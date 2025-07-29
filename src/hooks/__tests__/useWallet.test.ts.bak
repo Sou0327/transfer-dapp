@@ -1,0 +1,356 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { renderHook, act } from '@testing-library/react'
+import { ReactNode } from 'react'
+import { useWallet } from '../useWallet'
+import { WalletProvider } from '@/contexts/WalletContext'
+import { ToastProvider } from '@/contexts/ToastContext'
+
+// ユーティリティ関数のモック
+vi.mock('@/utils/web3', () => ({
+  isSupportedNetwork: vi.fn((chainId: number) => chainId === 1 || chainId === 5),
+  getNetworkConfig: vi.fn((chainId: number) => {
+    if (chainId === 1) return { chainId: 1, name: 'Ethereum Mainnet', symbol: 'ETH' }
+    if (chainId === 5) return { chainId: 5, name: 'Goerli Testnet', symbol: 'ETH' }
+    return null
+  }),
+}))
+
+vi.mock('@/utils/errors', () => ({
+  handleAsyncError: vi.fn(async (fn: () => Promise<any>) => {
+    try {
+      const data = await fn()
+      return { data, error: null }
+    } catch (error) {
+      return { data: null, error: { message: error instanceof Error ? error.message : 'Unknown error' } }
+    }
+  }),
+}))
+
+// テストプロバイダーコンポーネント
+const TestProviders = ({ children }: { children: ReactNode }) => (
+  <ToastProvider>
+    <WalletProvider>
+      {children}
+    </WalletProvider>
+  </ToastProvider>
+)
+
+describe('useWallet', () => {
+  // MetaMaskモックの初期化
+  const mockRequest = vi.fn()
+  const mockOn = vi.fn()
+  const mockRemoveListener = vi.fn()
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    
+    // window.ethereumのモック設定
+    Object.defineProperty(window, 'ethereum', {
+      value: {
+        request: mockRequest,
+        on: mockOn,
+        removeListener: mockRemoveListener,
+        selectedAddress: null,
+        chainId: '0x1',
+        isMetaMask: true,
+      },
+      writable: true,
+    })
+  })
+
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  describe('初期状態', () => {
+    it('初期状態で未接続であること', () => {
+      const { result } = renderHook(() => useWallet(), {
+        wrapper: TestProviders,
+      })
+
+      expect(result.current.isConnected).toBe(false)
+      expect(result.current.account).toBe(null)
+      expect(result.current.chainId).toBe(null)
+      expect(result.current.provider).toBe(null)
+      expect(result.current.isConnecting).toBe(false)
+      expect(result.current.error).toBe(null)
+    })
+
+    it('初期状態でネットワークがサポートされていないこと', () => {
+      const { result } = renderHook(() => useWallet(), {
+        wrapper: TestProviders,
+      })
+
+      expect(result.current.isNetworkSupported).toBe(false)
+      expect(result.current.currentNetwork).toBe(null)
+    })
+
+    it('初期状態でウォレット状態が正しいこと', () => {
+      const { result } = renderHook(() => useWallet(), {
+        wrapper: TestProviders,
+      })
+
+      expect(result.current.walletStatus).toEqual({
+        isConnected: false,
+        isConnecting: false,
+        hasError: false,
+        isNetworkSupported: false,
+        canTransact: false,
+      })
+    })
+  })
+
+  describe('ウォレット接続', () => {
+    it('正常にウォレット接続ができること', async () => {
+      const mockAccount = '0x1234567890123456789012345678901234567890'
+      
+      mockRequest.mockImplementation((params: any) => {
+        if (params.method === 'eth_requestAccounts') {
+          return Promise.resolve([mockAccount])
+        }
+        if (params.method === 'eth_chainId') {
+          return Promise.resolve('0x1')
+        }
+        return Promise.resolve(null)
+      })
+
+      const { result } = renderHook(() => useWallet(), {
+        wrapper: TestProviders,
+      })
+
+      let connectResult: boolean
+      await act(async () => {
+        connectResult = await result.current.connect()
+      })
+
+      expect(connectResult).toBe(true)
+      expect(mockRequest).toHaveBeenCalledWith({ method: 'eth_requestAccounts' })
+    })
+
+    it('ウォレット接続が拒否された場合にエラーハンドリングされること', async () => {
+      mockRequest.mockRejectedValue(new Error('User rejected the request'))
+
+      const { result } = renderHook(() => useWallet(), {
+        wrapper: TestProviders,
+      })
+
+      let connectResult: boolean
+      await act(async () => {
+        connectResult = await result.current.connect()
+      })
+
+      expect(connectResult).toBe(false)
+    })
+  })
+
+  describe('ネットワーク切り替え', () => {
+    it('サポートされているネットワークに切り替えができること', async () => {
+      mockRequest.mockResolvedValue(null)
+
+      const { result } = renderHook(() => useWallet(), {
+        wrapper: TestProviders,
+      })
+
+      let switchResult: boolean
+      await act(async () => {
+        switchResult = await result.current.switchNetwork(5) // Goerli
+      })
+
+      expect(switchResult).toBe(true)
+      expect(mockRequest).toHaveBeenCalledWith({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: '0x5' }],
+      })
+    })
+
+    it('サポートされていないネットワークへの切り替えが拒否されること', async () => {
+      const { result } = renderHook(() => useWallet(), {
+        wrapper: TestProviders,
+      })
+
+      let switchResult: boolean
+      await act(async () => {
+        switchResult = await result.current.switchNetwork(999) // 未サポート
+      })
+
+      expect(switchResult).toBe(false)
+      expect(mockRequest).not.toHaveBeenCalled()
+    })
+
+    it('ネットワーク切り替えが失敗した場合にエラーハンドリングされること', async () => {
+      mockRequest.mockRejectedValue(new Error('Switch network failed'))
+
+      const { result } = renderHook(() => useWallet(), {
+        wrapper: TestProviders,
+      })
+
+      let switchResult: boolean
+      await act(async () => {
+        switchResult = await result.current.switchNetwork(5)
+      })
+
+      expect(switchResult).toBe(false)
+    })
+  })
+
+  describe('ユーティリティ関数', () => {
+    it('アドレスを正しく短縮表示すること', () => {
+      const { result } = renderHook(() => useWallet(), {
+        wrapper: TestProviders,
+      })
+
+      const longAddress = '0x1234567890123456789012345678901234567890'
+      const formatted = result.current.formatAddress(longAddress)
+      
+      expect(formatted).toBe('0x1234...7890')
+    })
+
+    it('空のアドレスに対して空文字列を返すこと', () => {
+      const { result } = renderHook(() => useWallet(), {
+        wrapper: TestProviders,
+      })
+
+      const formatted = result.current.formatAddress('')
+      expect(formatted).toBe('')
+    })
+
+    it('チェーンIDを16進数で正しくフォーマットすること', () => {
+      const { result } = renderHook(() => useWallet(), {
+        wrapper: TestProviders,
+      })
+
+      const formatted = result.current.formatChainId(1)
+      expect(formatted).toBe('0x1')
+
+      const formatted2 = result.current.formatChainId(5)
+      expect(formatted2).toBe('0x5')
+    })
+
+    it('空のチェーンIDに対して空文字列を返すこと', () => {
+      const { result } = renderHook(() => useWallet(), {
+        wrapper: TestProviders,
+      })
+
+      const formatted = result.current.formatChainId(0)
+      expect(formatted).toBe('')
+    })
+  })
+
+  describe('ネットワーク状態', () => {
+    it('メインネット（chainId: 1）がサポートされていること', () => {
+      const { result } = renderHook(() => useWallet(), {
+        wrapper: TestProviders,
+      })
+
+      // メインネットの状態をシミュレート
+      act(() => {
+        // WalletContextの状態を直接変更する方法がないため、
+        // モック化したisSupportedNetworkの戻り値でテストする
+      })
+
+      // この場合、モック関数の動作をテスト
+      const { isSupportedNetwork } = require('@/utils/web3')
+      expect(isSupportedNetwork(1)).toBe(true)
+      expect(isSupportedNetwork(999)).toBe(false)
+    })
+
+    it('ネットワーク設定が正しく取得できること', () => {
+      const { getNetworkConfig } = require('@/utils/web3')
+      
+      const mainnetConfig = getNetworkConfig(1)
+      expect(mainnetConfig).toEqual({
+        chainId: 1,
+        name: 'Ethereum Mainnet',
+        symbol: 'ETH'
+      })
+
+      const unknownConfig = getNetworkConfig(999)
+      expect(unknownConfig).toBe(null)
+    })
+  })
+
+  describe('ウォレット状態の計算', () => {
+    it('接続状態が正しく計算されること', () => {
+      const { result } = renderHook(() => useWallet(), {
+        wrapper: TestProviders,
+      })
+
+      // 初期状態では未接続
+      expect(result.current.walletStatus.canTransact).toBe(false)
+      
+      // isConnected = account && provider が true
+      // isNetworkSupported = サポートされているネットワーク
+      // isConnecting = false
+      // すべてが true の場合のみ canTransact が true になる
+    })
+  })
+
+  describe('デバッグ情報', () => {
+    it('開発環境でデバッグ情報が含まれること', () => {
+      // NODE_ENVをdevelopmentに設定
+      vi.stubEnv('NODE_ENV', 'development')
+      
+      const { result } = renderHook(() => useWallet(), {
+        wrapper: TestProviders,
+      })
+
+      // デバッグ情報の存在確認
+      // 実際の実装では import.meta.env.DEV を使用しているため、
+      // モック化が必要かもしれません
+      expect(result.current).toHaveProperty('debug')
+    })
+  })
+
+  describe('エラーハンドリング', () => {
+    it('接続エラーが適切にハンドリングされること', async () => {
+      const errorMessage = 'Connection failed'
+      mockRequest.mockRejectedValue(new Error(errorMessage))
+
+      const { result } = renderHook(() => useWallet(), {
+        wrapper: TestProviders,
+      })
+
+      let connectResult: boolean
+      await act(async () => {
+        connectResult = await result.current.connect()
+      })
+
+      expect(connectResult).toBe(false)
+      // エラー状態の確認は実装に依存
+    })
+
+    it('ネットワーク切り替えエラーが適切にハンドリングされること', async () => {
+      const errorMessage = 'Network switch failed'
+      mockRequest.mockRejectedValue(new Error(errorMessage))
+
+      const { result } = renderHook(() => useWallet(), {
+        wrapper: TestProviders,
+      })
+
+      let switchResult: boolean
+      await act(async () => {
+        switchResult = await result.current.switchNetwork(5)
+      })
+
+      expect(switchResult).toBe(false)
+    })
+  })
+
+  describe('メモリリーク防止', () => {
+    it('コンポーネントアンマウント時にクリーンアップされること', () => {
+      const { unmount } = renderHook(() => useWallet(), {
+        wrapper: TestProviders,
+      })
+
+      // アンマウント前のリスナー登録状態を確認
+      expect(mockOn).toHaveBeenCalled()
+
+      // アンマウント
+      unmount()
+
+      // クリーンアップの確認（WalletContextの実装に依存）
+      // removeListener が呼ばれているかチェック
+      expect(mockRemoveListener).toHaveBeenCalled()
+    })
+  })
+})

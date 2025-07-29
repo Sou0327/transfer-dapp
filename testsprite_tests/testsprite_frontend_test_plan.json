@@ -1,0 +1,596 @@
+[
+  {
+    "id": "TC001",
+    "title": "MetaMask Wallet Connection Success",
+    "description": "Verify that the MetaMask wallet connection button successfully connects and displays correct account and network information when MetaMask is installed.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Open the dApp and click on the MetaMask connect button."
+      },
+      {
+        "type": "assertion",
+        "description": "Check that MetaMask wallet connection prompt appears."
+      },
+      {
+        "type": "action",
+        "description": "Approve the connection in MetaMask extension."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify wallet address and Ethereum network information are displayed correctly within the app."
+      },
+      {
+        "type": "assertion",
+        "description": "Ensure connection state updates to connected without errors."
+      }
+    ]
+  },
+  {
+    "id": "TC002",
+    "title": "MetaMask Wallet Connection Failure Without Installed Extension",
+    "description": "Ensure that clicking MetaMask connect button without MetaMask installed shows proper installation guide and does not attempt connection.",
+    "category": "error handling",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Open the dApp in a browser where MetaMask is not installed."
+      },
+      {
+        "type": "action",
+        "description": "Click the MetaMask connect button."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify that the UI displays an installation guide and does not throw connection errors."
+      }
+    ]
+  },
+  {
+    "id": "TC003",
+    "title": "TronLink Wallet Connection Success",
+    "description": "Verify that the TronLink wallet connection button successfully connects and displays correct account and network information when TronLink is installed.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Open the dApp and click on the TronLink connect button."
+      },
+      {
+        "type": "assertion",
+        "description": "Check that TronLink wallet connection prompt appears."
+      },
+      {
+        "type": "action",
+        "description": "Approve the connection in TronLink extension."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify wallet address and Tron network information are displayed correctly within the app."
+      },
+      {
+        "type": "assertion",
+        "description": "Ensure connection state updates to connected without errors."
+      }
+    ]
+  },
+  {
+    "id": "TC004",
+    "title": "TronLink Wallet Connection Failure Without Installed Extension",
+    "description": "Ensure that clicking TronLink connect button without TronLink installed shows proper installation guide and does not attempt connection.",
+    "category": "error handling",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Open the dApp in a browser without TronLink installed."
+      },
+      {
+        "type": "action",
+        "description": "Click the TronLink connect button."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify that the UI displays an installation guide and does not throw connection errors."
+      }
+    ]
+  },
+  {
+    "id": "TC005",
+    "title": "Simultaneous Connection of MetaMask and TronLink",
+    "description": "Validate that both MetaMask and TronLink wallets can be connected simultaneously and their states and network information update independently.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Connect MetaMask wallet."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify MetaMask connection state and network info are displayed correctly."
+      },
+      {
+        "type": "action",
+        "description": "Connect TronLink wallet."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify TronLink connection state and network info are shown independently."
+      },
+      {
+        "type": "action",
+        "description": "Change account or network in MetaMask."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify only MetaMask connection info updates without affecting TronLink."
+      },
+      {
+        "type": "action",
+        "description": "Change account or network in TronLink."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify only TronLink connection info updates without affecting MetaMask."
+      }
+    ]
+  },
+  {
+    "id": "TC006",
+    "title": "Token Balance Retrieval and Auto-Refresh",
+    "description": "Ensure ERC-20 and TRC-20 token balances are displayed correctly and refresh automatically every 15 seconds with error recovery.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Connect both MetaMask and TronLink wallets."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify initial token balances display for both Ethereum and Tron chains."
+      },
+      {
+        "type": "action",
+        "description": "Wait for 16 seconds to trigger automatic balance update."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the balances update correctly without UI refresh issues."
+      },
+      {
+        "type": "action",
+        "description": "Simulate network error during balance fetch."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify appropriate error messages are displayed and automatic retry is attempted."
+      }
+    ]
+  },
+  {
+    "id": "TC007",
+    "title": "Unified Token Transfer Success on Ethereum Chain",
+    "description": "Test that ERC-20 token transfer works with valid inputs and successful transaction confirmation with real-time progress updates.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Connect MetaMask wallet with a supported Ethereum network."
+      },
+      {
+        "type": "action",
+        "description": "Select Ethereum as the chain and choose an ERC-20 token from the token list."
+      },
+      {
+        "type": "action",
+        "description": "Enter a valid recipient Ethereum address and a valid token amount."
+      },
+      {
+        "type": "action",
+        "description": "Click the send/transfer button."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify input validations pass without errors."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify real-time transaction progress including transaction hash and confirmation counts updates on UI."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify success message is displayed after transaction confirms."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify updated balances post-transfer for the connected wallet."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify transaction is recorded encrypted in history storage."
+      }
+    ]
+  },
+  {
+    "id": "TC008",
+    "title": "Unified Token Transfer Success on Tron Chain",
+    "description": "Test that TRC-20 token transfer works with valid inputs and successful transaction confirmation with real-time progress updates.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Connect TronLink wallet with a supported Tron network."
+      },
+      {
+        "type": "action",
+        "description": "Select Tron as the chain and choose a TRC-20 token from the token list."
+      },
+      {
+        "type": "action",
+        "description": "Enter a valid recipient Tron address and a valid token amount."
+      },
+      {
+        "type": "action",
+        "description": "Click the send/transfer button."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify input validations pass without errors."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify real-time transaction progress including transaction hash and confirmation counts updates on UI."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify success message is displayed after transaction confirms."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify updated balances post-transfer for the connected wallet."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify transaction is recorded encrypted in history storage."
+      }
+    ]
+  },
+  {
+    "id": "TC009",
+    "title": "Token Transfer Input Validation",
+    "description": "Verify that invalid inputs for token transfer including incorrect address formats, insufficient balance, and invalid token selections show proper errors or warnings.",
+    "category": "error handling",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Attempt to send tokens selecting Ethereum chain and providing a non-0x prefixed address."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify Ethereum address format validation error is displayed."
+      },
+      {
+        "type": "action",
+        "description": "Attempt to send tokens selecting Tron chain and providing a non-Base58 T-prefixed address."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify Tron address format validation error is displayed."
+      },
+      {
+        "type": "action",
+        "description": "Enter a token amount greater than the wallet balance."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify insufficient balance error message is shown."
+      },
+      {
+        "type": "action",
+        "description": "Select a token incompatible with chosen chain."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify token compatibility warning is displayed preventing transfer."
+      }
+    ]
+  },
+  {
+    "id": "TC010",
+    "title": "Transaction History Display and Sorting",
+    "description": "Ensure the encrypted transaction history loads correctly, displays sorted records, supports filtering and searching, and shows pagination or infinite scrolling.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Complete multiple token transfers on both Ethereum and Tron chains."
+      },
+      {
+        "type": "action",
+        "description": "Navigate to the transaction history page."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify transaction records load decrypted and are sorted by date/time descending by default."
+      },
+      {
+        "type": "action",
+        "description": "Apply a filter by chain, date range, or token symbol."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify filtered results match criteria."
+      },
+      {
+        "type": "action",
+        "description": "Use the search input to find a transaction by recipient address or token name."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify search results display matching records only."
+      },
+      {
+        "type": "action",
+        "description": "Scroll through history to trigger pagination or infinite scroll."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify additional records load without UI glitches."
+      }
+    ]
+  },
+  {
+    "id": "TC011",
+    "title": "Export Transaction History as CSV",
+    "description": "Verify that the user can export the current filtered transaction history to a CSV file including all necessary metadata.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Filter transaction history by chain and token symbol."
+      },
+      {
+        "type": "action",
+        "description": "Click on the export button on the transaction history page."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a CSV file is downloaded."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the CSV file contents contain correct headers and all visible transactions data matching current filter."
+      }
+    ]
+  },
+  {
+    "id": "TC012",
+    "title": "Network Status Display and Auto-Refresh",
+    "description": "Ensure network status information such as gas/energy prices, block numbers, and congestion warnings update automatically every 30 seconds.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to the network status section of the app."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify gas price, energy price, and current block number are displayed for Ethereum and Tron."
+      },
+      {
+        "type": "action",
+        "description": "Wait for at least 31 seconds."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the network status updates with new values without page reload."
+      },
+      {
+        "type": "action",
+        "description": "Simulate a network congestion scenario."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify appropriate warning message about network congestion is displayed."
+      }
+    ]
+  },
+  {
+    "id": "TC013",
+    "title": "Non-Standard Token Handling",
+    "description": "Test that non-standard or unsupported tokens trigger safe warnings and do not cause application failure or security issues during transfers.",
+    "category": "security",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Select a known non-standard token for transfer."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify warning message is displayed explaining possible risks or unsupported features."
+      },
+      {
+        "type": "action",
+        "description": "Attempt to initiate transfer for the non-standard token."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify transfer proceeds safely or is blocked with clear messaging without crashing the UI."
+      }
+    ]
+  },
+  {
+    "id": "TC014",
+    "title": "Real-Time Transfer Progress Indication",
+    "description": "Verify that during token transfers users see live transaction hash, confirmation counts, success or failure states, and detailed error messages if transfer fails.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Initiate a valid token transfer on Ethereum."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify transaction hash is shown immediately after sending."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify confirmation count increments in real time."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify success message shows after required confirmations."
+      },
+      {
+        "type": "action",
+        "description": "Repeat the above steps but simulate a transfer failure."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify detailed error message is displayed describing the failure reason."
+      }
+    ]
+  },
+  {
+    "id": "TC015",
+    "title": "UI Responsiveness, Dark Mode, and Accessibility",
+    "description": "Validate app layout adapts properly on desktop and mobile, supports dark mode toggling, keyboard navigation, and ARIA compliance.",
+    "category": "ui",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Open app on desktop and mobile screen sizes."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify UI components resize and reposition for optimal usability."
+      },
+      {
+        "type": "action",
+        "description": "Toggle dark mode on and off."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify color scheme switches correctly and all text remains readable."
+      },
+      {
+        "type": "action",
+        "description": "Navigate the entire app using keyboard only."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify logical tab order and visible focus indicators."
+      },
+      {
+        "type": "assertion",
+        "description": "Use accessibility tools to verify ARIA attributes are present and correct."
+      }
+    ]
+  },
+  {
+    "id": "TC016",
+    "title": "Encrypted Data Storage and Retrieval",
+    "description": "Ensure that transaction history data is securely stored encrypted locally and can be decrypted correctly on retrieval without data corruption.",
+    "category": "security",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Perform several token transfers to create transaction history entries."
+      },
+      {
+        "type": "action",
+        "description": "Verify transaction data is stored in IndexedDB in encrypted form."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm that no plaintext transaction data is present in storage."
+      },
+      {
+        "type": "action",
+        "description": "Reload the app and navigate to the transaction history."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify that transaction data decrypts and displays correctly matching original input."
+      }
+    ]
+  },
+  {
+    "id": "TC017",
+    "title": "Error Boundaries and Graceful Error Handling",
+    "description": "Verify that runtime errors in wallet connection, transfer processes, or UI render do not crash the app, show user friendly error boundaries, and log errors as expected.",
+    "category": "error handling",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Simulate a runtime error during wallet connection process."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the app catches the error and displays an error boundary UI with a helpful message."
+      },
+      {
+        "type": "action",
+        "description": "Simulate error during token transfer process."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify error is caught and user sees a clear error message without app crash."
+      },
+      {
+        "type": "action",
+        "description": "Simulate error in transaction history component render."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify error boundary is shown and app remains usable."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm error details are logged appropriately for developer review."
+      }
+    ]
+  },
+  {
+    "id": "TC018",
+    "title": "Automated Test Coverage Verification",
+    "description": "Validate that unit and integration tests cover wallet connections, transfers, transaction history, and external dependency mocks comprehensively.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Run the full suite of automated tests (Vitest or similar)."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify tests for all core modules pass successfully."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify that external dependencies like MetaMask and TronLink clients are properly mocked in tests."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify code coverage reports indicate high coverage for wallet connection, transfer, and history features."
+      }
+    ]
+  }
+]
