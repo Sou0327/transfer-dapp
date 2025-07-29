@@ -1,0 +1,105 @@
+# Grafana Datasource Configuration for Cardano OTC Trading System
+# Automatically provisions data sources on startup
+
+apiVersion: 1
+
+datasources:
+  # Prometheus - Metrics
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    basicAuth: false
+    jsonData:
+      httpMethod: POST
+      prometheusType: Prometheus
+      prometheusVersion: 2.37.0
+      queryTimeout: 60s
+      timeInterval: 30s
+      incrementalQueryOverlapWindow: 10m
+    secureJsonData: {}
+    version: 1
+
+  # Loki - Logs
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    editable: false
+    basicAuth: false
+    jsonData:
+      maxLines: 1000
+    version: 1
+
+  # Elasticsearch - Logs and Security Events
+  - name: Elasticsearch
+    type: elasticsearch
+    access: proxy
+    url: http://elasticsearch:9200
+    editable: false
+    basicAuth: false
+    database: '[otc-logs-]YYYY.MM.DD'
+    jsonData:
+      esVersion: "8.0.0"
+      timeField: '@timestamp'
+      interval: Daily
+      maxConcurrentShardRequests: 5
+      logMessageField: message
+      logLevelField: level
+      includeFrozen: false
+    version: 1
+
+  # Elasticsearch - Security Events
+  - name: Elasticsearch-Security
+    type: elasticsearch
+    access: proxy
+    url: http://elasticsearch:9200
+    editable: false
+    basicAuth: false
+    database: '[otc-security-]YYYY.MM.DD'
+    jsonData:
+      esVersion: "8.0.0"
+      timeField: '@timestamp'
+      interval: Daily
+      maxConcurrentShardRequests: 5
+      logMessageField: message
+      logLevelField: severity
+      includeFrozen: false
+    version: 1
+
+  # PostgreSQL - Application Database Metrics
+  - name: PostgreSQL
+    type: postgres
+    access: proxy
+    url: postgres:5432
+    database: otc_system
+    user: grafana_reader
+    editable: false
+    basicAuth: false
+    jsonData:
+      sslmode: disable
+      maxOpenConns: 10
+      maxIdleConns: 2
+      connMaxLifetime: 14400
+      postgresVersion: 1500
+      timescaledb: false
+    secureJsonData:
+      password: '${GRAFANA_DB_PASSWORD}'
+    version: 1
+
+  # TestData - For testing and development
+  - name: TestData
+    type: testdata
+    access: proxy
+    editable: true
+    jsonData: {}
+    version: 1
+
+# Delete datasources that are not in this list
+deleteDatasources:
+  - name: Prometheus-Old
+    orgId: 1
+  - name: Loki-Old
+    orgId: 1

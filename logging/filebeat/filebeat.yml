@@ -1,0 +1,261 @@
+# Filebeat Configuration for Cardano OTC Trading System
+# Collects logs from various sources and sends to Logstash
+
+filebeat.inputs:
+  # Application logs
+  - type: log
+    enabled: true
+    paths:
+      - /var/log/otc-app/*.log
+      - /var/log/otc-app/error.log
+      - /var/log/otc-app/access.log
+    fields:
+      service: otc-application
+      environment: production
+      type: otc-app
+    fields_under_root: true
+    multiline.pattern: '^\d{4}-\d{2}-\d{2}'
+    multiline.negate: true
+    multiline.match: after
+    scan_frequency: 10s
+    harvester_buffer_size: 16384
+    max_bytes: 10485760
+
+  # Nginx access logs
+  - type: log
+    enabled: true
+    paths:
+      - /var/log/nginx/access.log
+      - /var/log/nginx/otc-access.log
+    fields:
+      service: nginx
+      type: nginx-access
+      environment: production
+    fields_under_root: true
+    scan_frequency: 10s
+
+  # Nginx error logs
+  - type: log
+    enabled: true
+    paths:
+      - /var/log/nginx/error.log
+      - /var/log/nginx/otc-error.log
+    fields:
+      service: nginx
+      type: nginx-error
+      environment: production
+    fields_under_root: true
+    multiline.pattern: '^\d{4}/\d{2}/\d{2}'
+    multiline.negate: true
+    multiline.match: after
+    scan_frequency: 10s
+
+  # PostgreSQL logs
+  - type: log
+    enabled: true
+    paths:
+      - /var/log/postgresql/*.log
+      - /var/lib/postgresql/data/log/*.log
+    fields:
+      service: postgresql
+      type: postgres
+      environment: production
+    fields_under_root: true
+    multiline.pattern: '^\d{4}-\d{2}-\d{2}'
+    multiline.negate: true
+    multiline.match: after
+    scan_frequency: 10s
+
+  # Redis logs
+  - type: log
+    enabled: true
+    paths:
+      - /var/log/redis/*.log
+    fields:
+      service: redis
+      type: redis
+      environment: production
+    fields_under_root: true
+    scan_frequency: 10s
+
+  # Docker container logs
+  - type: container
+    enabled: true
+    paths:
+      - '/var/lib/docker/containers/*/*.log'
+    stream: all
+    processors:
+      - add_docker_metadata:
+          host: "unix:///var/run/docker.sock"
+          match_fields: ["container.id"]
+          match_pids: ["process.pid"]
+          match_source: true
+          match_source_index: 4
+          match_short_id: false
+          cleanup_timeout: 60
+          skip_older: 168h
+    fields:
+      type: docker
+      environment: production
+    fields_under_root: true
+
+  # System logs
+  - type: syslog
+    enabled: true
+    protocol.udp:
+      host: "0.0.0.0:514"
+    fields:
+      service: system
+      type: syslog
+      environment: production
+    fields_under_root: true
+
+  # Security logs (if available)
+  - type: log
+    enabled: true
+    paths:
+      - /var/log/auth.log
+      - /var/log/secure
+      - /var/log/messages
+    fields:
+      service: system-security
+      type: security
+      environment: production
+    fields_under_root: true
+    include_lines: ['Failed', 'Invalid', 'authentication failure', 'sudo']
+    exclude_files: ['\.gz$']
+
+# Processors for log enhancement
+processors:
+  # Add hostname
+  - add_host_metadata:
+      when.not.contains.tags: forwarded
+      cache.ttl: 5m
+      geo:
+        name: otc-production
+        location: "40.7128, -74.0060"  # NYC coordinates as example
+        continent_name: "North America"
+        country_iso_code: "US"
+
+  # Add Docker metadata
+  - add_docker_metadata:
+      host: "unix:///var/run/docker.sock"
+      match_fields: ["container.id"]
+      match_pids: ["process.pid"]
+      match_source: true
+
+  # Add timestamp if missing
+  - timestamp:
+      field: '@timestamp'
+      layouts:
+        - '2006-01-02T15:04:05.000Z'
+        - '2006-01-02T15:04:05Z'
+        - '2006-01-02 15:04:05'
+      test:
+        - '2023-07-29T14:30:45.123Z'
+
+  # Parse JSON logs
+  - decode_json_fields:
+      fields: ["message"]
+      process_array: false
+      max_depth: 1
+      target: ""
+      overwrite_keys: false
+      add_error_key: true
+
+  # Drop empty events
+  - drop_event:
+      when:
+        or:
+          - equals:
+              message: ""
+          - equals:
+              message: " "
+
+  # Rate limiting for high-volume logs
+  - rate_limit:
+      limit: "1000/s"
+      fields: ["service", "host"]
+
+# Output configuration
+output.logstash:
+  hosts: ["logstash:5044"]
+  worker: 2
+  compression_level: 3
+  escape_html: false
+  bulk_max_size: 2048
+  timeout: 30s
+  
+  # Load balancing
+  loadbalance: true
+  
+  # SSL configuration (if needed)
+  # ssl.enabled: true
+  # ssl.certificate_authorities: ["/etc/filebeat/ca.crt"]
+  # ssl.certificate: "/etc/filebeat/filebeat.crt"
+  # ssl.key: "/etc/filebeat/filebeat.key"
+
+# Alternative output to Elasticsearch (if Logstash is unavailable)
+# output.elasticsearch:
+#   hosts: ["elasticsearch:9200"]
+#   protocol: "http"
+#   username: "elastic"
+#   password: "changeme"
+#   index: "filebeat-otc-%{+yyyy.MM.dd}"
+#   template.name: "filebeat-otc"
+#   template.pattern: "filebeat-otc-*"
+
+# Logging configuration
+logging.level: info
+logging.to_files: true
+logging.files:
+  path: /var/log/filebeat
+  name: filebeat.log
+  keepfiles: 7
+  permissions: 0644
+  rotateeverybytes: 10485760
+
+# Monitoring
+monitoring.enabled: true
+monitoring.elasticsearch:
+  hosts: ["elasticsearch:9200"]
+  username: "elastic"
+  password: "changeme"
+
+# HTTP endpoint for health checks
+http.enabled: true
+http.host: "0.0.0.0"
+http.port: 5066
+
+# Setup configuration
+setup.template.enabled: false  # Templates managed by Elasticsearch
+setup.ilm.enabled: false       # ILM managed separately
+
+# General settings
+name: "otc-filebeat-${HOSTNAME}"
+tags: ["otc", "production", "cardano"]
+
+# Ignore older files
+ignore_older: 24h
+
+# Close files after idle
+close_inactive: 5m
+close_renamed: true
+close_removed: true
+close_eof: false
+
+# Harvester settings
+harvester_limit: 0
+clean_inactive: 0
+clean_removed: true
+scan_frequency: 10s
+
+# Registry settings
+filebeat.registry.path: /usr/share/filebeat/data/registry
+filebeat.registry.file_permissions: 0600
+filebeat.registry.flush: 1s
+
+# Shutdown timeout
+filebeat.shutdown_timeout: 30s
+
+max_procs: 2

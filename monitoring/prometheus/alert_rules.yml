@@ -1,0 +1,278 @@
+# Prometheus Alert Rules for Cardano OTC Trading System
+# Comprehensive alerting for production monitoring
+
+groups:
+  # Application Health Alerts
+  - name: otc_application_health
+    rules:
+      - alert: OTCApplicationDown
+        expr: up{job="otc-app"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          service: otc-application
+        annotations:
+          summary: "OTC Application is down"
+          description: "The OTC application has been down for more than 30 seconds"
+          runbook_url: "https://your-runbook.com/otc-app-down"
+
+      - alert: OTCHighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+          service: otc-application
+        annotations:
+          summary: "High error rate in OTC application"
+          description: "Error rate is {{ $value | humanizePercentage }} over the last 5 minutes"
+
+      - alert: OTCHighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          service: otc-application
+        annotations:
+          summary: "High response time in OTC application"
+          description: "95th percentile response time is {{ $value }}s over the last 5 minutes"
+
+  # Database Alerts
+  - name: otc_database_health
+    rules:
+      - alert: PostgreSQLDown
+        expr: up{job="postgres"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          service: database
+        annotations:
+          summary: "PostgreSQL database is down"
+          description: "PostgreSQL database has been down for more than 30 seconds"
+
+      - alert: PostgreSQLHighConnections
+        expr: pg_stat_database_numbackends / pg_settings_max_connections > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          service: database
+        annotations:
+          summary: "PostgreSQL connection usage is high"
+          description: "Connection usage is {{ $value | humanizePercentage }}"
+
+      - alert: PostgreSQLSlowQueries
+        expr: rate(pg_stat_statements_mean_time_ms[5m]) > 1000
+        for: 5m
+        labels:
+          severity: warning
+          service: database
+        annotations:
+          summary: "PostgreSQL has slow queries"
+          description: "Average query time is {{ $value }}ms over the last 5 minutes"
+
+      - alert: PostgreSQLDiskSpaceUsage
+        expr: (pg_database_size_bytes / (1024^3)) > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: database
+        annotations:
+          summary: "PostgreSQL database size is high"
+          description: "Database size is {{ $value }}GB"
+
+  # Redis Alerts
+  - name: otc_redis_health
+    rules:
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          service: cache
+        annotations:
+          summary: "Redis cache is down"
+          description: "Redis cache has been down for more than 30 seconds"
+
+      - alert: RedisHighMemoryUsage
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          service: cache
+        annotations:
+          summary: "Redis memory usage is high"
+          description: "Memory usage is {{ $value | humanizePercentage }}"
+
+      - alert: RedisHighConnectionCount
+        expr: redis_connected_clients > 100
+        for: 5m
+        labels:
+          severity: warning
+          service: cache
+        annotations:
+          summary: "Redis connection count is high"
+          description: "Connected clients: {{ $value }}"
+
+  # System Resource Alerts
+  - name: otc_system_resources
+    rules:
+      - alert: HighCPUUsage
+        expr: 100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 90
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is {{ $value }}% over the last 5 minutes"
+
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is {{ $value | humanizePercentage }}"
+
+      - alert: DiskSpaceUsage
+        expr: (node_filesystem_size_bytes - node_filesystem_free_bytes) / node_filesystem_size_bytes > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High disk space usage"
+          description: "Disk usage is {{ $value | humanizePercentage }} on {{ $labels.mountpoint }}"
+
+      - alert: HighDiskIOUsage
+        expr: rate(node_disk_io_time_seconds_total[5m]) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High disk I/O usage"
+          description: "Disk I/O usage is {{ $value | humanizePercentage }}"
+
+  # Network Alerts
+  - name: otc_network_health
+    rules:
+      - alert: NginxDown
+        expr: up{job="nginx"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          service: proxy
+        annotations:
+          summary: "Nginx reverse proxy is down"
+          description: "Nginx has been down for more than 30 seconds"
+
+      - alert: HighNetworkTraffic
+        expr: rate(node_network_receive_bytes_total[5m]) > 100 * 1024 * 1024
+        for: 5m
+        labels:
+          severity: warning
+          service: network
+        annotations:
+          summary: "High network traffic detected"
+          description: "Network receive rate is {{ $value | humanize }}B/s"
+
+  # Business Logic Alerts
+  - name: otc_business_logic
+    rules:
+      - alert: HighFailedTransactions
+        expr: rate(otc_transactions_total{status="failed"}[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+          service: business
+        annotations:
+          summary: "High failed transaction rate"
+          description: "Failed transaction rate is {{ $value }}/s over the last 5 minutes"
+
+      - alert: StuckTransactions
+        expr: otc_transactions_pending_duration_seconds > 3600
+        for: 5m
+        labels:
+          severity: warning
+          service: business
+        annotations:
+          summary: "Transactions stuck in pending state"
+          description: "{{ $value }} transactions have been pending for over 1 hour"
+
+      - alert: LowWalletBalance
+        expr: otc_wallet_balance_ada < 100
+        for: 5m
+        labels:
+          severity: warning
+          service: business
+        annotations:
+          summary: "Low wallet balance detected"
+          description: "Wallet balance is {{ $value }} ADA"
+
+      - alert: HighUTxOFragmentation
+        expr: otc_utxo_count > 1000
+        for: 10m
+        labels:
+          severity: warning
+          service: business
+        annotations:
+          summary: "High UTxO fragmentation"
+          description: "UTxO count is {{ $value }}, consider consolidation"
+
+  # Security Alerts
+  - name: otc_security
+    rules:
+      - alert: HighLoginFailureRate
+        expr: rate(otc_login_failures_total[5m]) > 5
+        for: 2m
+        labels:
+          severity: warning
+          service: security
+        annotations:
+          summary: "High login failure rate detected"
+          description: "Login failure rate is {{ $value }}/s over the last 5 minutes"
+
+      - alert: SuspiciousActivity
+        expr: rate(otc_suspicious_activity_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          service: security
+        annotations:
+          summary: "Suspicious activity detected"
+          description: "{{ $value }} suspicious activities detected in the last 5 minutes"
+
+      - alert: UnauthorizedAPIAccess
+        expr: rate(http_requests_total{status="401"}[5m]) > 10
+        for: 2m
+        labels:
+          severity: warning
+          service: security
+        annotations:
+          summary: "High rate of unauthorized API access"
+          description: "Unauthorized access rate is {{ $value }}/s over the last 5 minutes"
+
+  # SSL Certificate Alerts
+  - name: otc_ssl_certificates
+    rules:
+      - alert: SSLCertificateExpiring
+        expr: (ssl_certificate_expiry_seconds - time()) / 86400 < 30
+        for: 1h
+        labels:
+          severity: warning
+          service: ssl
+        annotations:
+          summary: "SSL certificate expiring soon"
+          description: "SSL certificate will expire in {{ $value }} days"
+
+      - alert: SSLCertificateExpired
+        expr: ssl_certificate_expiry_seconds < time()
+        for: 1m
+        labels:
+          severity: critical
+          service: ssl
+        annotations:
+          summary: "SSL certificate has expired"
+          description: "SSL certificate expired {{ $value }} seconds ago"

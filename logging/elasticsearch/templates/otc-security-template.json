@@ -1,0 +1,226 @@
+{
+  "index_patterns": ["otc-security-*"],
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 1,
+      "index.refresh_interval": "10s",
+      "index.lifecycle.name": "otc-security-policy",
+      "index.lifecycle.rollover_alias": "otc-security",
+      "index.max_result_window": 100000,
+      "analysis": {
+        "analyzer": {
+          "security_analyzer": {
+            "type": "custom",
+            "tokenizer": "keyword",
+            "filter": ["lowercase"]
+          }
+        }
+      }
+    },
+    "mappings": {
+      "properties": {
+        "@timestamp": {
+          "type": "date",
+          "format": "strict_date_optional_time||epoch_millis"
+        },
+        "timestamp": {
+          "type": "date",
+          "format": "strict_date_optional_time||epoch_millis"
+        },
+        "security_event": {
+          "type": "keyword",
+          "fields": {
+            "text": {
+              "type": "text",
+              "analyzer": "security_analyzer"
+            }
+          }
+        },
+        "event_type": {
+          "type": "keyword"
+        },
+        "severity": {
+          "type": "keyword"
+        },
+        "source_ip": {
+          "type": "ip"
+        },
+        "client_ip": {
+          "type": "ip"
+        },
+        "user_agent": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword",
+              "ignore_above": 256
+            }
+          }
+        },
+        "user_id": {
+          "type": "keyword"
+        },
+        "session_id": {
+          "type": "keyword"
+        },
+        "request_id": {
+          "type": "keyword"
+        },
+        "correlation_id": {
+          "type": "keyword"
+        },
+        "attack_type": {
+          "type": "keyword"
+        },
+        "payload": {
+          "type": "text",
+          "analyzer": "security_analyzer"
+        },
+        "url": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword",
+              "ignore_above": 256
+            }
+          }
+        },
+        "method": {
+          "type": "keyword"
+        },
+        "status_code": {
+          "type": "integer"
+        },
+        "response_time": {
+          "type": "float"
+        },
+        "blocked": {
+          "type": "boolean"
+        },
+        "action_taken": {
+          "type": "keyword"
+        },
+        "rule_id": {
+          "type": "keyword"
+        },
+        "rule_description": {
+          "type": "text"
+        },
+        "geoip": {
+          "properties": {
+            "country_name": {
+              "type": "keyword"
+            },
+            "country_code2": {
+              "type": "keyword"
+            },
+            "city_name": {
+              "type": "keyword"
+            },
+            "region_name": {
+              "type": "keyword"
+            },
+            "location": {
+              "type": "geo_point"
+            },
+            "continent_code": {
+              "type": "keyword"
+            },
+            "timezone": {
+              "type": "keyword"
+            }
+          }
+        },
+        "threat_intelligence": {
+          "properties": {
+            "ip_reputation": {
+              "type": "keyword"
+            },
+            "malware_family": {
+              "type": "keyword"
+            },
+            "threat_type": {
+              "type": "keyword"
+            },
+            "confidence_score": {
+              "type": "float"
+            }
+          }
+        },
+        "cardano": {
+          "properties": {
+            "wallet_address": {
+              "type": "keyword"
+            },
+            "transaction_hash": {
+              "type": "keyword"
+            },
+            "ada_amount": {
+              "type": "long"
+            },
+            "suspicious_activity": {
+              "type": "keyword"
+            }
+          }
+        },
+        "authentication": {
+          "properties": {
+            "method": {
+              "type": "keyword"
+            },
+            "failure_reason": {
+              "type": "keyword"
+            },
+            "attempts_count": {
+              "type": "integer"
+            },
+            "lockout_duration": {
+              "type": "integer"
+            }
+          }
+        },
+        "environment": {
+          "type": "keyword"
+        },
+        "system": {
+          "type": "keyword"
+        },
+        "service": {
+          "type": "keyword"
+        },
+        "host": {
+          "type": "keyword"
+        },
+        "container_name": {
+          "type": "keyword"
+        },
+        "tags": {
+          "type": "keyword"
+        },
+        "alert_triggered": {
+          "type": "boolean"
+        },
+        "alert_id": {
+          "type": "keyword"
+        },
+        "investigation_status": {
+          "type": "keyword"
+        },
+        "notes": {
+          "type": "text"
+        },
+        "processed_at": {
+          "type": "date",
+          "format": "strict_date_optional_time||epoch_millis"
+        }
+      }
+    }
+  },
+  "composed_of": [],
+  "priority": 200,
+  "version": 1,
+  "_meta": {
+    "description": "Index template for Cardano OTC Trading System security events"
+  }
+}

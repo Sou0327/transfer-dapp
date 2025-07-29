@@ -1,0 +1,351 @@
+# AlertManager Configuration for Cardano OTC Trading System
+# Handles alert routing, grouping, and notification delivery
+
+global:
+  # Global SMTP configuration
+  smtp_smarthost: '${SMTP_HOST}:${SMTP_PORT}'
+  smtp_from: '${ALERT_FROM_EMAIL}'
+  smtp_auth_username: '${SMTP_USERNAME}'
+  smtp_auth_password: '${SMTP_PASSWORD}'
+  smtp_require_tls: true
+  
+  # Global Slack configuration
+  slack_api_url: '${SLACK_WEBHOOK_URL}'
+  
+  # Resolve timeout
+  resolve_timeout: 5m
+
+# Define notification templates
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Route tree for alert distribution
+route:
+  # Root route settings
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 1h
+  receiver: 'default-receiver'
+  
+  routes:
+    # Critical alerts - immediate notification
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      group_wait: 0s
+      group_interval: 5s
+      repeat_interval: 15m
+      routes:
+        # Application down alerts
+        - match:
+            alertname: OTCApplicationDown
+          receiver: 'app-down-alerts'
+          group_wait: 0s
+          repeat_interval: 5m
+        
+        # Database down alerts
+        - match:
+            alertname: PostgreSQLDown
+          receiver: 'db-down-alerts'
+          group_wait: 0s
+          repeat_interval: 5m
+        
+        # Security alerts
+        - match:
+            service: security
+          receiver: 'security-alerts'
+          group_wait: 0s
+          repeat_interval: 10m
+
+    # Warning alerts - regular notification
+    - match:
+        severity: warning
+      receiver: 'warning-alerts'
+      group_wait: 30s
+      group_interval: 30s
+      repeat_interval: 2h
+      routes:
+        # Performance issues
+        - match_re:
+            alertname: '.*(HighResponseTime|HighMemoryUsage|HighCPUUsage).*'
+          receiver: 'performance-alerts'
+          repeat_interval: 30m
+        
+        # Database performance
+        - match:
+            service: database
+          receiver: 'db-performance-alerts'
+          repeat_interval: 1h
+        
+        # Business logic alerts
+        - match:
+            service: business
+          receiver: 'business-alerts'
+          repeat_interval: 1h
+
+    # SSL Certificate alerts
+    - match:
+        service: ssl
+      receiver: 'ssl-alerts'
+      group_wait: 1h
+      repeat_interval: 24h
+
+    # Maintenance window - silence alerts
+    - match:
+        alertname: MaintenanceMode
+      receiver: 'null-receiver'
+
+# Inhibition rules to reduce noise
+inhibit_rules:
+  # Inhibit warning alerts when critical alerts are firing
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'cluster', 'service']
+  
+  # Inhibit individual service alerts when application is down
+  - source_match:
+      alertname: 'OTCApplicationDown'
+    target_match_re:
+      alertname: '.*(HighResponseTime|HighErrorRate).*'
+    equal: ['cluster']
+
+# Receiver definitions
+receivers:
+  # Default receiver for uncategorized alerts
+  - name: 'default-receiver'
+    email_configs:
+      - to: '${DEFAULT_EMAIL}'
+        subject: '🔹 OTC Alert: {{ .GroupLabels.alertname }}'
+        body: |
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Labels: {{ range .Labels.SortedPairs }}{{ .Name }}={{ .Value }} {{ end }}
+          Started: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          {{ end }}
+
+  # Critical alerts - multiple channels
+  - name: 'critical-alerts'
+    email_configs:
+      - to: '${CRITICAL_EMAIL}'
+        subject: '🚨 CRITICAL OTC Alert: {{ .GroupLabels.alertname }}'
+        body: |
+          CRITICAL ALERT TRIGGERED
+          ======================
+          
+          {{ range .Alerts }}
+          🚨 Alert: {{ .Annotations.summary }}
+          📝 Description: {{ .Annotations.description }}
+          🏷️  Labels: {{ range .Labels.SortedPairs }}{{ .Name }}={{ .Value }} {{ end }}
+          ⏰ Started: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          🔗 Runbook: {{ .Annotations.runbook_url }}
+          {{ end }}
+          
+          Please investigate immediately!
+        headers:
+          Priority: 'high'
+    
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#alerts-critical'
+        title: '🚨 Critical OTC Alert'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Service:* {{ .Labels.service }}
+          *Started:* {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          {{ if .Annotations.runbook_url }}*Runbook:* {{ .Annotations.runbook_url }}{{ end }}
+          {{ end }}
+        send_resolved: true
+
+    # Webhook for integration with incident management
+    webhook_configs:
+      - url: '${INCIDENT_WEBHOOK_URL}'
+        send_resolved: true
+        http_config:
+          bearer_token: '${INCIDENT_API_TOKEN}'
+
+  # Application down alerts
+  - name: 'app-down-alerts'
+    email_configs:
+      - to: '${ONCALL_EMAIL}'
+        subject: '🔥 OTC APPLICATION DOWN - Immediate Action Required'
+        body: |
+          THE OTC APPLICATION IS DOWN!
+          =============================
+          
+          {{ range .Alerts }}
+          ⚠️  Alert: {{ .Annotations.summary }}
+          📝 Description: {{ .Annotations.description }}
+          ⏰ Started: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          🔗 Runbook: {{ .Annotations.runbook_url }}
+          {{ end }}
+          
+          IMMEDIATE ACTION REQUIRED!
+
+    # SMS notification (if configured)
+    # sms_configs:
+    #   - to: '${ONCALL_PHONE}'
+    #     body: 'URGENT: OTC Application is DOWN. Check email for details.'
+
+  # Database down alerts
+  - name: 'db-down-alerts'
+    email_configs:
+      - to: '${DBA_EMAIL}'
+        subject: '💾 Database Down - OTC System Affected'
+        body: |
+          DATABASE SYSTEM IS DOWN
+          =======================
+          
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Started: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          {{ end }}
+
+  # Security alerts
+  - name: 'security-alerts'
+    email_configs:
+      - to: '${SECURITY_EMAIL}'
+        subject: '🛡️  Security Alert - OTC System'
+        body: |
+          SECURITY ALERT DETECTED
+          ======================
+          
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Service: {{ .Labels.service }}
+          Started: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          {{ end }}
+          
+          Please investigate for potential security incidents.
+
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#security-alerts'
+        title: '🛡️ Security Alert'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Started:* {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          {{ end }}
+
+  # Warning alerts
+  - name: 'warning-alerts'
+    email_configs:
+      - to: '${WARNING_EMAIL}'
+        subject: '⚠️  OTC Warning: {{ .GroupLabels.alertname }}'
+        body: |
+          {{ range .Alerts }}
+          Warning: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Service: {{ .Labels.service }}
+          Started: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          {{ end }}
+
+  # Performance alerts
+  - name: 'performance-alerts'
+    email_configs:
+      - to: '${PERFORMANCE_EMAIL}'
+        subject: '📊 Performance Alert - OTC System'
+        body: |
+          PERFORMANCE ISSUE DETECTED
+          =========================
+          
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Current Value: {{ .Annotations.value }}
+          Started: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          {{ end }}
+
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#performance'
+        title: '📊 Performance Alert'
+        text: |
+          {{ range .Alerts }}
+          *Issue:* {{ .Annotations.summary }}
+          *Details:* {{ .Annotations.description }}
+          {{ end }}
+
+  # Database performance alerts
+  - name: 'db-performance-alerts'
+    email_configs:
+      - to: '${DBA_EMAIL}'
+        subject: '💾 Database Performance Alert'
+        body: |
+          DATABASE PERFORMANCE ISSUE
+          =========================
+          
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Started: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          {{ end }}
+
+  # Business alerts
+  - name: 'business-alerts'
+    email_configs:
+      - to: '${BUSINESS_EMAIL}'
+        subject: '💼 Business Logic Alert - OTC System'
+        body: |
+          BUSINESS LOGIC ISSUE DETECTED
+          ============================
+          
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Impact: Business operations may be affected
+          Started: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          {{ end }}
+
+  # SSL certificate alerts
+  - name: 'ssl-alerts'
+    email_configs:
+      - to: '${SSL_EMAIL}'
+        subject: '🔒 SSL Certificate Alert'
+        body: |
+          SSL CERTIFICATE ISSUE
+          ====================
+          
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Domain: {{ .Labels.domain }}
+          Started: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          {{ end }}
+
+  # Null receiver for silencing
+  - name: 'null-receiver'
+
+# Time intervals for notification schedules
+time_intervals:
+  - name: business-hours
+    time_intervals:
+      - times:
+          - start_time: '09:00'
+            end_time: '18:00'
+        weekdays: ['monday:friday']
+        location: 'America/New_York'
+  
+  - name: on-call-hours
+    time_intervals:
+      - times:
+          - start_time: '18:00'
+            end_time: '09:00'
+        weekdays: ['monday:friday']
+      - weekdays: ['saturday', 'sunday']
+
+  - name: maintenance-window
+    time_intervals:
+      - times:
+          - start_time: '02:00'
+            end_time: '04:00'
+        weekdays: ['sunday']

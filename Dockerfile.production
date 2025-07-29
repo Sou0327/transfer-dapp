@@ -1,0 +1,213 @@
+# Production-Optimized Dockerfile for Cardano OTC Trading System
+# Multi-stage build for maximum security and minimal image size
+
+# ================================
+# Stage 1: Base dependencies
+# ================================
+FROM node:20-alpine AS base
+
+# Install system dependencies
+RUN apk add --no-cache \
+    git \
+    python3 \
+    make \
+    g++ \
+    linux-headers \
+    curl \
+    ca-certificates \
+    tzdata
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+COPY yarn.lock* ./
+
+# ================================
+# Stage 2: Development dependencies
+# ================================
+FROM base AS deps
+
+# Install all dependencies (including dev dependencies for building)
+RUN npm ci --include=dev --frozen-lockfile
+
+# ================================
+# Stage 3: Build stage
+# ================================
+FROM base AS builder
+
+# Copy dependencies from deps stage
+COPY --from=deps /app/node_modules ./node_modules
+
+# Copy source code
+COPY . .
+
+# Set build environment
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV GENERATE_SOURCEMAP=false
+
+# Build the application
+RUN npm run build
+
+# Remove development dependencies
+RUN npm prune --production --silent
+
+# ================================
+# Stage 4: Production dependencies only
+# ================================
+FROM base AS prod-deps
+
+# Install only production dependencies
+RUN npm ci --omit=dev --frozen-lockfile && \
+    npm cache clean --force
+
+# ================================
+# Stage 5: Runtime stage (final image)
+# ================================
+FROM node:20-alpine AS runtime
+
+# Set labels for image metadata
+LABEL maintainer="OTC Trading System Team" \
+      version="1.0.0" \
+      description="Cardano OTC Trading System" \
+      org.opencontainers.image.title="OTC Trading System" \
+      org.opencontainers.image.description="Production-ready Cardano OTC trading platform" \
+      org.opencontainers.image.version="1.0.0" \
+      org.opencontainers.image.vendor="OTC Team" \
+      org.opencontainers.image.licenses="MIT"
+
+# Install runtime dependencies and security updates
+RUN apk add --no-cache \
+    curl \
+    ca-certificates \
+    tzdata \
+    tini \
+    su-exec \
+    dumb-init && \
+    # Update certificates
+    update-ca-certificates && \
+    # Create non-root user
+    addgroup -g 1001 -S nodejs && \
+    adduser -S otcuser -u 1001 -G nodejs
+
+# Set environment variables
+ENV NODE_ENV=production \
+    NODE_OPTIONS="--max-old-space-size=2048" \
+    PORT=4000 \
+    USER=otcuser \
+    GROUP=nodejs \
+    HOME=/app
+
+# Set working directory
+WORKDIR /app
+
+# Copy production dependencies
+COPY --from=prod-deps --chown=otcuser:nodejs /app/node_modules ./node_modules
+
+# Copy built application
+COPY --from=builder --chown=otcuser:nodejs /app/dist ./dist
+COPY --from=builder --chown=otcuser:nodejs /app/public ./public
+COPY --from=builder --chown=otcuser:nodejs /app/package*.json ./
+
+# Copy configuration files
+COPY --chown=otcuser:nodejs config/ ./config/
+COPY --chown=otcuser:nodejs src/migrations/ ./src/migrations/
+
+# Create necessary directories
+RUN mkdir -p /var/log/otc-app && \
+    mkdir -p /app/uploads && \
+    mkdir -p /app/temp && \
+    chown -R otcuser:nodejs /var/log/otc-app /app/uploads /app/temp && \
+    chmod 755 /var/log/otc-app /app/uploads /app/temp
+
+# Copy health check script
+COPY --chown=otcuser:nodejs scripts/healthcheck.js ./scripts/
+RUN chmod +x ./scripts/healthcheck.js
+
+# Create startup script
+RUN echo '#!/bin/sh' > /app/start.sh && \
+    echo 'set -e' >> /app/start.sh && \
+    echo '' >> /app/start.sh && \
+    echo '# Run database migrations' >> /app/start.sh && \
+    echo 'echo "Running database migrations..."' >> /app/start.sh && \
+    echo 'npm run migrate' >> /app/start.sh && \
+    echo '' >> /app/start.sh && \
+    echo '# Start the application' >> /app/start.sh && \
+    echo 'echo "Starting OTC Trading System..."' >> /app/start.sh && \
+    echo 'exec npm start' >> /app/start.sh && \
+    chmod +x /app/start.sh && \
+    chown otcuser:nodejs /app/start.sh
+
+# Security hardening
+RUN rm -rf /tmp/* /var/tmp/* /var/cache/apk/* && \
+    # Remove unnecessary files
+    find /usr/local/lib/node_modules/npm -name "*.md" -delete && \
+    find /usr/local/lib/node_modules/npm -name "test" -type d -exec rm -rf {} + 2>/dev/null || true && \
+    find /usr/local/lib/node_modules/npm -name "*.map" -delete && \
+    # Set secure permissions
+    chmod -R go-w /app && \
+    chmod -R o-rwx /app
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD node ./scripts/healthcheck.js || exit 1
+
+# Security: Don't run as root
+USER otcuser:nodejs
+
+# Expose port
+EXPOSE 4000
+
+# Use tini as PID 1 for proper signal handling
+ENTRYPOINT ["tini", "--"]
+
+# Start the application
+CMD ["/app/start.sh"]
+
+# ================================
+# Stage 6: Development stage (optional)
+# ================================
+FROM builder AS development
+
+# Install development tools
+RUN apk add --no-cache \
+    bash \
+    vim \
+    less
+
+# Copy all dependencies (including dev dependencies)
+COPY --from=deps /app/node_modules ./node_modules
+
+# Set development environment
+ENV NODE_ENV=development
+ENV DEBUG=*
+
+# Create non-root user for development
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S otcuser -u 1001 -G nodejs
+
+# Set ownership
+RUN chown -R otcuser:nodejs /app
+
+USER otcuser:nodejs
+
+# Expose port and debug port
+EXPOSE 4000 9229
+
+# Development command with hot reload
+CMD ["npm", "run", "dev"]
+
+# ================================
+# Build arguments and metadata
+# ================================
+ARG BUILD_DATE
+ARG GIT_COMMIT
+ARG GIT_BRANCH
+ARG VERSION
+
+LABEL build.date=$BUILD_DATE \
+      build.git.commit=$GIT_COMMIT \
+      build.git.branch=$GIT_BRANCH \
+      build.version=$VERSION

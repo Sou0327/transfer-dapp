@@ -1,0 +1,53 @@
+# Grafana Dashboard Provisioning Configuration
+# Automatically loads dashboards from filesystem
+
+apiVersion: 1
+
+providers:
+  # OTC System Dashboards
+  - name: 'otc-dashboards'
+    orgId: 1
+    folder: 'OTC Trading System'
+    type: file
+    disableDeletion: false
+    editable: true
+    allowUiUpdates: true
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/provisioning/dashboards/otc
+
+  # System Monitoring Dashboards
+  - name: 'system-dashboards'
+    orgId: 1
+    folder: 'System Monitoring'
+    type: file
+    disableDeletion: false
+    editable: true
+    allowUiUpdates: true
+    updateIntervalSeconds: 60
+    options:
+      path: /etc/grafana/provisioning/dashboards/system
+
+  # Security Dashboards
+  - name: 'security-dashboards'
+    orgId: 1
+    folder: 'Security & Audit'
+    type: file
+    disableDeletion: false
+    editable: true
+    allowUiUpdates: true
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/provisioning/dashboards/security
+
+  # Business Intelligence Dashboards
+  - name: 'business-dashboards'
+    orgId: 1
+    folder: 'Business Intelligence'
+    type: file
+    disableDeletion: false
+    editable: true
+    allowUiUpdates: true
+    updateIntervalSeconds: 300
+    options:
+      path: /etc/grafana/provisioning/dashboards/business

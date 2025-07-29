@@ -1,0 +1,284 @@
+{
+  "index_patterns": ["otc-logs-*"],
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 1,
+      "index.refresh_interval": "30s",
+      "index.lifecycle.name": "otc-logs-policy",
+      "index.lifecycle.rollover_alias": "otc-logs",
+      "index.max_result_window": 50000,
+      "analysis": {
+        "analyzer": {
+          "log_analyzer": {
+            "type": "custom",
+            "tokenizer": "standard",
+            "filter": ["lowercase", "stop"]
+          }
+        }
+      }
+    },
+    "mappings": {
+      "properties": {
+        "@timestamp": {
+          "type": "date",
+          "format": "strict_date_optional_time||epoch_millis"
+        },
+        "timestamp": {
+          "type": "date",
+          "format": "strict_date_optional_time||epoch_millis"
+        },
+        "level": {
+          "type": "keyword",
+          "fields": {
+            "text": {
+              "type": "text",
+              "analyzer": "log_analyzer"
+            }
+          }
+        },
+        "log_level": {
+          "type": "keyword"
+        },
+        "message": {
+          "type": "text",
+          "analyzer": "log_analyzer",
+          "fields": {
+            "keyword": {
+              "type": "keyword",
+              "ignore_above": 256
+            }
+          }
+        },
+        "log_message": {
+          "type": "text",
+          "analyzer": "log_analyzer",
+          "fields": {
+            "keyword": {
+              "type": "keyword",
+              "ignore_above": 256
+            }
+          }
+        },
+        "service": {
+          "type": "keyword"
+        },
+        "type": {
+          "type": "keyword"
+        },
+        "host": {
+          "type": "keyword"
+        },
+        "container_name": {
+          "type": "keyword"
+        },
+        "correlation_id": {
+          "type": "keyword"
+        },
+        "user_id": {
+          "type": "keyword"
+        },
+        "client_ip": {
+          "type": "ip"
+        },
+        "geoip": {
+          "properties": {
+            "country_name": {
+              "type": "keyword"
+            },
+            "city_name": {
+              "type": "keyword"
+            },
+            "region_name": {
+              "type": "keyword"
+            },
+            "location": {
+              "type": "geo_point"
+            },
+            "continent_code": {
+              "type": "keyword"
+            },
+            "country_code2": {
+              "type": "keyword"
+            }
+          }
+        },
+        "transaction_id": {
+          "type": "keyword"
+        },
+        "request_id": {
+          "type": "keyword"
+        },
+        "wallet_id": {
+          "type": "keyword"
+        },
+        "security_event": {
+          "type": "keyword"
+        },
+        "environment": {
+          "type": "keyword"
+        },
+        "system": {
+          "type": "keyword"
+        },
+        "processed_at": {
+          "type": "date",
+          "format": "strict_date_optional_time||epoch_millis"
+        },
+        "tags": {
+          "type": "keyword"
+        },
+        "fields": {
+          "type": "object",
+          "dynamic": true
+        },
+        "beat": {
+          "properties": {
+            "hostname": {
+              "type": "keyword"
+            },
+            "name": {
+              "type": "keyword"
+            },
+            "version": {
+              "type": "keyword"
+            }
+          }
+        },
+        "source": {
+          "type": "keyword"
+        },
+        "offset": {
+          "type": "long"
+        },
+        "input": {
+          "properties": {
+            "type": {
+              "type": "keyword"
+            }
+          }
+        },
+        "prospector": {
+          "properties": {
+            "type": {
+              "type": "keyword"
+            }
+          }
+        },
+        "fileset": {
+          "properties": {
+            "module": {
+              "type": "keyword"
+            },
+            "name": {
+              "type": "keyword"
+            }
+          }
+        },
+        "module": {
+          "type": "keyword"
+        },
+        "dataset": {
+          "type": "keyword"
+        },
+        "namespace": {
+          "type": "keyword"
+        },
+        "http": {
+          "properties": {
+            "request": {
+              "properties": {
+                "method": {
+                  "type": "keyword"
+                },
+                "url": {
+                  "type": "text",
+                  "fields": {
+                    "keyword": {
+                      "type": "keyword",
+                      "ignore_above": 256
+                    }
+                  }
+                },
+                "headers": {
+                  "type": "object",
+                  "dynamic": true
+                }
+              }
+            },
+            "response": {
+              "properties": {
+                "status_code": {
+                  "type": "integer"
+                },
+                "body": {
+                  "type": "text"
+                }
+              }
+            }
+          }
+        },
+        "error": {
+          "properties": {
+            "message": {
+              "type": "text",
+              "analyzer": "log_analyzer"
+            },
+            "stack_trace": {
+              "type": "text",
+              "analyzer": "log_analyzer"
+            },
+            "type": {
+              "type": "keyword"
+            },
+            "code": {
+              "type": "keyword"
+            }
+          }
+        },
+        "database": {
+          "properties": {
+            "query": {
+              "type": "text",
+              "analyzer": "log_analyzer"
+            },
+            "duration": {
+              "type": "float"
+            },
+            "user": {
+              "type": "keyword"
+            },
+            "name": {
+              "type": "keyword"
+            }
+          }
+        },
+        "cardano": {
+          "properties": {
+            "transaction_hash": {
+              "type": "keyword"
+            },
+            "block_hash": {
+              "type": "keyword"
+            },
+            "slot": {
+              "type": "long"
+            },
+            "epoch": {
+              "type": "integer"
+            },
+            "ada_amount": {
+              "type": "long"
+            }
+          }
+        }
+      }
+    }
+  },
+  "composed_of": [],
+  "priority": 100,
+  "version": 1,
+  "_meta": {
+    "description": "Index template for Cardano OTC Trading System logs"
+  }
+}

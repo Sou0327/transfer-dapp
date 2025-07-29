@@ -1,0 +1,483 @@
+# Production Configuration for Cardano OTC Trading System
+# Environment-specific settings for production deployment
+
+application:
+  name: "Cardano OTC Trading System"
+  version: "1.0.0"
+  environment: "production"
+  
+  # Server configuration
+  server:
+    host: "0.0.0.0"
+    port: 4000
+    cors:
+      enabled: true
+      origins:
+        - "https://${DOMAIN}"
+        - "https://www.${DOMAIN}"
+      credentials: true
+      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+      headers: ["Content-Type", "Authorization", "X-Requested-With"]
+    
+    # Security headers
+    security:
+      helmet:
+        enabled: true
+        contentSecurityPolicy:
+          directives:
+            defaultSrc: ["'self'"]
+            scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"]
+            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"]
+            fontSrc: ["'self'", "https://fonts.gstatic.com"]
+            imgSrc: ["'self'", "data:", "https:"]
+            connectSrc: ["'self'", "wss:", "https:"]
+        hsts:
+          maxAge: 31536000
+          includeSubDomains: true
+          preload: true
+        noSniff: true
+        frameguard:
+          action: "deny"
+        
+      # Rate limiting
+      rateLimit:
+        windowMs: 900000  # 15 minutes
+        max: 100  # limit each IP to 100 requests per windowMs
+        message: "Too many requests from this IP"
+        standardHeaders: true
+        legacyHeaders: false
+        
+        # API specific limits
+        api:
+          windowMs: 60000  # 1 minute
+          max: 60  # 60 requests per minute for API endpoints
+        
+        # Admin endpoints (stricter)
+        admin:
+          windowMs: 300000  # 5 minutes
+          max: 20  # 20 requests per 5 minutes for admin endpoints
+        
+        # Signing endpoints (very strict)
+        sign:
+          windowMs: 60000  # 1 minute
+          max: 5  # 5 signing attempts per minute
+
+  # Session configuration
+  session:
+    secret: "${SESSION_SECRET}"
+    name: "otc-session"
+    cookie:
+      secure: true
+      httpOnly: true
+      maxAge: 3600000  # 1 hour
+      sameSite: "strict"
+    
+    # Session store (Redis)
+    store:
+      type: "redis"
+      host: "redis"
+      port: 6379
+      password: "${REDIS_PASSWORD}"
+      db: 0
+      prefix: "otc:sess:"
+      ttl: 3600  # 1 hour
+
+# Database configuration
+database:
+  # Primary database
+  primary:
+    type: "postgresql"
+    host: "postgres"
+    port: 5432
+    database: "otc_system"
+    username: "otc_user"
+    password: "${DATABASE_PASSWORD}"
+    schema: "public"
+    
+    # Connection pool
+    pool:
+      min: 5
+      max: 20
+      acquireTimeoutMillis: 30000
+      createTimeoutMillis: 30000
+      destroyTimeoutMillis: 5000
+      idleTimeoutMillis: 600000
+      reapIntervalMillis: 1000
+      createRetryIntervalMillis: 200
+    
+    # SSL configuration
+    ssl:
+      enabled: false  # Set to true if using SSL
+      rejectUnauthorized: true
+      ca: "${DATABASE_CA_CERT}"
+      cert: "${DATABASE_CLIENT_CERT}"
+      key: "${DATABASE_CLIENT_KEY}"
+    
+    # Migration settings
+    migrations:
+      directory: "./src/migrations"
+      tableName: "migrations"
+      schemaName: "public"
+  
+  # Read replica (optional)
+  replica:
+    enabled: false
+    host: "postgres-replica"
+    port: 5432
+    database: "otc_system"
+    username: "otc_reader"
+    password: "${DATABASE_REPLICA_PASSWORD}"
+
+# Cache configuration (Redis)
+cache:
+  redis:
+    host: "redis"
+    port: 6379
+    password: "${REDIS_PASSWORD}"
+    db: 1
+    
+    # Connection options
+    connectTimeout: 10000
+    lazyConnect: true
+    maxRetriesPerRequest: 3
+    retryDelayOnFailover: 100
+    enableReadyCheck: false
+    maxLoadingTimeout: 0
+    
+    # Clustering (if needed)
+    cluster:
+      enabled: false
+      nodes: []
+    
+    # Cache TTL settings
+    ttl:
+      default: 300  # 5 minutes
+      rates: 60     # 1 minute for exchange rates
+      utxos: 30     # 30 seconds for UTxO data
+      balances: 60  # 1 minute for wallet balances
+
+# Cardano network configuration
+cardano:
+  network: "mainnet"
+  
+  # Blockfrost configuration
+  blockfrost:
+    apiUrl: "https://cardano-mainnet.blockfrost.io/api/v0"
+    apiKey: "${BLOCKFROST_API_KEY}"
+    rateLimit:
+      requestsPerSecond: 10
+      burstSize: 50
+    
+    # Request configuration
+    timeout: 30000
+    retries: 3
+    retryDelay: 1000
+  
+  # Alternative providers (fallback)
+  koios:
+    enabled: true
+    apiUrl: "https://api.koios.rest/api/v1"
+    timeout: 30000
+    retries: 2
+  
+  # Network parameters
+  parameters:
+    epochLength: 432000  # 5 days in seconds
+    slotLength: 1        # 1 second per slot
+    minFeeA: 44
+    minFeeB: 155381
+    maxTxSize: 16384
+    maxValSize: 5000
+    utxoCostPerWord: 4310
+    poolDeposit: 500000000  # 500 ADA
+    keyDeposit: 2000000     # 2 ADA
+  
+  # Protocol parameters cache
+  protocolParams:
+    cacheExpiry: 3600  # 1 hour
+    autoUpdate: true
+
+# JWT Authentication
+jwt:
+  secret: "${JWT_SECRET}"
+  algorithm: "HS256"
+  expiresIn: "1h"
+  issuer: "otc-trading-system"
+  audience: "otc-users"
+  
+  # Refresh token
+  refresh:
+    secret: "${JWT_REFRESH_SECRET}"
+    expiresIn: "7d"
+    
+  # Admin tokens (longer expiry)
+  admin:
+    expiresIn: "8h"
+
+# Encryption settings
+encryption:
+  # AES encryption for sensitive data
+  aes:
+    algorithm: "aes-256-gcm"
+    keyLength: 32
+    ivLength: 16
+    tagLength: 16
+    key: "${ENCRYPTION_KEY}"
+  
+  # Wallet data encryption
+  wallet:
+    key: "${WALLET_ENCRYPTION_KEY}"
+    algorithm: "aes-256-cbc"
+
+# Logging configuration
+logging:
+  level: "info"
+  format: "json"
+  
+  # Console logging
+  console:
+    enabled: true
+    colorize: false
+    timestamp: true
+    
+  # File logging
+  file:
+    enabled: true
+    filename: "/var/log/otc-app/application.log"
+    maxsize: "100MB"
+    maxFiles: 10
+    tailable: true
+    zippedArchive: true
+    
+  # Error logging (separate file)
+  error:
+    enabled: true
+    filename: "/var/log/otc-app/error.log"
+    level: "error"
+    maxsize: "50MB"
+    maxFiles: 5
+    
+  # Audit logging
+  audit:
+    enabled: true
+    filename: "/var/log/otc-app/audit.log"
+    maxsize: "100MB"
+    maxFiles: 20
+  
+  # Log rotation
+  rotation:
+    frequency: "daily"
+    maxSize: "100MB"
+    maxFiles: 30
+    compress: true
+
+# Monitoring and metrics
+monitoring:
+  # Prometheus metrics
+  prometheus:
+    enabled: true
+    endpoint: "/metrics"
+    defaultMetrics: true
+    
+    # Custom metrics
+    customMetrics:
+      enabled: true
+      prefix: "otc_"
+    
+    # Histogram buckets
+    histogramBuckets: [0.1, 0.3, 0.5, 0.7, 1, 3, 5, 7, 10]
+  
+  # Health checks
+  health:
+    enabled: true
+    endpoint: "/health"
+    checks:
+      - database
+      - redis
+      - blockfrost
+    timeout: 5000
+  
+  # Application performance monitoring
+  apm:
+    enabled: false  # Set to true if using APM service
+    serviceName: "otc-trading-system"
+    environment: "production"
+    serverUrl: "${APM_SERVER_URL}"
+    secretToken: "${APM_SECRET_TOKEN}"
+
+# WebSocket configuration
+websocket:
+  enabled: true
+  path: "/ws"
+  
+  # Connection limits
+  maxConnections: 1000
+  connectionTimeout: 30000
+  
+  # Message limits
+  maxMessageSize: 1024  # 1KB
+  rateLimit:
+    points: 10
+    duration: 60  # 1 minute
+  
+  # Heartbeat
+  heartbeat:
+    interval: 30000  # 30 seconds
+    timeout: 5000
+
+# Security configuration
+security:
+  # HTTPS settings
+  https:
+    enabled: true
+    forceRedirect: true
+    
+  # Content Security Policy
+  csp:
+    enabled: true
+    reportOnly: false
+    reportUri: "/api/csp-report"
+    
+  # API key validation
+  apiKey:
+    enabled: true
+    header: "X-API-Key"
+    keys:
+      - "${API_KEY_1}"
+      - "${API_KEY_2}"
+  
+  # Request validation
+  validation:
+    maxRequestSize: "10MB"
+    parameterLimit: 100
+    
+  # IP whitelisting (optional)
+  ipWhitelist:
+    enabled: false
+    ips: []
+    
+  # Fail2ban integration
+  fail2ban:
+    enabled: true
+    maxAttempts: 5
+    windowMinutes: 15
+    banMinutes: 60
+
+# Email configuration
+email:
+  # SMTP settings
+  smtp:
+    host: "${SMTP_HOST}"
+    port: "${SMTP_PORT}"
+    secure: true  # Use TLS
+    auth:
+      user: "${SMTP_USERNAME}"
+      pass: "${SMTP_PASSWORD}"
+  
+  # Email templates
+  templates:
+    directory: "./src/templates/email"
+    
+  # Default settings
+  defaults:
+    from:
+      name: "OTC Trading System"
+      address: "${EMAIL_FROM_ADDRESS}"
+    
+    replyTo: "${EMAIL_REPLY_TO}"
+    
+  # Email types
+  types:
+    alerts:
+      enabled: true
+      to: "${ALERT_EMAIL}"
+    
+    admin:
+      enabled: true
+      to: "${ADMIN_EMAIL}"
+    
+    security:
+      enabled: true
+      to: "${SECURITY_EMAIL}"
+
+# External services
+external:
+  # Exchange rate providers
+  rates:
+    primary: "coingecko"
+    fallback: "coinmarketcap"
+    
+    coingecko:
+      apiUrl: "https://api.coingecko.com/api/v3"
+      apiKey: "${COINGECKO_API_KEY}"
+      timeout: 10000
+      
+    coinmarketcap:
+      apiUrl: "https://pro-api.coinmarketcap.com/v1"
+      apiKey: "${COINMARKETCAP_API_KEY}"
+      timeout: 10000
+  
+  # Webhook endpoints
+  webhooks:
+    enabled: true
+    timeout: 30000
+    retries: 3
+    
+    # Payment notifications
+    payments:
+      url: "${PAYMENT_WEBHOOK_URL}"
+      secret: "${PAYMENT_WEBHOOK_SECRET}"
+    
+    # Security alerts
+    security:
+      url: "${SECURITY_WEBHOOK_URL}"
+      secret: "${SECURITY_WEBHOOK_SECRET}"
+
+# Backup configuration
+backup:
+  # Database backups
+  database:
+    enabled: true
+    schedule: "0 2 * * *"  # Daily at 2 AM
+    retention: 30  # Keep 30 days
+    compression: "gzip"
+    
+    # S3 backup (optional)
+    s3:
+      enabled: false
+      bucket: "${BACKUP_S3_BUCKET}"
+      region: "${BACKUP_S3_REGION}"
+      accessKey: "${BACKUP_S3_ACCESS_KEY}"
+      secretKey: "${BACKUP_S3_SECRET_KEY}"
+  
+  # File backups
+  files:
+    enabled: true
+    directories:
+      - "/var/log/otc-app"
+      - "./ssl"
+    schedule: "0 3 * * *"  # Daily at 3 AM
+    retention: 7  # Keep 7 days
+
+# Maintenance mode
+maintenance:
+  enabled: false
+  message: "System is under maintenance. Please try again later."
+  allowedIPs: []
+  
+# Feature flags
+features:
+  rateBasedRequests: true
+  sweepRequests: true
+  multiWalletSupport: true
+  utxoSelection: true
+  realTimeMonitoring: true
+  auditLogging: true
+  apiMetrics: true
+  
+# Development settings (disabled in production)
+development:
+  hotReload: false
+  debugMode: false
+  verboseLogging: false
+  mockExternalServices: false
