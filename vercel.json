@@ -1,7 +1,7 @@
 {
-  "buildCommand": "npm install --no-optional && npm run build",
+  "buildCommand": "npm ci --omit=optional && npm run build",
   "outputDirectory": "dist",
-  "installCommand": "npm install --no-optional",
+  "installCommand": "npm ci --omit=optional",
   "framework": "vite",
   "env": {
     "NODE_ENV": "production",
