@@ -271,7 +271,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
         </form>
 
         {/* Development Information */}
-        {process.env.NODE_ENV === 'development' && (
+        {(import.meta.env.NODE_ENV === 'development' || import.meta.env.DEV) && (
           <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-md">
             <h4 className="text-sm font-medium text-blue-800">開発用情報</h4>
             <div className="mt-2 text-xs text-blue-600">

@@ -5,10 +5,10 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useAdminAuth, createAuthenticatedFetch } from '../../hooks/useAdminAuth';
 import { AdminLogin } from './AdminLogin';
-import { AdminLayout } from './AdminLayout';
 import { Dashboard } from './Dashboard';
 import { RequestsManagement } from './RequestsManagement';
 import { TransactionManagement } from './TransactionManagement';
+import { SecurityDashboard } from './SecurityDashboard';
 import { MonitoringSettings } from './MonitoringSettings';
 import { SystemSettings } from './SystemSettings';
 import { 
@@ -19,7 +19,7 @@ import {
   LoginCredentials
 } from '../../types/otc/index';
 
-type AdminTab = 'dashboard' | 'requests' | 'transactions' | 'monitoring' | 'settings';
+type AdminTab = 'dashboard' | 'requests' | 'transactions' | 'security' | 'monitoring' | 'settings';
 
 export const AdminApp: React.FC = () => {
   const { session, loading: authLoading, error: authError, login, logout } = useAdminAuth();
@@ -52,6 +52,25 @@ export const AdminApp: React.FC = () => {
     try {
       setRequestsLoading(true);
       
+      // 開発環境ではモックデータを使用
+      if (import.meta.env.NODE_ENV === 'development' || import.meta.env.DEV) {
+        const mockRequests: OTCRequest[] = [
+          {
+            id: 'req_' + Date.now(),
+            currency: 'ADA',
+            amount_mode: 'fixed',
+            amount_or_rule_json: { amount: '100000000' }, // 100 ADA in lovelace
+            recipient: 'addr1qxyz...example',
+            ttl_slot: 12345678,
+            status: RequestStatus.REQUESTED,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }
+        ];
+        setRequests(mockRequests);
+        return;
+      }
+
       const authFetch = createAuthenticatedFetch();
       const response = await authFetch('/api/ada/requests');
       const data = await response.json();
@@ -66,6 +85,34 @@ export const AdminApp: React.FC = () => {
 
   // Create new request
   const handleCreateRequest = useCallback(async (requestData: CreateRequestRequest): Promise<CreateRequestResponse> => {
+    // 開発環境ではモックレスポンスを返す
+    if (import.meta.env.NODE_ENV === 'development' || import.meta.env.DEV) {
+      const mockRequestId = 'req_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+      const mockSignUrl = `${window.location.origin}/sign?request=${mockRequestId}&ttl=${Date.now() + 15 * 60 * 1000}`;
+      
+      console.log('🎯 モック請求作成:', { mockRequestId, mockSignUrl });
+      
+      // 新しい請求をリストに追加
+      const newRequest: OTCRequest = {
+        id: mockRequestId,
+        currency: requestData.currency,
+        amount_mode: requestData.amount_mode,
+        amount_or_rule_json: requestData.amount_or_rule,
+        recipient: requestData.recipient,
+        ttl_slot: Math.floor((Date.now() + requestData.ttl_minutes * 60 * 1000) / 1000),
+        status: RequestStatus.REQUESTED,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      
+      setRequests(prev => [newRequest, ...prev]);
+      
+      return {
+        requestId: mockRequestId,
+        signUrl: mockSignUrl,
+      };
+    }
+
     const authFetch = createAuthenticatedFetch();
     
     const response = await authFetch('/api/ada/requests', {
@@ -91,6 +138,16 @@ export const AdminApp: React.FC = () => {
 
   // Update request status
   const handleUpdateStatus = useCallback(async (id: string, status: RequestStatus): Promise<void> => {
+    // 開発環境ではローカル状態を更新
+    if (import.meta.env.NODE_ENV === 'development' || import.meta.env.DEV) {
+      setRequests(prev => prev.map(req => 
+        req.id === id 
+          ? { ...req, status, updated_at: new Date().toISOString() }
+          : req
+      ));
+      return;
+    }
+
     const authFetch = createAuthenticatedFetch();
     
     const response = await authFetch(`/api/ada/requests/${id}`, {
@@ -112,6 +169,13 @@ export const AdminApp: React.FC = () => {
 
   // Generate new signing link
   const handleGenerateLink = useCallback(async (id: string): Promise<string> => {
+    // 開発環境では新しいリンクを生成
+    if (import.meta.env.NODE_ENV === 'development' || import.meta.env.DEV) {
+      const newSignUrl = `${window.location.origin}/sign?request=${id}&ttl=${Date.now() + 15 * 60 * 1000}&regenerated=true`;
+      console.log('新しいリンクが生成されました:', newSignUrl);
+      return newSignUrl;
+    }
+
     const authFetch = createAuthenticatedFetch();
     
     const response = await authFetch(`/api/ada/requests/${id}/regenerate-link`, {
@@ -160,50 +224,86 @@ export const AdminApp: React.FC = () => {
     );
   }
 
-  // Show login screen if not authenticated
+  // Show login form if not authenticated
   if (!session) {
     return (
-      <AdminLogin
+      <AdminLogin 
         onLogin={handleLogin}
         loading={loginLoading}
-        error={loginError || authError}
+        error={loginError}
       />
     );
   }
 
-  // Render main admin interface
-  const renderTabContent = () => {
-    switch (activeTab) {
-      case 'dashboard':
-        return <Dashboard />;
-        
-      case 'requests':
-        return (
-          <RequestsManagement
-            requests={requests}
-            onCreateRequest={handleCreateRequest}
-            onUpdateStatus={handleUpdateStatus}
-            onGenerateLink={handleGenerateLink}
-          />
-        );
-        
-      case 'transactions':
-        return <TransactionManagement />;
-        
-      case 'monitoring':
-        return <MonitoringSettings />;
-        
-      case 'settings':
-        return <SystemSettings />;
-        
-      default:
-        return <Dashboard />;
-    }
-  };
-
+  // Main admin interface
   return (
-    <AdminLayout activeTab={activeTab} onTabChange={handleTabChange}>
-      {renderTabContent()}
-    </AdminLayout>
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white shadow">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-6">
+            <div className="flex items-center">
+              <h1 className="text-2xl font-bold text-gray-900">₳ OTC管理システム</h1>
+            </div>
+            <div className="flex items-center space-x-4">
+              <span className="text-sm text-gray-500">管理者: {session.username}</span>
+              <button
+                onClick={() => logout()}
+                className="text-sm text-gray-500 hover:text-gray-700"
+              >
+                ログアウト
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Navigation */}
+      <nav className="bg-white shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex space-x-8">
+            {[
+              { id: 'dashboard' as const, label: 'ダッシュボード' },
+              { id: 'requests' as const, label: '請求管理' },
+              { id: 'transactions' as const, label: 'トランザクション' },
+              { id: 'security' as const, label: 'セキュリティ' },
+              { id: 'monitoring' as const, label: '監視' },
+              { id: 'settings' as const, label: 'システム設定' },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => handleTabChange(tab.id)}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === tab.id
+                    ? 'border-orange-500 text-orange-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </nav>
+
+      {/* Main content */}
+      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <div className="px-4 py-6 sm:px-0">
+          {activeTab === 'dashboard' && <Dashboard />}
+          {activeTab === 'requests' && (
+            <RequestsManagement
+              requests={requests}
+              onCreateRequest={handleCreateRequest}
+              onUpdateStatus={handleUpdateStatus}
+              onGenerateLink={handleGenerateLink}
+            />
+          )}
+          {activeTab === 'transactions' && <TransactionManagement />}
+          {activeTab === 'security' && <SecurityDashboard />}
+          {activeTab === 'monitoring' && <MonitoringSettings />}
+          {activeTab === 'settings' && <SystemSettings />}
+        </div>
+      </main>
+    </div>
   );
 };

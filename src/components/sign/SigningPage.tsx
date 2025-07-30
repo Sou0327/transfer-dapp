@@ -5,10 +5,10 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { OTCRequest, RequestStatus, FixedAmount, SweepRule, RateBasedRule } from '../../types/otc/index';
-import { WalletSelectModal } from '../wallet/WalletSelectModal';
-import { TxPreview } from '../transaction/TxPreview';
-import { SigningFlow } from '../transaction/SigningFlow';
-import { CountdownBadge } from '../ui/CountdownBadge';
+import { WalletSelectModal } from '../WalletSelectModal';
+import { TxPreview } from '../TxPreview';
+import { SigningFlow } from '../SigningFlow';
+import { CountdownBadge } from '../CountdownBadge';
 import { SigningSteps } from './SigningSteps';
 import { SigningError } from './SigningError';
 import { SigningSuccess } from './SigningSuccess';

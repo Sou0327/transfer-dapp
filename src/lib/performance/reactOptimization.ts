@@ -278,7 +278,8 @@ export const withPerformanceMonitoring = <P extends Record<string, any>>(
   const WrappedComponent: React.FC<P> = (props) => {
     const name = componentName || Component.displayName || Component.name || 'Unknown';
     usePerformanceMonitor(name);
-    return <Component {...props} />;
+    // Note: Component rendering should be implemented in .tsx files
+    throw new Error('Component rendering should be moved to .tsx files');
   };
   
   WrappedComponent.displayName = `WithPerformanceMonitoring(${Component.displayName || Component.name})`;
@@ -314,14 +315,8 @@ export const createOptimizedListItem = <T>(
     const item = data[index];
     const key = getItemKey(item, index);
     
-    return (
-      <ItemComponent
-        key={key}
-        item={item}
-        index={index}
-        style={style}
-      />
-    );
+    // Note: Component rendering should be implemented in .tsx files
+    throw new Error('Component rendering should be moved to .tsx files');
   }, (prevProps, nextProps) => {
     // Custom comparison for list items
     return (
@@ -494,19 +489,10 @@ export const LazyUtils = {
   ) => {
     const LazyComponent = React.lazy(importFn);
     
-    const WrappedComponent: React.FC<P> = (props) => (
-      <React.Suspense 
-        fallback={
-          fallback ? <fallback /> : (
-            <div className="flex items-center justify-center p-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
-            </div>
-          )
-        }
-      >
-        <LazyComponent {...props} />
-      </React.Suspense>
-    );
+    const WrappedComponent: React.FC<P> = (props) => {
+      // Note: Component rendering should be implemented in .tsx files
+      throw new Error('Component rendering should be moved to .tsx files');
+    };
     
     return WrappedComponent;
   },

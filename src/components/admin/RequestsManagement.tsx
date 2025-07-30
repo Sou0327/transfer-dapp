@@ -1,9 +1,8 @@
 /**
  * Requests Management Component for OTC Admin System
  */
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import QRCode from 'qrcode';
-import { v4 as uuidv4 } from 'uuid';
 import { 
   OTCRequest, 
   CreateRequestRequest, 
@@ -14,7 +13,7 @@ import {
   RateBasedRule,
   AmountOrRule
 } from '../../types/otc/index';
-import { useAdminAuth, createAuthenticatedFetch } from '../../hooks/useAdminAuth';
+import { useAdminAuth } from '../../hooks/useAdminAuth';
 
 interface RequestsManagementProps {
   requests: OTCRequest[];
@@ -48,7 +47,7 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
   onGenerateLink,
   className = '',
 }) => {
-  const { session, token } = useAdminAuth();
+  // const { } = useAdminAuth(); // 現在未使用
   const [activeTab, setActiveTab] = useState<'list' | 'create'>('list');
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -58,7 +57,7 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
   const [formData, setFormData] = useState<CreateRequestFormData>({
     currency: 'ADA',
     amount_mode: 'fixed',
-    recipient: process.env.VITE_ESCROW_ADDRESS || '',
+    recipient: import.meta.env.VITE_ESCROW_ADDRESS || '',
     ttl_minutes: 10,
     fixed_amount: '',
     ada_only: true,
@@ -123,9 +122,11 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
           }
         }
 
-        const slippage = parseFloat(formData.slippage_bps);
-        if (isNaN(slippage) || slippage < 0 || slippage > 1000) {
-          errors.push('スリッページは0〜1000bpsの範囲で入力してください');
+        {
+          const slippage = parseFloat(formData.slippage_bps);
+          if (isNaN(slippage) || slippage < 0 || slippage > 1000) {
+            errors.push('スリッページは0〜1000bpsの範囲で入力してください');
+          }
         }
         break;
     }
@@ -136,13 +137,14 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
   // Create amount rule based on mode
   const createAmountRule = useCallback((): AmountOrRule => {
     switch (formData.amount_mode) {
-      case 'fixed':
+      case 'fixed': {
         const fixedRule: FixedAmount = {
           amount: (parseFloat(formData.fixed_amount) * 1_000_000).toString(), // Convert to lovelace
         };
         return fixedRule;
+      }
 
-      case 'sweep':
+      case 'sweep': {
         const sweepRule: SweepRule = {
           ada_only: formData.ada_only,
           exclude_utxos: formData.exclude_utxos.trim() 
@@ -150,8 +152,9 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
             : undefined,
         };
         return sweepRule;
+      }
 
-      case 'rate_based':
+      case 'rate_based': {
         const rateRule: RateBasedRule = {
           fiat_amount: parseFloat(formData.fiat_amount),
           rate_source: formData.rate_source,
@@ -159,6 +162,7 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
           slippage_bps: parseFloat(formData.slippage_bps),
         };
         return rateRule;
+      }
 
       default:
         throw new Error('Invalid amount mode');
@@ -188,18 +192,48 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
       };
 
       const response = await onCreateRequest(requestData);
+      console.log('📝 請求作成レスポンス:', response);
       setGeneratedRequest(response);
 
-      // Generate QR code
-      const qrDataUrl = await QRCode.toDataURL(response.signUrl, {
-        width: 256,
-        margin: 2,
-        color: {
-          dark: '#000000',
-          light: '#FFFFFF',
-        },
-      });
-      setQrCodeDataUrl(qrDataUrl);
+      // Generate QR code with error handling
+      try {
+        // Try SVG format first (more reliable in browser)
+        const qrSvg = await QRCode.toString(response.signUrl, {
+          type: 'svg',
+          width: 256,
+          margin: 2,
+          color: {
+            dark: '#000000',
+            light: '#FFFFFF',
+          },
+        });
+        
+        // Convert SVG to data URL for img src compatibility
+        const svgDataUrl = `data:image/svg+xml;base64,${btoa(qrSvg)}`;
+        setQrCodeDataUrl(svgDataUrl);
+      } catch (qrError) {
+        console.warn('QRコード生成に失敗しました:', qrError);
+        
+        // Fallback: Create a simple text-based QR code placeholder
+        try {
+          const fallbackSvg = `
+            <svg width="256" height="256" xmlns="http://www.w3.org/2000/svg">
+              <rect width="256" height="256" fill="#f3f4f6" stroke="#d1d5db" stroke-width="2"/>
+              <text x="128" y="120" text-anchor="middle" font-family="Arial" font-size="12" fill="#374151">
+                QRコード生成失敗
+              </text>
+              <text x="128" y="140" text-anchor="middle" font-family="Arial" font-size="10" fill="#6b7280">
+                下記URLを手動でコピー
+              </text>
+            </svg>
+          `;
+          const fallbackDataUrl = `data:image/svg+xml;base64,${btoa(fallbackSvg)}`;
+          setQrCodeDataUrl(fallbackDataUrl);
+        } catch {
+          // 完全にQRコード生成に失敗
+          setQrCodeDataUrl(null);
+        }
+      }
 
       // Reset form
       setFormData(prev => ({
@@ -239,14 +273,16 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
   // Format amount for display
   const formatAmount = useCallback((request: OTCRequest): string => {
     switch (request.amount_mode) {
-      case 'fixed':
+      case 'fixed': {
         const fixedAmount = request.amount_or_rule_json as FixedAmount;
         return `${(parseInt(fixedAmount.amount) / 1_000_000).toFixed(6)} ADA`;
+      }
       case 'sweep':
         return 'All ADA (Sweep)';
-      case 'rate_based':
+      case 'rate_based': {
         const rateAmount = request.amount_or_rule_json as RateBasedRule;
         return `¥${rateAmount.fiat_amount.toLocaleString()} (Rate-based)`;
+      }
       default:
         return 'Unknown';
     }

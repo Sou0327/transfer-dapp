@@ -50,7 +50,7 @@ export class ErrorBoundary extends Component<Props, State> {
                     <p>申し訳ございませんが、予期しないエラーが発生しました。</p>
                     <p className="mt-1">ページを再読み込みしてお試しください。</p>
                   </div>
-                  {process.env.NODE_ENV === 'development' && this.state.error && (
+                  {(import.meta.env.NODE_ENV === 'development' || import.meta.env.DEV) && this.state.error && (
                     <div className="mt-4">
                       <details className="text-xs text-red-600">
                         <summary className="cursor-pointer font-medium">エラー詳細</summary>

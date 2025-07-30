@@ -1,13 +1,29 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { Buffer } from 'buffer';
 import { useYoroiConnect } from '../hooks/useYoroiConnect';
 import { useUtxoManager } from '../hooks/useUtxoManager';
 import { TransferFormProps } from '../types';
+import { OptimizationUtils, useOptimizedState } from '../lib/performance/reactOptimization';
 
 // Buffer polyfill for browser
 window.Buffer = Buffer;
 
-export const TransferForm: React.FC<TransferFormProps> = ({
+// Buffer polyfill for browser
+window.Buffer = Buffer;
+
+// Memoized CSL loader to avoid repeated imports
+let cachedCSL: any = null;
+const loadCSL = async () => {
+  if (cachedCSL) return cachedCSL;
+  
+  console.log('🔧 Loading CSL for the first time...');
+  const wasmModule = await import('@emurgo/cardano-serialization-lib-browser');
+  cachedCSL = wasmModule.default || wasmModule;
+  console.log('✅ CSL cached successfully');
+  return cachedCSL;
+};
+
+export const TransferForm: React.FC<TransferFormProps> = React.memo(({
   onTransferComplete,
   onTransferError,
   className = '',
@@ -15,22 +31,22 @@ export const TransferForm: React.FC<TransferFormProps> = ({
   const { isConnected, api } = useYoroiConnect();
   const { utxos, totalAda, autoSelectForAmount, clearSelection } = useUtxoManager();
   
-  const [formData, setFormData] = useState({
+  // Use optimized state to prevent unnecessary re-renders
+  const [formData, setFormData] = useOptimizedState({
     to: '',
     amount: '',
     sweepMode: false,
   });
+  
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
-  // フォーム入力の処理
-  const handleInputChange = useCallback((field: string, value: string | boolean) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    setValidationErrors([]);
-  }, []);
+  // Stable callbacks for onTransfer handlers
+  const stableOnTransferComplete = OptimizationUtils.useStableCallback(onTransferComplete);
+  const stableOnTransferError = OptimizationUtils.useStableCallback(onTransferError);
 
-  // バリデーション
-  const validateForm = useCallback((): string[] => {
+  // Memoized validation function to avoid recreation
+  const validateForm = useMemo(() => (): string[] => {
     const errors: string[] = [];
 
     // アドレス検証
@@ -60,14 +76,32 @@ export const TransferForm: React.FC<TransferFormProps> = ({
     }
 
     return errors;
-  }, [formData, totalAda, utxos.length]);
+  }, [formData.to, formData.amount, formData.sweepMode, totalAda, utxos.length]);
 
-  // 送金実行
+  // Optimized input change handler
+  const handleInputChange = useCallback((field: string, value: string | boolean) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    setValidationErrors([]);
+  }, [setFormData]);
+
+  // Memoized available balance display
+  const availableBalance = useMemo(() => {
+    return (Number(totalAda) / 1_000_000).toFixed(6);
+  }, [totalAda]);
+
+  // Memoized estimated sweep amount
+  const estimatedSweepAmount = useMemo(() => {
+    if (!formData.sweepMode) return null;
+    const minFee = 170_000; // 0.17 ADA (実際にはBlockfrostから取得)
+    return ((Number(totalAda) - minFee) / 1_000_000).toFixed(6);
+  }, [formData.sweepMode, totalAda]);
+
+  // Optimized submit handler
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!isConnected || !api) {
-      onTransferError('ウォレットが接続されていません');
+      stableOnTransferError('ウォレットが接続されていません');
       return;
     }
 
@@ -81,9 +115,8 @@ export const TransferForm: React.FC<TransferFormProps> = ({
     setValidationErrors([]);
 
     try {
-      // CSL (Cardano Serialization Library) を動的読み込み
-      const wasmModule = await import('@emurgo/cardano-serialization-lib-browser');
-      const wasm = wasmModule.default || wasmModule;
+      // Use cached CSL loader
+      const wasm = await loadCSL();
       
       console.log('🔧 CSL loaded in TransferForm:', { 
         wasm: !!wasm, 
@@ -165,7 +198,7 @@ export const TransferForm: React.FC<TransferFormProps> = ({
       const txHash = await api.submitTx(Buffer.from(signedTx.to_bytes()).toString('hex'));
       
       // 成功時の処理
-      onTransferComplete(txHash);
+      stableOnTransferComplete(txHash);
       
       // フォームリセット
       setFormData({ to: '', amount: '', sweepMode: false });
@@ -173,7 +206,7 @@ export const TransferForm: React.FC<TransferFormProps> = ({
 
     } catch (error: any) {
       console.error('Transfer failed:', error);
-      onTransferError(error.message || 'トランザクション送信に失敗しました');
+      stableOnTransferError(error.message || 'トランザクション送信に失敗しました');
     } finally {
       setIsSubmitting(false);
     }
@@ -185,10 +218,12 @@ export const TransferForm: React.FC<TransferFormProps> = ({
     totalAda,
     autoSelectForAmount,
     clearSelection,
-    onTransferComplete,
-    onTransferError,
+    stableOnTransferComplete,
+    stableOnTransferError,
+    setFormData,
   ]);
 
+  // Early return for non-connected state
   if (!isConnected) {
     return (
       <div className={`text-center py-8 ${className}`}>
@@ -249,7 +284,7 @@ export const TransferForm: React.FC<TransferFormProps> = ({
               disabled={isSubmitting}
             />
             <p className="mt-1 text-xs text-gray-500">
-              利用可能残高: {(Number(totalAda) / 1_000_000).toFixed(6)} ADA
+              利用可能残高: {availableBalance} ADA
             </p>
           </div>
         )}
@@ -275,7 +310,7 @@ export const TransferForm: React.FC<TransferFormProps> = ({
         )}
 
         {/* 送金情報サマリー */}
-        {formData.sweepMode && (
+        {formData.sweepMode && estimatedSweepAmount && (
           <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
             <div className="flex">
               <div className="flex-shrink-0">
@@ -288,7 +323,7 @@ export const TransferForm: React.FC<TransferFormProps> = ({
                   <strong>Sweep送金:</strong> 利用可能な全額から手数料を差し引いた金額を送金します
                 </p>
                 <p className="text-xs text-blue-600 mt-1">
-                  おおよその送金額: {((Number(totalAda) - 170_000) / 1_000_000).toFixed(6)} ADA
+                  おおよその送金額: {estimatedSweepAmount} ADA
                 </p>
               </div>
             </div>
@@ -315,4 +350,11 @@ export const TransferForm: React.FC<TransferFormProps> = ({
       </form>
     </div>
   );
-};
+}, (prevProps, nextProps) => {
+  // Custom comparison - only re-render if callback functions or className change
+  return (
+    prevProps.onTransferComplete === nextProps.onTransferComplete &&
+    prevProps.onTransferError === nextProps.onTransferError &&
+    prevProps.className === nextProps.className
+  );
+});

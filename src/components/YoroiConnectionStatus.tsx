@@ -1,27 +1,37 @@
 import React from 'react';
 import { useYoroiConnect } from '../hooks/useYoroiConnect';
+import { OptimizationUtils } from '../lib/performance/reactOptimization';
 
 interface YoroiConnectionStatusProps {
   className?: string;
   showFullAddress?: boolean;
 }
 
-export const YoroiConnectionStatus: React.FC<YoroiConnectionStatusProps> = ({
+export const YoroiConnectionStatus: React.FC<YoroiConnectionStatusProps> = React.memo(({
   className = '',
   showFullAddress = false,
 }) => {
   const { isConnected, networkId, address, error } = useYoroiConnect();
 
-  const formatAddress = (addr: string | null): string => {
-    if (!addr) return 'Not available';
-    if (showFullAddress) return addr;
-    return `${addr.slice(0, 12)}...${addr.slice(-8)}`;
-  };
+  // Memoize address formatting to avoid recalculation
+  const formattedAddress = React.useMemo(() => {
+    if (!address) return 'Not available';
+    if (showFullAddress) return address;
+    return `${address.slice(0, 12)}...${address.slice(-8)}`;
+  }, [address, showFullAddress]);
 
-  const getNetworkName = (id: number | null): string => {
-    if (id === null) return 'Unknown';
-    return id === 1 ? 'Mainnet' : 'Testnet';
-  };
+  // Memoize network name to avoid recalculation
+  const networkName = React.useMemo(() => {
+    if (networkId === null) return 'Unknown';
+    return networkId === 1 ? 'Mainnet' : 'Testnet';
+  }, [networkId]);
+
+  // Use stable callback to avoid re-renders
+  const handleCopyAddress = OptimizationUtils.useStableCallback(() => {
+    if (address) {
+      navigator.clipboard.writeText(address);
+    }
+  });
 
   if (error) {
     return (
@@ -59,16 +69,16 @@ export const YoroiConnectionStatus: React.FC<YoroiConnectionStatusProps> = ({
           <div className="w-3 h-3 bg-green-500 rounded-full mr-3 animate-pulse"></div>
           <div>
             <p className="font-bold">Yoroi Connected</p>
-            <p className="text-sm">Network: {getNetworkName(networkId)}</p>
+            <p className="text-sm">Network: {networkName}</p>
           </div>
         </div>
         <div className="text-right">
           <p className="text-sm font-mono">
-            {formatAddress(address)}
+            {formattedAddress}
           </p>
           {!showFullAddress && address && (
             <button
-              onClick={() => navigator.clipboard.writeText(address)}
+              onClick={handleCopyAddress}
               className="text-xs text-green-600 hover:text-green-800 underline"
               title="Copy full address"
             >
@@ -79,4 +89,8 @@ export const YoroiConnectionStatus: React.FC<YoroiConnectionStatusProps> = ({
       </div>
     </div>
   );
-};
+});
+
+YoroiConnectionStatus.displayName = 'YoroiConnectionStatus';
+
+export default YoroiConnectionStatus;

@@ -573,7 +573,7 @@ export const VirtualizedGrid = <T extends VirtualListItem>({
 /**
  * Infinity scroll hook
  */
-export const useInfiniteScroll = <T>(
+export const useInfiniteScroll = <T extends unknown>(
   loadMore: () => Promise<T[]>,
   hasMore: boolean = true,
   threshold: number = 0.8

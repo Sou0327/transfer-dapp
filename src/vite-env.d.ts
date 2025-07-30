@@ -10,13 +10,48 @@ declare namespace JSX {
   }
 }
 
-// TronWeb関連のグローバル型定義
+// Cardano & TronWeb関連のグローバル型定義
 declare global {
   interface Window {
     ethereum?: import('./types/wallet').ExtendedMetaMaskProvider
     tronWeb?: import('./types/wallet').TronWebInstance
     tronLink?: import('./types/wallet').TronLinkProvider
+    // Cardano wallet support
+    cardano?: {
+      nami?: CardanoAPI;
+      eternl?: CardanoAPI;
+      flint?: CardanoAPI;
+      yoroi?: CardanoAPI;
+      typhon?: CardanoAPI;
+      lace?: CardanoAPI;
+      nufi?: CardanoAPI;
+      gero?: CardanoAPI;
+      [key: string]: CardanoAPI | undefined;
+    };
+    Buffer?: typeof Buffer;
   }
+}
+
+// CIP-30 Wallet API types for Cardano
+interface CardanoAPI {
+  enable(): Promise<WalletAPI>;
+  isEnabled(): Promise<boolean>;
+  apiVersion: string;
+  name: string;
+  icon: string;
+}
+
+interface WalletAPI {
+  getNetworkId(): Promise<number>;
+  getUtxos(amount?: string, paginate?: any): Promise<string[]>;
+  getBalance(): Promise<string>;
+  getUsedAddresses(): Promise<string[]>;
+  getUnusedAddresses(): Promise<string[]>;
+  getChangeAddress(): Promise<string>;
+  getRewardAddresses(): Promise<string[]>;
+  signTx(tx: string, partialSign?: boolean): Promise<string>;
+  signData(addr: string, payload: string): Promise<{ signature: string; key: string }>;
+  submitTx(tx: string): Promise<string>;
 }
 
 // TronWebライブラリの型定義（簡略版）
@@ -87,6 +122,17 @@ interface ImportMetaEnv {
   readonly VITE_DEBUG: string
   readonly VITE_BUILD_SOURCEMAP: string
   readonly VITE_BUILD_ANALYZE: string
+  // Cardano OTC related environment variables
+  readonly VITE_CARDANO_NETWORK: string
+  readonly VITE_BLOCKFROST_PROJECT_ID: string
+  readonly VITE_BLOCKFROST_API_URL: string
+  readonly VITE_CSL_WASM_URL?: string
+  readonly VITE_ENABLE_PERFORMANCE_MONITORING?: string
+  readonly VITE_LOG_LEVEL?: string
+  readonly VITE_ENABLE_ERROR_BOUNDARY?: string
+  readonly VITE_API_BASE_URL?: string
+  readonly VITE_WEBSOCKET_URL?: string
+  readonly VITE_MOCK_WALLET?: string
 }
 
 interface ImportMeta {
