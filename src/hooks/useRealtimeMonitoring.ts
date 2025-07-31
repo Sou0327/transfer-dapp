@@ -2,7 +2,7 @@
  * Real-time Monitoring Hook
  * Provides comprehensive real-time monitoring for OTC requests
  */
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRequestStatus, webSocketService, StatusUpdate, TTLUpdate, UTxOUpdate } from '../lib/websocket';
 
 export interface MonitoringState {
@@ -48,7 +48,7 @@ const DEFAULT_OPTIONS: Partial<MonitoringOptions> = {
 };
 
 export function useRealtimeMonitoring(options: MonitoringOptions = {}) {
-  const opts = { ...DEFAULT_OPTIONS, ...options };
+  const opts = useMemo(() => ({ ...DEFAULT_OPTIONS, ...options }), [options]);
   const [state, setState] = useState<MonitoringState>({
     isConnected: false,
     lastUpdate: null,
@@ -88,7 +88,7 @@ export function useRealtimeMonitoring(options: MonitoringOptions = {}) {
     opts.onStatusChange?.(update);
 
     console.log('📊 Status update received:', update);
-  }, [opts.onStatusChange, updateState]);
+  }, [opts, updateState]);
 
   // Handle TTL updates
   const handleTTLUpdate = useCallback((update: TTLUpdate) => {
@@ -111,7 +111,7 @@ export function useRealtimeMonitoring(options: MonitoringOptions = {}) {
     }
 
     console.log('⏰ TTL update received:', update);
-  }, [opts.warningThresholdMinutes, opts.onExpired, opts.onTTLWarning, updateState]);
+  }, [opts, updateState]);
 
   // Handle UTxO updates
   const handleUTxOUpdate = useCallback((update: UTxOUpdate) => {
@@ -125,7 +125,7 @@ export function useRealtimeMonitoring(options: MonitoringOptions = {}) {
     }
 
     console.log('💰 UTxO update received:', update);
-  }, [opts.onUTxOConsumed, updateState]);
+  }, [opts, updateState]);
 
   // Handle connection status
   const handleConnection = useCallback(() => {
@@ -151,7 +151,7 @@ export function useRealtimeMonitoring(options: MonitoringOptions = {}) {
       error
     });
     opts.onError?.(error);
-  }, [opts.onError, updateState]);
+  }, [opts, updateState]);
 
   // Use WebSocket hook with handlers
   const { isConnected } = useRequestStatus(opts.requestId);
@@ -319,7 +319,7 @@ export function useAdminMonitoring(adminId?: string) {
     webSocketService.subscribeToAdminUpdates(adminId);
 
     const handleAdminUpdate = (update: Record<string, unknown>) => {
-      const { request_id } = update;
+      const request_id = update.request_id as string;
       
       setRequests(prev => {
         const newMap = new Map(prev);
@@ -338,7 +338,7 @@ export function useAdminMonitoring(adminId?: string) {
 
         newMap.set(request_id, {
           ...existing,
-          currentStatus: update,
+          currentStatus: update as StatusUpdate,
           lastUpdate: new Date()
         });
 

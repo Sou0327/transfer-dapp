@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useWindowSize, useIntersectionObserver, useThrottledCallback } from '../../lib/performance/reactOptimization';
+// Performance optimization imports removed - using standard implementations
 
 /**
  * Virtual list item interface
@@ -219,7 +219,8 @@ export const VirtualizedList = <T extends VirtualListItem>({
   }, [visibleRange, items, getItemHeight, getItemKey]);
 
   // Handle scroll
-  const handleScroll = useThrottledCallback((e: React.UIEvent<HTMLDivElement>) => {
+  const handleScroll = React.useCallback((...args: unknown[]) => {
+    const e = args[0] as React.UIEvent<HTMLDivElement>;
     const scrollTop = e.currentTarget.scrollTop;
     const direction = scrollTop > lastScrollTop.current ? 'down' : 'up';
     
@@ -250,32 +251,9 @@ export const VirtualizedList = <T extends VirtualListItem>({
         loadMore();
       }
     }
-  }, 16); // 60fps
+  }, [onScroll, hasNextPage, loading, loadMore, containerHeight, totalHeight]);
 
-  // Scroll to item - Future API for external use
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const scrollToItem = useCallback((index: number, align: 'start' | 'center' | 'end' = 'start') => {
-    if (!scrollElementRef.current || index < 0 || index >= items.length) return;
 
-    let offset = 0;
-    
-    if (typeof itemHeight === 'number') {
-      offset = index * itemHeight;
-    } else {
-      for (let i = 0; i < index; i++) {
-        offset += getItemHeight(items[i], i);
-      }
-    }
-
-    // Adjust offset based on alignment
-    if (align === 'center') {
-      offset -= containerHeight / 2;
-    } else if (align === 'end') {
-      offset -= containerHeight - getItemHeight(items[index], index);
-    }
-
-    scrollElementRef.current.scrollTop = Math.max(0, offset);
-  }, [items, itemHeight, containerHeight, getItemHeight]);
 
   // Cleanup
   useEffect(() => {
@@ -502,7 +480,7 @@ export const VirtualizedGrid = <T extends VirtualListItem>({
   const rowHeight = itemHeight + gap;
 
   const gridItems = useMemo(() => {
-    const result: Array<{
+    const result: Array<VirtualListItem & {
       row: number;
       items: Array<{ item: T; index: number; colIndex: number }>;
     }> = [];
@@ -521,21 +499,29 @@ export const VirtualizedGrid = <T extends VirtualListItem>({
       }
 
       if (rowItems.length > 0) {
-        result.push({ row, items: rowItems });
+        result.push({ 
+          id: `row-${row}`,
+          data: { row, items: rowItems },
+          row, 
+          items: rowItems 
+        });
       }
     }
 
     return result;
   }, [items, columnsPerRow, totalRows]);
 
-  const renderRow = useCallback(({ item: rowData, index: rowIndex, style }: {
-    item: { row: number; items: Array<{ item: T; index: number; colIndex: number }> };
+  const renderRow = useCallback(({ item: gridItem, index: rowIndex, style }: {
+    item: VirtualListItem & {
+      row: number;
+      items: Array<{ item: T; index: number; colIndex: number }>;
+    };
     index: number;
     style: React.CSSProperties;
     isVisible: boolean;
   }) => (
     <div style={style} className="flex">
-      {rowData.items.map(({ item, index, colIndex }) => (
+      {gridItem.items.map(({ item, index, colIndex }) => (
         <div
           key={`${rowIndex}-${colIndex}`}
           style={{
@@ -565,7 +551,7 @@ export const VirtualizedGrid = <T extends VirtualListItem>({
         containerHeight={containerHeight}
         renderItem={renderRow}
         overscan={overscan}
-        getItemKey={(item) => `row-${item.row}`}
+        getItemKey={(item) => item.id}
       />
     </div>
   );
@@ -621,8 +607,27 @@ export const useInfiniteScroll = <T,>(
 export const AutoSizedVirtualizedList = <T extends VirtualListItem>(
   props: Omit<VirtualListProps<T>, 'containerHeight'>
 ) => {
-  const [containerRef, isVisible] = useIntersectionObserver();
-  const { height } = useWindowSize();
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const [isVisible, setIsVisible] = React.useState(true);
+  
+  React.useEffect(() => {
+    const element = containerRef.current;
+    if (!element) return;
+    
+    const observer = new IntersectionObserver(([entry]) => {
+      setIsVisible(entry.isIntersecting);
+    });
+    
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  const [height, setHeight] = React.useState(window.innerHeight);
+  
+  React.useEffect(() => {
+    const handleResize = () => setHeight(window.innerHeight);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   const [containerHeight, setContainerHeight] = useState(400);
 
   useEffect(() => {

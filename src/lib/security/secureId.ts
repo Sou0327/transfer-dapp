@@ -288,7 +288,7 @@ export const isIdExpired = (id: string, ttlMinutes: number): boolean => {
 /**
  * Generate time-limited secure token
  */
-export const generateTimeLimitedToken = (prefix: string, ttlMinutes: number = 60): string => { // eslint-disable-line @typescript-eslint/no-unused-vars
+export const generateTimeLimitedToken = (prefix: string): string => {
   const token = generateSecureRequestId({
     length: 32,
     prefix,

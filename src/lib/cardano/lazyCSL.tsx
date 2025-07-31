@@ -10,36 +10,70 @@ import { AuditEventType, AuditSeverity } from '../security/auditLog';
 /**
  * CSL Module type definitions
  */
-// eslint-disable-next-line react-refresh/only-export-components
+ 
 export interface CSLModule {
-  Address: unknown;
+  Address: {
+    from_bech32: (addressString: string) => CSLAddress;
+    from_bytes: (bytes: Uint8Array) => CSLAddress;
+  };
   BaseAddress: unknown;
   StakeCredential: unknown;
   Ed25519KeyHash: unknown;
   ScriptHash: unknown;
-  TransactionBuilder: unknown;
-  TransactionBuilderConfigBuilder: unknown;
-  LinearFee: unknown;
-  BigNum: unknown;
-  Value: unknown;
-  TransactionInput: unknown;
-  TransactionOutput: unknown;
-  TransactionHash: unknown;
+  TransactionBuilder: {
+    new: (config: CSLTxBuilderConfig) => CSLTransactionBuilder;
+  };
+  TransactionBuilderConfigBuilder: {
+    new: () => CSLTxBuilderConfigBuilder;
+  };
+  LinearFee: {
+    new: (coefficient: CSLBigNum, constant: CSLBigNum) => CSLLinearFee;
+  };
+  BigNum: {
+    from_str: (str: string) => CSLBigNum;
+  };
+  Value: {
+    new: (coin: CSLBigNum) => CSLValue;
+  };
+  TransactionInput: {
+    new: (hash: CSLTransactionHash, index: number) => CSLTransactionInput;
+  };
+  TransactionOutput: {
+    new: (address: CSLAddress, amount: CSLValue) => CSLTransactionOutput;
+  };
+  TransactionHash: {
+    from_bytes: (bytes: Uint8Array) => CSLTransactionHash;
+  };
   TransactionBody: unknown;
-  Transaction: unknown;
-  TransactionWitnessSet: unknown;
-  Vkeywitnesses: unknown;
-  Vkeywitness: unknown;
-  Vkey: unknown;
-  Ed25519Signature: unknown;
+  Transaction: {
+    new: (body: unknown, witnessSet: CSLTransactionWitnessSet) => CSLTransaction;
+    from_bytes: (bytes: Uint8Array) => CSLTransaction;
+  };
+  TransactionWitnessSet: {
+    new: () => CSLTransactionWitnessSet;
+  };
+  Vkeywitnesses: {
+    new: () => CSLVkeywitnesses;
+  };
+  Vkeywitness: {
+    new: (vkey: CSLVkey, signature: CSLEd25519Signature) => CSLVkeywitness;
+  };
+  Vkey: {
+    new: (publicKey: CSLPublicKey) => CSLVkey;
+  };
+  Ed25519Signature: {
+    from_bytes: (bytes: Uint8Array) => CSLEd25519Signature;
+  };
   PublicKey: unknown;
-  PrivateKey: unknown;
+  PrivateKey: {
+    generate_ed25519: () => CSLPrivateKey;
+  };
   NetworkInfo: unknown;
   ProtocolParameters: unknown;
-  encode_json_str_to_metadatum: unknown;
-  decode_metadatum_to_json_str: unknown;
-  hash_transaction: unknown;
-  min_fee: unknown;
+  encode_json_str_to_metadatum: (json: string, schema: CSLMetadataJsonSchema) => unknown;
+  decode_metadatum_to_json_str: (metadata: unknown, schema: CSLMetadataJsonSchema) => string;
+  hash_transaction: (txBody: unknown) => CSLTransactionHash;
+  min_fee: (tx: CSLTransaction, linearFee: CSLLinearFee) => CSLBigNum;
   encode_json_str_to_plutus_datum: unknown;
   hash_plutus_data: unknown;
   PlutusData: unknown;
@@ -49,15 +83,126 @@ export interface CSLModule {
   Int: unknown;
   UnitInterval: unknown;
   Coin: unknown;
-  Assets: unknown;
-  MultiAsset: unknown;
-  AssetName: unknown;
-  PolicyID: unknown;
+  MetadataJsonSchema: {
+    BasicConversions: CSLMetadataJsonSchema;
+  };
+  PolicyID: {
+    from_bytes: (bytes: Uint8Array) => CSLPolicyID;
+  };
+  AssetName: {
+    new: (bytes: Uint8Array) => CSLAssetName;
+  };
+  Assets: {
+    new: () => CSLAssets;
+  };
+  MultiAsset: {
+    new: () => CSLMultiAsset;
+  };
   ScriptRef: unknown;
   PlutusScript: unknown;
   NativeScript: unknown;
   TimelockExpiry: unknown;
   TimelockStart: unknown;
+}
+
+// CSL Type Interfaces
+interface CSLAddress {
+  to_bytes(): Uint8Array;
+}
+
+interface CSLBigNum {
+  to_str(): string;
+  to_bytes(): Uint8Array;
+}
+
+interface CSLValue {
+  set_multiasset(multiAsset: CSLMultiAsset): void;
+}
+
+interface CSLTransactionHash {
+  to_bytes(): Uint8Array;
+}
+
+interface CSLTransactionInput {
+  to_bytes(): Uint8Array;
+}
+
+interface CSLTransactionOutput {
+  to_bytes(): Uint8Array;
+}
+
+interface CSLTransaction {
+  to_bytes(): Uint8Array;
+}
+
+interface CSLTransactionWitnessSet {
+  set_vkeys(vkeys: CSLVkeywitnesses): void;
+}
+
+interface CSLVkeywitnesses {
+  add(witness: CSLVkeywitness): void;
+}
+
+interface CSLVkeywitness {
+  to_bytes(): Uint8Array;
+}
+
+interface CSLVkey {
+  to_bytes(): Uint8Array;
+}
+
+interface CSLEd25519Signature {
+  to_bytes(): Uint8Array;
+}
+
+interface CSLPublicKey {
+  to_bytes(): Uint8Array;
+}
+
+interface CSLPrivateKey {
+  to_public(): CSLPublicKey;
+}
+
+interface CSLLinearFee {
+  coefficient(): CSLBigNum;
+  constant(): CSLBigNum;
+}
+
+interface CSLTxBuilderConfig {
+  build(): unknown;
+}
+
+interface CSLTxBuilderConfigBuilder {
+  fee_algo(linearFee: CSLLinearFee): CSLTxBuilderConfigBuilder;
+  coins_per_utxo_byte(coins: CSLBigNum): CSLTxBuilderConfigBuilder;
+  pool_deposit(deposit: CSLBigNum): CSLTxBuilderConfigBuilder;
+  key_deposit(deposit: CSLBigNum): CSLTxBuilderConfigBuilder;
+  max_value_size(size: number): CSLTxBuilderConfigBuilder;
+  max_tx_size(size: number): CSLTxBuilderConfigBuilder;
+  build(): CSLTxBuilderConfig;
+}
+
+interface CSLTransactionBuilder {
+  to_bytes(): Uint8Array;
+}
+
+type CSLMetadataJsonSchema = unknown;
+
+interface CSLPolicyID {
+  to_bytes(): Uint8Array;
+}
+
+interface CSLAssetName {
+  to_bytes(): Uint8Array;
+}
+
+interface CSLAssets {
+  insert(name: CSLAssetName, quantity: CSLBigNum): void;
+}
+
+interface CSLMultiAsset {
+  get(policy: CSLPolicyID): CSLAssets | undefined;
+  insert(policy: CSLPolicyID, assets: CSLAssets): void;
 }
 
 /**
@@ -92,9 +237,6 @@ let loadingPromise: Promise<CSLModule> | null = null;
 /**
  * CSL module cache
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const moduleCache = new Map<string, unknown>();
-
 /**
  * Performance metrics
  */
@@ -105,6 +247,22 @@ interface CSLMetrics {
   errorCount: number;
   usageCount: number;
   lastUsed: number;
+}
+
+// Protocol Parameters Interface
+interface ProtocolParameters {
+  min_fee_a: number;
+  min_fee_b: number;
+  coins_per_utxo_byte?: number;
+  pool_deposit: number;
+  key_deposit: number;
+  max_val_size: number;
+  max_tx_size: number;
+}
+
+// Extended Window Interface  
+interface ExtendedWindow extends Omit<Window, 'requestIdleCallback'> {
+  requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
 }
 
 const metrics: CSLMetrics = {
@@ -153,7 +311,7 @@ export const loadCSL = async (): Promise<CSLModule> => {
       cslState.loadEndTime = Date.now();
       cslState.loaded = true;
       cslState.loading = false;
-      cslState.module = CSL as CSLModule;
+      cslState.module = CSL as unknown as CSLModule;
       cslState.error = null;
 
       // Calculate metrics
@@ -174,7 +332,7 @@ export const loadCSL = async (): Promise<CSLModule> => {
 
       console.log(`✅ CSL loaded successfully in ${metrics.loadTime}ms`);
       
-      return CSL as CSLModule;
+      return CSL as unknown as CSLModule;
     } catch (error) {
       cslState.loading = false;
       cslState.loaded = false;
@@ -215,7 +373,7 @@ export const preloadCSL = (): void => {
     };
 
     if ('requestIdleCallback' in window) {
-      (window as typeof window & { requestIdleCallback: (callback: () => void, options?: { timeout: number }) => void }).requestIdleCallback(preloadFn, { timeout: 5000 });
+      (window as ExtendedWindow).requestIdleCallback?.(preloadFn, { timeout: 5000 });
     } else {
       setTimeout(preloadFn, 2000);
     }
@@ -241,12 +399,12 @@ export const getCSLMetrics = (): CSLMetrics => {
 /**
  * CSL utility functions with lazy loading
  */
-// eslint-disable-next-line react-refresh/only-export-components
+ 
 export class LazyCSL {
   /**
    * Create a Cardano address from bech32 string
    */
-  static async createAddress(addressString: string): Promise<unknown> {
+  static async createAddress(addressString: string): Promise<CSLAddress> {
     const CSL = await loadCSL();
     try {
       return CSL.Address.from_bech32(addressString);
@@ -262,8 +420,8 @@ export class LazyCSL {
    * Create transaction builder with current network parameters
    */
   static async createTransactionBuilder(
-    protocolParams: Record<string, unknown>
-  ): Promise<unknown> {
+    protocolParams: ProtocolParameters
+  ): Promise<CSLTransactionBuilder> {
     const CSL = await loadCSL();
     
     const txBuilderConfig = CSL.TransactionBuilderConfigBuilder.new()
@@ -292,7 +450,7 @@ export class LazyCSL {
   /**
    * Convert lovelace string to CSL BigNum
    */
-  static async bigNumFromStr(lovelace: string): Promise<unknown> {
+  static async bigNumFromStr(lovelace: string): Promise<CSLBigNum> {
     const CSL = await loadCSL();
     return CSL.BigNum.from_str(lovelace);
   }
@@ -300,7 +458,7 @@ export class LazyCSL {
   /**
    * Create transaction input from UTxO
    */
-  static async createTxInput(txHash: string, outputIndex: number): Promise<unknown> {
+  static async createTxInput(txHash: string, outputIndex: number): Promise<CSLTransactionInput> {
     const CSL = await loadCSL();
     return CSL.TransactionInput.new(
       CSL.TransactionHash.from_bytes(Buffer.from(txHash, 'hex')),
@@ -315,7 +473,7 @@ export class LazyCSL {
     address: string,
     amount: string,
     assets?: Array<{ unit: string; quantity: string }>
-  ): Promise<unknown> {
+  ): Promise<CSLTransactionOutput> {
     const CSL = await loadCSL();
     
     const addr = await this.createAddress(address);
@@ -353,7 +511,7 @@ export class LazyCSL {
    */
   static async calculateMinFee(
     txBody: unknown,
-    protocolParams: Record<string, unknown>,
+    protocolParams: ProtocolParameters,
     witnessCount: number = 1
   ): Promise<string> {
     const CSL = await loadCSL();
@@ -398,7 +556,7 @@ export class LazyCSL {
   /**
    * Convert hex string to transaction
    */
-  static async transactionFromHex(hex: string): Promise<unknown> {
+  static async transactionFromHex(hex: string): Promise<CSLTransaction> {
     const CSL = await loadCSL();
     return CSL.Transaction.from_bytes(Buffer.from(hex, 'hex'));
   }
@@ -406,7 +564,7 @@ export class LazyCSL {
   /**
    * Convert transaction to hex string
    */
-  static async transactionToHex(tx: unknown): Promise<string> {
+  static async transactionToHex(tx: CSLTransaction): Promise<string> {
     await loadCSL();
     return Buffer.from(tx.to_bytes()).toString('hex');
   }

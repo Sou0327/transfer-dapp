@@ -146,7 +146,7 @@ export const createPerformanceSlice: StateCreator<
     // Start performance monitoring
     if (typeof performance !== 'undefined' && 'memory' in performance) {
       const updateMemoryMetrics = () => {
-        const memory = (performance as { memory?: { usedJSHeapSize: number; totalJSHeapSize: number } }).memory;
+        const memory = (performance as { memory?: { usedJSHeapSize: number; totalJSHeapSize: number; jsHeapSizeLimit: number } }).memory;
         if (memory && get().performance.isMonitoring) {
           set((state) => ({
             ...state,
@@ -188,7 +188,7 @@ export const createPerformanceSlice: StateCreator<
       
       set((state) => {
         const fcp = paintEntries.find(entry => entry.name === 'first-contentful-paint');
-        const nav = navigationEntries[0] as { name: string; entryType: string; startTime: number; duration: number };
+        const nav = navigationEntries[0] as { domContentLoadedEventEnd?: number; loadEventEnd?: number } | undefined;
         
         return {
           ...state,

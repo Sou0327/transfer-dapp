@@ -5,8 +5,8 @@
 
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-
 import { devtools } from 'zustand/middleware';
+import { UTxO } from '../types/cardano';
 
 
 // Import store slices
@@ -58,8 +58,9 @@ export const useUtxoActions = () => {
   const deselectUtxo = useAppStore((state) => state.deselectUtxo);
   const clearSelection = useAppStore((state) => state.clearUtxoSelection);
   const refreshUtxos = useAppStore((state) => state.refreshUtxos);
+  const autoSelectForAmount = useAppStore((state) => state.autoSelectForAmount);
   
-  return { setUtxos, selectUtxo, deselectUtxo, clearSelection, refreshUtxos };
+  return { setUtxos, selectUtxo, deselectUtxo, clearSelection, refreshUtxos, autoSelectForAmount };
 };
 
 export const useTransactionActions = () => useAppStore((state) => ({

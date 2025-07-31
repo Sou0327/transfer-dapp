@@ -1,0 +1,52 @@
+# Serena configuration for transfer-dapp security analysis
+project_directory: /Users/aocunxiangyilang/cardano-wallet/run/mainnet/docker/cardano-byron-recovery-workspace/transfer-dapp
+
+# Enable all security analysis tools
+tools:
+  - activate_project
+  - create_text_file
+  - delete_lines
+  - execute_shell_command
+  - find_referencing_code_snippets
+  - find_referencing_symbols
+  - find_symbol
+  - get_active_project
+  - get_current_config
+  - get_symbols_overview
+  - initial_instructions
+  - insert_after_symbol
+  - insert_at_line
+  - insert_before_symbol
+  - list_dir
+  - read_file
+  - replace_lines
+  - replace_symbol_body
+  - search_for_pattern
+  - write_memory
+  - read_memory
+  - list_memories
+
+# Security-focused configuration
+context: ide-assistant
+modes:
+  - editing
+  - interactive
+
+# Logging configuration
+logging:
+  level: INFO
+  enable_web_dashboard: true
+  enable_gui_log_window: false
+
+# Tool execution settings
+tool_timeout: 120.0
+read_only: false
+
+# Language server settings
+language_servers:
+  typescript:
+    enabled: true
+  python:
+    enabled: true
+  javascript:
+    enabled: true

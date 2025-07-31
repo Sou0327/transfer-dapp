@@ -1,6 +1,6 @@
 import React from 'react';
 import { useYoroiConnect } from '../hooks/useYoroiConnect';
-import { OptimizationUtils } from '../lib/performance/reactOptimization';
+// Performance optimization imports removed - using standard React hooks
 
 interface YoroiConnectionStatusProps {
   className?: string;
@@ -27,11 +27,11 @@ export const YoroiConnectionStatus: React.FC<YoroiConnectionStatusProps> = React
   }, [networkId]);
 
   // Use stable callback to avoid re-renders
-  const handleCopyAddress = OptimizationUtils.useStableCallback(() => {
+  const handleCopyAddress = React.useCallback(() => {
     if (address) {
       navigator.clipboard.writeText(address);
     }
-  });
+  }, [address]);
 
   if (error) {
     return (

@@ -94,6 +94,9 @@ export const useWallet = (): UseWalletReturn => {
     setState(prev => ({ ...prev, loading: true, error: null }));
     
     try {
+      if (!window.cardano) {
+        throw new Error('Cardano wallet interface not available');
+      }
       const walletApi = window.cardano[state.selectedWallet.toLowerCase()];
       const api = await walletApi.enable();
       
@@ -118,10 +121,13 @@ export const useWallet = (): UseWalletReturn => {
     }
 
     try {
+      if (!window.cardano) {
+        throw new Error('Cardano wallet interface not available');
+      }
       const walletApi = window.cardano[state.selectedWallet.toLowerCase()];
       const api = await walletApi.enable();
       
-      const utxos = await api.getUtxos();
+      const utxos = await api.getUtxos() as unknown as UTxO[];
       
       setState(prev => ({ ...prev, utxos }));
       return utxos;
@@ -138,6 +144,9 @@ export const useWallet = (): UseWalletReturn => {
     }
 
     try {
+      if (!window.cardano) {
+        throw new Error('Cardano wallet interface not available');
+      }
       const walletApi = window.cardano[state.selectedWallet.toLowerCase()];
       const api = await walletApi.enable();
       

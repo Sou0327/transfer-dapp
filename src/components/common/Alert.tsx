@@ -1,5 +1,5 @@
 import React from 'react';
-import { OptimizationUtils } from '../../lib/performance/reactOptimization';
+// Performance optimization imports removed - using standard React hooks
 
 export interface AlertProps {
   children: React.ReactNode;
@@ -59,11 +59,11 @@ export const Alert: React.FC<AlertProps> = React.memo(({
   className = '',
   dismissible = true,
 }) => {
-  const stableOnClose = OptimizationUtils.useStableCallback(() => {
+  const stableOnClose = React.useCallback(() => {
     if (onClose) {
       onClose();
     }
-  });
+  }, [onClose]);
 
   const alertClasses = React.useMemo(() => {
     const baseClasses = 'border px-4 py-3 rounded-lg';

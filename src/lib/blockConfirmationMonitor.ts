@@ -3,6 +3,24 @@
  * Tracks submitted transactions and updates their status based on blockchain confirmations
  */
 import { TransactionDAO, RequestDAO, AuditDAO } from './database.js';
+import { RequestStatus } from '../types/otc/index.js';
+
+/**
+ * WebSocket broadcast data interface
+ */
+interface RequestUpdateData {
+  status: RequestStatus;
+  transactionHash?: string;
+  tx_hash?: string;
+  confirmations?: number;
+  required_confirmations?: number;
+  blockHeight?: number;
+  block_height?: number;
+  block_hash?: string;
+  confirmed_at?: string;
+  failure_reason?: string;
+  failed_at?: string;
+}
 
 export interface ConfirmationConfig {
   networkId: 'mainnet' | 'preprod' | 'preview';
@@ -44,7 +62,7 @@ export class BlockConfirmationMonitor {
   private isRunning = false;
   private intervalId: NodeJS.Timeout | null = null;
   private monitoredTransactions = new Map<string, TransactionStatus>();
-  private webSocketHandler: unknown = null;
+  private webSocketHandler: { broadcastRequestUpdate?: (requestId: string, data: RequestUpdateData) => void } | null = null;
 
   constructor(config?: Partial<ConfirmationConfig>) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -94,7 +112,7 @@ export class BlockConfirmationMonitor {
   /**
    * Set WebSocket handler for real-time notifications
    */
-  setWebSocketHandler(handler: unknown): void {
+  setWebSocketHandler(handler: { broadcastRequestUpdate?: (requestId: string, data: RequestUpdateData) => void }): void {
     this.webSocketHandler = handler;
   }
 
@@ -243,7 +261,7 @@ export class BlockConfirmationMonitor {
       
       // If too many failed attempts, mark as failed
       if (tx.checkAttempts >= this.config.maxRetries * 5) {
-        await this.markTransactionFailed(tx, `Too many check failures: ${error.message}`);
+        await this.markTransactionFailed(tx, `Too many check failures: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
   }
@@ -312,7 +330,7 @@ export class BlockConfirmationMonitor {
     try {
       // Update database
       await TransactionDAO.updateStatusByHash(tx.txHash, 'CONFIRMED');
-      await RequestDAO.updateStatus(tx.requestId, 'CONFIRMED');
+      await RequestDAO.updateStatus(tx.requestId, RequestStatus.CONFIRMED);
 
       // Update local status
       tx.status = 'CONFIRMED';
@@ -353,7 +371,7 @@ export class BlockConfirmationMonitor {
     try {
       // Update database
       await TransactionDAO.updateStatusByHash(tx.txHash, 'FAILED', reason);
-      await RequestDAO.updateStatus(tx.requestId, 'FAILED');
+      await RequestDAO.updateStatus(tx.requestId, RequestStatus.FAILED);
 
       // Update local status
       tx.status = 'FAILED';
@@ -393,8 +411,8 @@ export class BlockConfirmationMonitor {
     if (!this.webSocketHandler) return;
 
     try {
-      this.webSocketHandler.broadcastRequestUpdate(tx.requestId, {
-        status: 'SUBMITTED',
+      this.webSocketHandler?.broadcastRequestUpdate?.(tx.requestId, {
+        status: RequestStatus.SUBMITTED,
         tx_hash: tx.txHash,
         confirmations: tx.confirmations,
         required_confirmations: this.config.requiredConfirmations,
@@ -413,8 +431,8 @@ export class BlockConfirmationMonitor {
     if (!this.webSocketHandler) return;
 
     try {
-      this.webSocketHandler.broadcastRequestUpdate(tx.requestId, {
-        status: 'CONFIRMED',
+      this.webSocketHandler?.broadcastRequestUpdate?.(tx.requestId, {
+        status: RequestStatus.CONFIRMED,
         tx_hash: tx.txHash,
         confirmations: tx.confirmations,
         block_height: tx.blockHeight,
@@ -433,8 +451,8 @@ export class BlockConfirmationMonitor {
     if (!this.webSocketHandler) return;
 
     try {
-      this.webSocketHandler.broadcastRequestUpdate(tx.requestId, {
-        status: 'FAILED',
+      this.webSocketHandler?.broadcastRequestUpdate?.(tx.requestId, {
+        status: RequestStatus.FAILED,
         tx_hash: tx.txHash,
         failure_reason: reason,
         failed_at: new Date().toISOString()

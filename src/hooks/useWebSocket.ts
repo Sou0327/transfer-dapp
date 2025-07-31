@@ -59,7 +59,7 @@ export const useWebSocket = (url?: string): UseWebSocketReturn => {
     }
   }, []);
 
-  const sendMessage = useCallback((message: Record<string, unknown>) => {
+  const sendMessage = useCallback((message: unknown) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(message));
     }

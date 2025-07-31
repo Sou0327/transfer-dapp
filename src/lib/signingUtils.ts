@@ -71,7 +71,7 @@ export async function signTransaction(
       signedTxHex
     };
 
-  } catch {
+  } catch (error) {
     console.error('Transaction signing failed:', error);
 
     let errorMessage = 'Transaction signing failed';
@@ -123,7 +123,7 @@ function assembleSignedTransaction(txBodyHex: string, witnessSetHex: string): st
     );
 
     return Buffer.from(signedTx.to_bytes()).toString('hex');
-  } catch {
+  } catch (error) {
     throw new Error(`Failed to assemble signed transaction: ${error}`);
   }
 }
@@ -141,7 +141,8 @@ export function verifyTransactionSignature(
   witnessSetHex: string
 ): boolean {
   try {
-    const _tx = CSL.Transaction.from_bytes(Buffer.from(txHex, 'hex')); // eslint-disable-line @typescript-eslint/no-unused-vars
+    // Validate transaction format
+    CSL.Transaction.from_bytes(Buffer.from(txHex, 'hex'));
     const witnessSet = CSL.TransactionWitnessSet.from_bytes(Buffer.from(witnessSetHex, 'hex'));
 
     // Basic validation - check if witness set has required signatures
@@ -154,7 +155,7 @@ export function verifyTransactionSignature(
     // For now, just check that we have witnesses and they're properly formatted
     return true;
 
-  } catch {
+  } catch (error) {
     console.error('Signature verification failed:', error);
     return false;
   }
@@ -168,7 +169,7 @@ export function getTransactionHash(txHex: string): string {
     const tx = CSL.Transaction.from_bytes(Buffer.from(txHex, 'hex'));
     const txHash = CSL.hash_transaction(tx.body());
     return Buffer.from(txHash.to_bytes()).toString('hex');
-  } catch {
+  } catch (error) {
     throw new Error(`Failed to extract transaction hash: ${error}`);
   }
 }
@@ -179,7 +180,7 @@ export function getTransactionHash(txHex: string): string {
 export function getTransactionSize(txHex: string): number {
   try {
     return Buffer.from(txHex, 'hex').length;
-  } catch {
+  } catch (error) {
     throw new Error(`Failed to calculate transaction size: ${error}`);
   }
 }
@@ -205,8 +206,8 @@ export function validateTransactionForSigning(txHex: string): {
     // Extract transaction details
     const inputs = body.inputs().len();
     const outputs = body.outputs().len();
-    const fee = body.fee().to_str();
-    const ttl = body.ttl()?.to_str();
+    const fee = body.fee().toString();
+    const ttl = body.ttl();
     const size = getTransactionSize(txHex);
 
     // Basic validation
@@ -232,12 +233,12 @@ export function validateTransactionForSigning(txHex: string): {
         inputs,
         outputs,
         fee,
-        ttl: ttl ? parseInt(ttl) : undefined,
+        ttl: ttl ? Number(ttl) : undefined,
         size
       }
     };
 
-  } catch {
+  } catch (error) {
     return {
       valid: false,
       error: `Transaction validation failed: ${error}`
@@ -252,31 +253,17 @@ export function createPreSignedData(
   requestId: string,
   txBodyHex: string,
   witnessSetHex: string,
-  walletName: string,
-  metadata?: Record<string, unknown>
+  walletName: string
 ): PreSignedData {
-  const txHash = getTransactionHash(txBodyHex);
-  const tx = CSL.Transaction.from_bytes(Buffer.from(txBodyHex, 'hex'));
-  const body = tx.body();
 
   return {
+    id: '',
     request_id: requestId,
-    tx_body_hex: txBodyHex,
-    witness_set_hex: witnessSetHex,
-    tx_hash: txHash,
-    fee_lovelace: body.fee().to_str(),
-    ttl_slot: body.ttl()?.to_str() ? parseInt(body.ttl()!.to_str()) : 0,
-    signed_at: new Date().toISOString(),
-    wallet_used: walletName,
-    metadata: {
-      tx_size: getTransactionSize(txBodyHex),
-      inputs_count: body.inputs().len(),
-      outputs_count: body.outputs().len(),
-      witnesses_count: CSL.TransactionWitnessSet.from_bytes(
-        Buffer.from(witnessSetHex, 'hex')
-      ).vkeys()?.len() || 0,
-      ...metadata
-    }
+    provider_id: walletName,
+    tx_body_cbor: txBodyHex,
+    witness_cbor: witnessSetHex,
+    selected_utxos: [],
+    signed_at: new Date()
   };
 }
 
@@ -312,7 +299,7 @@ export async function signTransactionWithRetry(
         await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
       }
 
-    } catch {
+    } catch (error) {
       lastError = error instanceof Error ? error.message : 'Unknown error';
     }
   }

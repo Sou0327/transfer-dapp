@@ -2,7 +2,6 @@ import React from 'react';
 import { Buffer } from 'buffer';
 import { UTxO } from '../types/cardano';
 import { VirtualizedTable, VirtualizedTableColumn } from './performance/VirtualizedList';
-import { OptimizationUtils } from '../lib/performance/reactOptimization';
 
 // Buffer polyfill for browser
 window.Buffer = Buffer;
@@ -24,6 +23,7 @@ interface VirtualizedUTxOTableProps {
 // Create VirtualListItem-compatible UTxO interface
 interface VirtualUTxO extends UTxO {
   id: string;
+  data: Record<string, unknown>;
 }
 
 // Helper functions (memoized outside component)
@@ -54,6 +54,12 @@ export const VirtualizedUTxOTable: React.FC<VirtualizedUTxOTableProps> = React.m
     utxos.map((utxo): VirtualUTxO => ({
       ...utxo,
       id: `${utxo.txHash}#${utxo.outputIndex}`,
+      data: {
+        txHash: utxo.txHash,
+        outputIndex: utxo.outputIndex,
+        amount: utxo.amount,
+        address: utxo.address
+      }
     })), 
     [utxos]
   );
@@ -73,7 +79,7 @@ export const VirtualizedUTxOTable: React.FC<VirtualizedUTxOTableProps> = React.m
   }, [selectedUtxosMap]);
 
   // Stable callback for toggling selection
-  const handleToggleSelect = OptimizationUtils.useStableCallback((utxo: UTxO) => {
+  const handleToggleSelect = React.useCallback((utxo: UTxO) => {
     if (!selectionEnabled || !onSelect || !onDeselect) return;
     
     if (isSelected(utxo)) {
@@ -81,7 +87,7 @@ export const VirtualizedUTxOTable: React.FC<VirtualizedUTxOTableProps> = React.m
     } else {
       onSelect(utxo);
     }
-  });
+  }, [selectionEnabled, onSelect, onDeselect, isSelected]);
 
   // Render assets helper
   const renderAssets = React.useCallback((utxo: UTxO) => {

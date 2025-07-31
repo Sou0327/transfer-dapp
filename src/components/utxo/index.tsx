@@ -4,13 +4,13 @@
  */
 
 // Components
-// eslint-disable-next-line react-refresh/only-export-components
+ 
 export { EnhancedUtxoTable } from './EnhancedUtxoTable';
-// eslint-disable-next-line react-refresh/only-export-components
+ 
 export { CoinControlModal } from './CoinControlModal';
 
 // Legacy component for compatibility
-// eslint-disable-next-line react-refresh/only-export-components
+ 
 export { UTxOTable } from '../UTxOTable';
 
 // Hooks

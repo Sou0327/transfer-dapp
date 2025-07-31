@@ -18,6 +18,8 @@ export interface RateLimitResult {
   allowed: boolean;
   remaining: number;
   resetTime: number;
+  reset: number; // Add alias for resetTime
+  limit: number; // Add limit from rule
   retryAfter?: number;
   blocked?: boolean;
   blockExpiresAt?: number;
@@ -203,6 +205,8 @@ export const checkRateLimit = (
       allowed: false,
       remaining: 0,
       resetTime: info.blockExpiresAt,
+      reset: info.blockExpiresAt,
+      limit: rule.maxRequests,
       retryAfter: info.blockExpiresAt - now,
       blocked: true,
       blockExpiresAt: info.blockExpiresAt
@@ -246,6 +250,8 @@ export const checkRateLimit = (
       allowed: false,
       remaining: 0,
       resetTime: windowStart + rule.windowMs,
+      reset: windowStart + rule.windowMs,
+      limit: rule.maxRequests,
       retryAfter: rule.blockDuration || rule.windowMs,
       blocked: info.blocked,
       blockExpiresAt: info.blockExpiresAt
@@ -260,7 +266,9 @@ export const checkRateLimit = (
   return {
     allowed: true,
     remaining,
-    resetTime: windowStart + rule.windowMs
+    resetTime: windowStart + rule.windowMs,
+    reset: windowStart + rule.windowMs,
+    limit: rule.maxRequests
   };
 };
 
@@ -454,7 +462,8 @@ export const getRateLimiterStats = (): {
 export class AdaptiveRateLimiter {
   private baseRule: RateLimitRule;
   private loadFactor: number = 1;
-  private lastUpdate: number = Date.now();
+
+
 
   constructor(baseRule: RateLimitRule) {
     this.baseRule = { ...baseRule };
@@ -474,7 +483,7 @@ export class AdaptiveRateLimiter {
       this.loadFactor = 1.0; // Normal operation
     }
 
-    this.lastUpdate = Date.now();
+
   }
 
   getAdaptedRule(): RateLimitRule {

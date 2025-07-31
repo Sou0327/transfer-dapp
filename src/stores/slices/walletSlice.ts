@@ -6,6 +6,21 @@
 import { StateCreator } from 'zustand';
 import { CIP30Api } from '../../types/cardano';
 
+/**
+ * Extended window interface for Cardano wallets
+ */
+interface WindowWithCardano extends Window {
+  cardano?: {
+    [key: string]: {
+      enable(): Promise<CIP30Api>;
+      isEnabled(): Promise<boolean>;
+      apiVersion: string;
+      name: string;
+      icon: string;
+    };
+  };
+}
+
 export interface WalletState {
   isConnected: boolean;
   isConnecting: boolean;
@@ -69,12 +84,13 @@ export const createWalletSlice: StateCreator<
 
     try {
       // Check if Yoroi is installed
-      if (!window.cardano?.yoroi) {
+      const cardanoWindow = (window as WindowWithCardano).cardano;
+      if (!cardanoWindow?.yoroi) {
         throw new Error('Yoroi wallet is not installed. Please install Yoroi extension.');
       }
 
       // Enable the wallet
-      const api = await window.cardano.yoroi.enable();
+      const api = await cardanoWindow.yoroi.enable();
       
       if (!api) {
         throw new Error('Failed to enable Yoroi wallet. Please try again.');
@@ -115,16 +131,17 @@ export const createWalletSlice: StateCreator<
       console.error('Wallet connection failed:', error);
       
       let errorMessage = 'Unknown error occurred';
-      if (error.message.includes('not installed')) {
+      const errorMsg = error instanceof Error ? error.message : '';
+      if (errorMsg.includes('not installed')) {
         errorMessage = 'Yoroi wallet is not installed. Please install Yoroi extension.';
-      } else if (error.message.includes('not enabled')) {
+      } else if (errorMsg.includes('not enabled')) {
         errorMessage = 'Failed to enable Yoroi wallet. Please try again.';
-      } else if (error.message.includes('Wrong network')) {
-        errorMessage = error.message;
-      } else if (error.message.includes('rejected')) {
+      } else if (errorMsg.includes('Wrong network')) {
+        errorMessage = errorMsg;
+      } else if (errorMsg.includes('rejected')) {
         errorMessage = 'Connection was rejected by user.';
       } else {
-        errorMessage = error.message || errorMessage;
+        errorMessage = errorMsg || errorMessage;
       }
 
       set((state) => ({
@@ -161,7 +178,7 @@ export const createWalletSlice: StateCreator<
   checkConnection: async () => {
     const wasConnected = localStorage.getItem('yoroi_connected') === 'true';
     
-    if (wasConnected && window.cardano?.yoroi) {
+    if (wasConnected && (window as WindowWithCardano).cardano?.yoroi) {
       try {
         await get().connectWallet();
       } catch (error) {

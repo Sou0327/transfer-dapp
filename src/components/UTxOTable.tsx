@@ -1,7 +1,6 @@
 import React from 'react';
 import { Buffer } from 'buffer';
 import { UTxO } from '../types/cardano';
-import { OptimizationUtils } from '../lib/performance/reactOptimization';
 
 // Buffer polyfill for browser
 window.Buffer = Buffer;
@@ -72,15 +71,15 @@ const UTxORow = React.memo<{
   }, [utxo.amount.multiasset, showAssets]);
 
   // Stable click handler
-  const handleClick = OptimizationUtils.useStableCallback(() => {
+  const handleClick = React.useCallback(() => {
     if (selectionEnabled) {
       onToggleSelect(utxo);
     }
-  });
+  }, [selectionEnabled, onToggleSelect, utxo]);
 
-  const handleCheckboxChange = OptimizationUtils.useStableCallback(() => {
+  const handleCheckboxChange = React.useCallback(() => {
     onToggleSelect(utxo);
-  });
+  }, [onToggleSelect, utxo]);
 
   return (
     <tr 
@@ -159,7 +158,7 @@ export const UTxOTable: React.FC<UTxOTableProps> = React.memo(({
   }, [selectedUtxosMap]);
 
   // Stable callback for toggling selection
-  const handleToggleSelect = OptimizationUtils.useStableCallback((utxo: UTxO) => {
+  const handleToggleSelect = React.useCallback((utxo: UTxO) => {
     if (!selectionEnabled || !onSelect || !onDeselect) return;
     
     if (isSelected(utxo)) {
@@ -167,7 +166,7 @@ export const UTxOTable: React.FC<UTxOTableProps> = React.memo(({
     } else {
       onSelect(utxo);
     }
-  });
+  }, [selectionEnabled, onSelect, onDeselect, isSelected]);
 
   // Memoize total selected amount
   const selectedTotal = React.useMemo(() => {

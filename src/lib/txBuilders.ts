@@ -6,7 +6,7 @@ import * as CSL from '@emurgo/cardano-serialization-lib-browser';
 import { 
   CIP30Api, 
   UTxO, 
-  ProtocolParameters,
+  ProtocolParams,
   FixedAmountRule,
   SweepRule,
   RateBasedRule,
@@ -21,7 +21,7 @@ const MIN_UTXO_VALUE = 1_000_000; // 1 ADA minimum
 const DEFAULT_TTL_OFFSET = 7200; // 2 hours in seconds
 
 interface TxBuilderConfig {
-  protocolParams: ProtocolParameters;
+  protocolParams: ProtocolParams;
   api: CIP30Api;
   changeAddress: string;
   destinationAddress: string;
@@ -191,9 +191,10 @@ abstract class BaseTxBuilder {
       const multiAsset = CSL.MultiAsset.new();
       
       for (const asset of assets) {
-        const policyId = CSL.ScriptHash.from_bytes(Buffer.from(asset.policyId, 'hex'));
-        const assetName = CSL.AssetName.new(Buffer.from(asset.assetName, 'hex'));
-        const assetAmount = CSL.BigNum.from_str(asset.amount);
+        const assetData = asset as { policyId: string; assetName: string; amount: string };
+        const policyId = CSL.ScriptHash.from_bytes(Buffer.from(assetData.policyId, 'hex'));
+        const assetName = CSL.AssetName.new(Buffer.from(assetData.assetName, 'hex'));
+        const assetAmount = CSL.BigNum.from_str(assetData.amount);
 
         let assets = multiAsset.get(policyId);
         if (!assets) {
@@ -251,13 +252,13 @@ export class FixedAmountTxBuilder extends BaseTxBuilder {
         txHex: txResult.txHex,
         txHash: txResult.txHash,
         fee: txResult.fee,
-        ttl: txResult.ttl,
-        witnesses_required: selection.selectedUtxos.length,
+        ttl: parseInt(txResult.ttl),
+        witnesses_required: selection.selectedUtxos?.length?.toString() || '0',
         summary: {
-          inputs: selection.selectedUtxos.length,
-          outputs: selection.changeAmount > 0 ? 2 : 1,
-          amount_sent: this.rule.amount,
-          change_amount: selection.changeAmount.toString(),
+          inputs: selection.selectedUtxos?.length || 0,
+          outputs: (selection.changeAmount || 0) > 0 ? 2 : 1,
+          amount_sent: this.rule.amount.toString(),
+          change_amount: (selection.changeAmount || 0).toString(),
           total_fee: txResult.fee
         }
       };
@@ -275,7 +276,7 @@ export class FixedAmountTxBuilder extends BaseTxBuilder {
     const adaOnlyUtxos = utxos.filter(utxo => !utxo.assets || utxo.assets.length === 0);
     adaOnlyUtxos.sort((a, b) => Number(BigInt(b.amount.coin) - BigInt(a.amount.coin)));
 
-    let totalSelected = 0n;
+    let totalSelected = BigInt(0);
     const selectedUtxos: UTxO[] = [];
 
     // Estimate fee (will refine later)
@@ -301,7 +302,7 @@ export class FixedAmountTxBuilder extends BaseTxBuilder {
           return {
             selectedUtxos,
             totalValue: totalSelected,
-            changeAmount: 0n,
+            changeAmount: BigInt(0),
             estimatedFee
           };
         }
@@ -419,8 +420,8 @@ export class SweepTxBuilder extends BaseTxBuilder {
         txHex: txResult.txHex,
         txHash: txResult.txHash,
         fee: txResult.fee,
-        ttl: txResult.ttl,
-        witnesses_required: sweepResult.selectedUtxos.length,
+        ttl: parseInt(txResult.ttl),
+        witnesses_required: sweepResult.selectedUtxos.length.toString(),
         summary: {
           inputs: sweepResult.selectedUtxos.length,
           outputs: 1,
@@ -454,7 +455,7 @@ export class SweepTxBuilder extends BaseTxBuilder {
     // Calculate total value
     const totalValue = adaOnlyUtxos.reduce(
       (sum, utxo) => sum + BigInt(utxo.amount.coin),
-      0n
+      BigInt(0)
     );
 
     // Estimate transaction size and fee
@@ -574,16 +575,16 @@ export class RateBasedTxBuilder extends BaseTxBuilder {
         txHex: txResult.txHex,
         txHash: txResult.txHash,
         fee: txResult.fee,
-        ttl: txResult.ttl,
-        witnesses_required: selection.selectedUtxos.length,
+        ttl: parseInt(txResult.ttl),
+        witnesses_required: selection.selectedUtxos?.length?.toString() || '0',
         summary: {
-          inputs: selection.selectedUtxos.length,
-          outputs: selection.changeAmount > 0 ? 2 : 1,
-          amount_sent: adaAmount.toString(),
-          change_amount: selection.changeAmount.toString(),
-          total_fee: txResult.fee,
-          rate_used: this.rule.rate_jpy_per_ada,
-          jpy_amount: this.rule.jpy_amount
+          inputs: selection.selectedUtxos?.length || 0,
+          outputs: (selection.changeAmount || 0) > 0 ? 2 : 1,
+          amount_sent: adaAmount?.toString() || '0',
+          change_amount: (selection.changeAmount || 0).toString(),
+          total_fee: txResult?.fee || '0',
+          rate_used: this.rule.rate_jpy_per_ada?.toString() || '0',
+          jpy_amount: this.rule.jpy_amount?.toString() || '0'
         }
       };
 
@@ -597,10 +598,10 @@ export class RateBasedTxBuilder extends BaseTxBuilder {
 
   private async calculateAdaAmount(): Promise<bigint> {
     // Convert JPY to ADA using the stored rate
-    const adaAmount = Math.floor(this.rule.jpy_amount / this.rule.rate_jpy_per_ada * LOVELACE_PER_ADA);
+    const adaAmount = Math.floor((this.rule.jpy_amount || 0) / (this.rule.rate_jpy_per_ada || 1) * LOVELACE_PER_ADA);
     
     // Apply slippage tolerance
-    const slippageMultiplier = (10000 - this.rule.slippage_bps) / 10000;
+    const slippageMultiplier = (10000 - (this.rule.slippage_bps || 0)) / 10000;
     const adjustedAmount = Math.floor(adaAmount * slippageMultiplier);
 
     return BigInt(adjustedAmount);
@@ -611,7 +612,7 @@ export class RateBasedTxBuilder extends BaseTxBuilder {
     const adaOnlyUtxos = utxos.filter(utxo => !utxo.assets || utxo.assets.length === 0);
     adaOnlyUtxos.sort((a, b) => Number(BigInt(b.amount.coin) - BigInt(a.amount.coin)));
 
-    let totalSelected = 0n;
+    let totalSelected = BigInt(0);
     const selectedUtxos: UTxO[] = [];
     let estimatedFee = this.calculateFee(250 * (selectedUtxos.length + 2));
 
@@ -631,7 +632,7 @@ export class RateBasedTxBuilder extends BaseTxBuilder {
           return {
             selectedUtxos,
             totalValue: totalSelected,
-            changeAmount: 0n,
+            changeAmount: BigInt(0),
             estimatedFee
           };
         }

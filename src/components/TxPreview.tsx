@@ -42,12 +42,14 @@ export const TxPreview: React.FC<TxPreviewProps> = ({
     );
   }
 
-  const formatADA = (lovelace: string) => {
+  const formatADA = (lovelace: string | undefined) => {
+    if (!lovelace) return '0 ADA';
     const ada = parseInt(lovelace) / 1_000_000;
     return `${ada.toLocaleString()} ADA`;
   };
 
-  const formatLovelace = (lovelace: string) => {
+  const formatLovelace = (lovelace: string | undefined) => {
+    if (!lovelace) return '0 lovelace';
     return `${parseInt(lovelace).toLocaleString()} lovelace`;
   };
 
@@ -116,10 +118,10 @@ export const TxPreview: React.FC<TxPreviewProps> = ({
           <span className="text-sm font-semibold text-gray-800">合計消費</span>
           <div className="text-right">
             <div className="text-lg font-bold text-gray-900">
-              {formatADA((parseInt(summary?.amount_sent || '0') + parseInt(txResult.fee)).toString())}
+              {formatADA((parseInt(summary?.amount_sent || '0') + parseInt(txResult.fee || '0')).toString())}
             </div>
             <div className="text-xs text-gray-500">
-              {formatLovelace((parseInt(summary?.amount_sent || '0') + parseInt(txResult.fee)).toString())}
+              {formatLovelace((parseInt(summary?.amount_sent || '0') + parseInt(txResult.fee || '0')).toString())}
             </div>
           </div>
         </div>
@@ -129,8 +131,8 @@ export const TxPreview: React.FC<TxPreviewProps> = ({
           <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
             <div className="text-sm text-blue-800 mb-2 font-medium">レート情報</div>
             <div className="space-y-1 text-xs text-blue-700">
-              <div>JPY金額: ¥{summary.jpy_amount.toLocaleString()}</div>
-              <div>使用レート: ¥{summary.rate_used.toFixed(4)}/ADA</div>
+              <div>JPY金額: ¥{parseFloat(summary.jpy_amount).toLocaleString()}</div>
+              <div>使用レート: ¥{parseFloat(summary.rate_used).toFixed(4)}/ADA</div>
             </div>
           </div>
         )}

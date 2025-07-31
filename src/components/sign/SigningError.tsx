@@ -86,7 +86,7 @@ export const SigningError: React.FC<SigningErrorProps> = ({
     }
   };
 
-  const errorInfo = getErrorInfo();
+
 
   // Get troubleshooting tips based on error type
   const getTroubleshootingTips = (): string[] => {
@@ -129,6 +129,7 @@ export const SigningError: React.FC<SigningErrorProps> = ({
     }
   };
 
+  const errorInfo = getErrorInfo();
   const troubleshootingTips = getTroubleshootingTips();
 
   return (

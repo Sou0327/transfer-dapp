@@ -3,22 +3,76 @@ import { Buffer } from 'buffer';
 import { useYoroiConnect } from '../hooks/useYoroiConnect';
 import { useUtxoManager } from '../hooks/useUtxoManager';
 import { TransferFormProps } from '../types';
-import { OptimizationUtils, useOptimizedState } from '../lib/performance/reactOptimization';
+// Performance optimization imports removed - using standard React hooks
 
 // Buffer polyfill for browser
 window.Buffer = Buffer;
 
 // Buffer polyfill for browser
 window.Buffer = Buffer;
+
+/**
+ * CSL (Cardano Serialization Library) type definitions
+ */
+interface CSLTransactionBuilder {
+  add_inputs_from: (inputs: unknown, strategy: number) => void;
+  add_output: (output: unknown) => void;
+  set_fee: (fee: unknown) => void;
+  set_ttl: (ttl: number) => void;
+  build: () => unknown;
+}
+
+interface CSLTransactionBuilderConfig {
+  fee_algo: (fee: unknown) => CSLTransactionBuilderConfig;
+  pool_deposit: (deposit: unknown) => CSLTransactionBuilderConfig;
+  key_deposit: (deposit: unknown) => CSLTransactionBuilderConfig;
+  max_value_size: (size: number) => CSLTransactionBuilderConfig;
+  max_tx_size: (size: number) => CSLTransactionBuilderConfig;
+  coins_per_utxo_byte: (coins: unknown) => CSLTransactionBuilderConfig;
+  build: () => unknown;
+}
+
+interface CSLModule {
+  TransactionBuilder: {
+    new: (config: unknown) => CSLTransactionBuilder;
+  };
+  TransactionBuilderConfigBuilder: {
+    new: () => CSLTransactionBuilderConfig;
+  };
+  LinearFee: {
+    new: (coefficient: unknown, constant: unknown) => unknown;
+  };
+  BigNum: {
+    from_str: (str: string) => unknown;
+  };
+  Address: {
+    from_bech32: (addr: string) => unknown;
+  };
+  TransactionOutput: {
+    new: (address: unknown, amount: unknown) => unknown;
+  };
+  Value: {
+    new: (coin: unknown) => unknown;
+  };
+  Transaction: {
+    new: (body: unknown, witnessSet: unknown, auxiliaryData?: unknown) => {
+      to_bytes: () => Uint8Array;
+    };
+  };
+  TransactionWitnessSet: {
+    new: () => unknown;
+    from_bytes: (bytes: Uint8Array) => unknown;
+  };
+}
 
 // Memoized CSL loader to avoid repeated imports
-let cachedCSL: unknown = null;
-const loadCSL = async () => {
+let cachedCSL: CSLModule | null = null;
+const loadCSL = async (): Promise<CSLModule> => {
   if (cachedCSL) return cachedCSL;
   
   console.log('🔧 Loading CSL for the first time...');
   const wasmModule = await import('@emurgo/cardano-serialization-lib-browser');
-  cachedCSL = wasmModule.default || wasmModule;
+  cachedCSL = (wasmModule.default || wasmModule) as CSLModule;
   console.log('✅ CSL cached successfully');
   return cachedCSL;
 };
@@ -32,7 +86,7 @@ export const TransferForm: React.FC<TransferFormProps> = React.memo(({
   const { utxos, totalAda, autoSelectForAmount, clearSelection } = useUtxoManager();
   
   // Use optimized state to prevent unnecessary re-renders
-  const [formData, setFormData] = useOptimizedState({
+  const [formData, setFormData] = useState({
     to: '',
     amount: '',
     sweepMode: false,
@@ -42,8 +96,8 @@ export const TransferForm: React.FC<TransferFormProps> = React.memo(({
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
   // Stable callbacks for onTransfer handlers
-  const stableOnTransferComplete = OptimizationUtils.useStableCallback(onTransferComplete);
-  const stableOnTransferError = OptimizationUtils.useStableCallback(onTransferError);
+  const stableOnTransferComplete = useCallback((txHash: string) => onTransferComplete(txHash), [onTransferComplete]);
+  const stableOnTransferError = useCallback((error: string) => onTransferError(error), [onTransferError]);
 
   // Memoized validation function to avoid recreation
   const validateForm = useMemo(() => (): string[] => {
@@ -192,7 +246,7 @@ export const TransferForm: React.FC<TransferFormProps> = React.memo(({
       const witnessSet = wasm.TransactionWitnessSet.from_bytes(
         Buffer.from(witnessSetHex, 'hex')
       );
-      const signedTx = wasm.Transaction.new(txBody, witnessSet, tx.auxiliary_data());
+      const signedTx = wasm.Transaction.new(txBody, witnessSet, undefined);
       
       // トランザクション送信
       const txHash = await api.submitTx(Buffer.from(signedTx.to_bytes()).toString('hex'));
@@ -206,7 +260,7 @@ export const TransferForm: React.FC<TransferFormProps> = React.memo(({
 
     } catch (error: unknown) {
       console.error('Transfer failed:', error);
-      stableOnTransferError(error.message || 'トランザクション送信に失敗しました');
+      stableOnTransferError(error instanceof Error ? error.message : 'トランザクション送信に失敗しました');
     } finally {
       setIsSubmitting(false);
     }

@@ -2,7 +2,7 @@ import React from 'react';
 import { UTxO } from '../types/cardano';
 import { UTxOTable } from './UTxOTable';
 import { VirtualizedUTxOTable } from './VirtualizedUTxOTable';
-import { useWindowSize } from '../lib/performance/reactOptimization';
+// Performance optimization imports removed
 
 interface SmartUTxOTableProps {
   utxos: UTxO[];
@@ -35,7 +35,13 @@ export const SmartUTxOTable: React.FC<SmartUTxOTableProps> = React.memo(({
   onLoadMore,
   hasNextPage = false,
 }) => {
-  const { height } = useWindowSize();
+  const [height, setHeight] = React.useState(window.innerHeight);
+  
+  React.useEffect(() => {
+    const handleResize = () => setHeight(window.innerHeight);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Decision logic for virtualization
   const shouldVirtualize = React.useMemo(() => {

@@ -1,6 +1,5 @@
 import React from 'react';
 import { useYoroiConnect } from '../hooks/useYoroiConnect';
-import { OptimizationUtils } from '../lib/performance/reactOptimization';
 
 interface YoroiConnectButtonProps {
   className?: string;
@@ -16,7 +15,7 @@ export const YoroiConnectButton: React.FC<YoroiConnectButtonProps> = React.memo(
   const { isConnected, isConnecting, connect, disconnect, error } = useYoroiConnect();
 
   // Use stable callbacks to prevent unnecessary re-renders
-  const handleConnect = OptimizationUtils.useStableCallback(async () => {
+  const handleConnect = React.useCallback(async () => {
     try {
       await connect();
       onConnect?.();
@@ -24,16 +23,16 @@ export const YoroiConnectButton: React.FC<YoroiConnectButtonProps> = React.memo(
       const errorMessage = err instanceof Error ? err.message : 'Connection failed';
       onError?.(errorMessage);
     }
-  });
+  }, [connect, onConnect, onError]);
 
-  const handleDisconnect = OptimizationUtils.useStableCallback(() => {
+  const handleDisconnect = React.useCallback(() => {
     disconnect();
-  });
+  }, [disconnect]);
 
   // Stable callback for error handling
-  const stableOnError = OptimizationUtils.useStableCallback((errorMessage: string) => {
+  const stableOnError = React.useCallback((errorMessage: string) => {
     onError?.(errorMessage);
-  });
+  }, [onError]);
 
   // Show error if any - with stable callback
   React.useEffect(() => {

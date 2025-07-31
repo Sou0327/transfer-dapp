@@ -9,12 +9,14 @@ interface CountdownBadgeProps {
   requestId?: string;
   ttlSlot?: number;
   currentSlot?: number;
+  targetTime?: Date;
   className?: string;
   size?: 'sm' | 'md' | 'lg';
   showIcon?: boolean;
   showLabel?: boolean;
   onExpired?: () => void;
   onWarning?: (timeRemaining: number) => void;
+  onExpire?: () => void;
 }
 
 interface TimeRemaining {

@@ -9,7 +9,7 @@ import {
   CIP30Api, 
   OTCRequest, 
   TransactionBuildResult,
-  ProtocolParameters,
+  ProtocolParams,
   PreSignedData 
 } from '../types/otc/index';
 
@@ -50,7 +50,7 @@ export const SigningFlow: React.FC<SigningFlowProps> = ({
   }, []);
 
   // Get protocol parameters
-  const getProtocolParams = useCallback(async (): Promise<ProtocolParameters> => {
+  const getProtocolParams = useCallback(async (): Promise<ProtocolParams> => {
     try {
       const response = await fetch('/api/ada/protocol-params');
       if (!response.ok) {
@@ -101,7 +101,7 @@ export const SigningFlow: React.FC<SigningFlowProps> = ({
         protocolParams,
         api,
         changeAddress,
-        destinationAddress: request.destination_address,
+        destinationAddress: request.destination_address || request.recipient,
         ttlOffset: 7200 // 2 hours
       };
 
@@ -109,7 +109,7 @@ export const SigningFlow: React.FC<SigningFlowProps> = ({
       const builder = TxBuilderFactory.create(
         request.amount_mode,
         config,
-        request.amount_rule
+        request.amount_rule || request.amount_or_rule_json
       );
 
       // Build transaction
@@ -139,7 +139,7 @@ export const SigningFlow: React.FC<SigningFlowProps> = ({
       });
       onError(errorMessage);
     }
-  }, [request, api, getProtocolParams, getWalletAddresses, onError]);
+  }, [request, api, getProtocolParams, getWalletAddresses, onError, updateState]);
 
   // Sign transaction
   const signTransaction = useCallback(async () => {
@@ -152,6 +152,9 @@ export const SigningFlow: React.FC<SigningFlowProps> = ({
 
     try {
       // Sign transaction using CIP-30 API
+      if (!state.txResult.txHex) {
+        throw new Error('Transaction hex not available');
+      }
       const witnessSetHex = await api.signTx(state.txResult.txHex, true);
       
       if (!witnessSetHex) {
@@ -160,20 +163,13 @@ export const SigningFlow: React.FC<SigningFlowProps> = ({
 
       // Create pre-signed data
       const preSignedData: PreSignedData = {
+        id: `presigned_${Date.now()}`,
         request_id: request.id,
-        tx_body_hex: state.txResult.txHex,
-        witness_set_hex: witnessSetHex,
-        tx_hash: state.txResult.txHash,
-        fee_lovelace: state.txResult.fee,
-        ttl_slot: parseInt(state.txResult.ttl),
-        signed_at: new Date().toISOString(),
-        wallet_used: api.getNetworkId ? 'cip30' : 'unknown',
-        metadata: {
-          amount_mode: request.amount_mode,
-          witnesses_count: state.txResult.witnesses_required || 1,
-          tx_size_estimate: Math.floor(state.txResult.txHex.length / 2),
-          ...state.txResult.summary
-        }
+        provider_id: 'cip30',
+        tx_body_cbor: state.txResult.txHex || '',
+        witness_cbor: witnessSetHex,
+        selected_utxos: [],
+        signed_at: new Date()
       };
 
       updateState({ step: 'complete', isLoading: false });
@@ -199,7 +195,7 @@ export const SigningFlow: React.FC<SigningFlowProps> = ({
       });
       onError(errorMessage);
     }
-  }, [state.txResult, api, request, onSuccess, onError]);
+  }, [state.txResult, api, request, onSuccess, onError, updateState]);
 
   // Handle preview confirmation
   const handlePreviewConfirm = useCallback(() => {

@@ -5,10 +5,20 @@
 
 import { StateCreator } from 'zustand';
 import { Buffer } from 'buffer';
-import { UTxO, AssetBalance } from '../../types/cardano';
+import { UTxO, AssetBalance, CIP30Api } from '../../types/cardano';
 
 // Buffer polyfill for browser
 window.Buffer = Buffer;
+
+/**
+ * Combined store state interface for accessing wallet slice
+ */
+interface CombinedStore {
+  wallet: {
+    isConnected: boolean;
+    api: CIP30Api | null;
+  };
+}
 
 export interface UtxoState {
   utxos: UTxO[];
@@ -284,9 +294,9 @@ export const createUtxoSlice: StateCreator<
 
   refreshUtxos: async () => {
     const state = get();
-    const wallet = (state as { wallet: { address?: string } }).wallet;
+    const wallet = (state as unknown as CombinedStore).wallet;
     
-    if (!wallet.isConnected || !wallet.api) {
+    if (!wallet?.isConnected || !wallet?.api) {
       set((state) => ({
         ...state,
         utxo: {
@@ -347,7 +357,7 @@ export const createUtxoSlice: StateCreator<
         utxo: {
           ...state.utxo,
           isLoading: false,
-          error: error.message || 'Failed to fetch UTxOs',
+          error: (error instanceof Error ? error.message : String(error)) || 'Failed to fetch UTxOs',
         },
       }));
     }

@@ -10,24 +10,49 @@ let pool: Pool | null = null;
 let redisClient: RedisClientType | null = null;
 
 /**
- * Database configuration
+ * セキュアなデータベース設定
  */
 export const dbConfig = {
-  connectionString: process.env.DATABASE_URL || 'postgresql://user:password@localhost:5432/otc_db',
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-  max: 20, // Maximum number of clients in the pool
-  idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
-  connectionTimeoutMillis: 2000, // Return an error if connection takes longer than 2 seconds
+  connectionString: (() => {
+    const dbUrl = process.env.DATABASE_URL;
+    if (!dbUrl || dbUrl.includes('user:password') || dbUrl.includes('localhost')) {
+      throw new Error('DATABASE_URL環境変数が設定されていないか、デフォルト値のままです');
+    }
+    return dbUrl;
+  })(),
+  ssl: process.env.NODE_ENV === 'production' ? { 
+    rejectUnauthorized: true, // SSL証明書を管理する
+    ca: process.env.DB_CA_CERT, // CA証明書を設定
+  } : false,
+  max: 20, // プール内の最大クライアント数
+  idleTimeoutMillis: 30000, // 30秒後にアイドルクライアントをクローズ
+  connectionTimeoutMillis: 2000, // 2秒でタイムアウト
+  statement_timeout: 30000, // 30秒でSQLタイムアウト
+  query_timeout: 30000, // 30秒でクエリタイムアウト
 };
 
 /**
- * Redis configuration
+ * セキュアなRedis設定
  */
 export const redisConfig = {
-  url: process.env.REDIS_URL || 'redis://localhost:6379',
+  url: (() => {
+    const redisUrl = process.env.REDIS_URL;
+    if (!redisUrl || redisUrl.includes('localhost')) {
+      console.warn('REDIS_URLが設定されていないため、Redisキャッシュが無効です');
+      return undefined;
+    }
+    return redisUrl;
+  })(),
   socket: {
-    reconnectStrategy: (retries: number) => Math.min(retries * 50, 1000),
+    reconnectStrategy: (retries: number) => {
+      if (retries > 10) return false; // 10回後に停止
+      return Math.min(retries * 50, 1000);
+    },
+    connectTimeout: 5000, // 5秒でタイムアウト
+    commandTimeout: 5000, // 5秒でコマンドタイムアウト
   },
+  username: process.env.REDIS_USERNAME,
+  password: process.env.REDIS_PASSWORD,
 };
 
 /**
@@ -51,39 +76,91 @@ export function getPool(): Pool {
 }
 
 /**
- * Initialize Redis client
+ * セキュアなRedisクライアント初期化
  */
 export async function getRedisClient(): Promise<RedisClientType> {
+  if (!redisConfig.url) {
+    throw new Error('Redis URLが設定されていません');
+  }
+
   if (!redisClient) {
     redisClient = createClient(redisConfig);
     
     redisClient.on('error', (err) => {
       console.error('Redis client error:', err);
+      // エラー時にクライアントをリセット
+      redisClient = null;
     });
     
     redisClient.on('connect', () => {
       console.log('🔴 Redis client connected');
     });
+
+    redisClient.on('disconnect', () => {
+      console.log('🔴 Redis client disconnected');
+    });
     
-    await redisClient.connect();
+    try {
+      await redisClient.connect();
+    } catch (error) {
+      console.error('Redis connection failed:', error);
+      redisClient = null;
+      throw error;
+    }
   }
   
   return redisClient;
 }
 
 /**
- * Execute a database query with connection pooling
+ * セキュアなデータベースクエリ実行関数
  */
-export async function query<T = Record<string, unknown>>(
+export async function query<T extends Record<string, unknown> = Record<string, unknown>>(
   text: string, 
   params?: unknown[]
 ): Promise<QueryResult<T>> {
+  // SQLインジェクション対策のための入力検証
+  if (!text || typeof text !== 'string') {
+    throw new Error('無効なSQLクエリです');
+  }
+
+  // 危険なSQLキーワードの検知
+  const dangerousPatterns = [
+    /;\s*(DROP|DELETE|UPDATE|INSERT|ALTER|CREATE|TRUNCATE|EXEC|EXECUTE)\s+/i,
+    /\bUNION\s+SELECT\b/i,
+    /--[^\r\n]*$/m,
+    /\/\*.*?\*\//s,
+    /\bxp_cmdshell\b/i,
+    /\bsp_executesql\b/i
+  ];
+
+  for (const pattern of dangerousPatterns) {
+    if (pattern.test(text)) {
+      throw new Error('潜在的に危険なSQLパターンが検出されました');
+    }
+  }
+
+  // パラメータ化クエリの強制（$nプレースホルダーのチェック）
+  const hasPlaceholders = /\$\d+/.test(text);
+  const hasParams = params && params.length > 0;
+  
+  if (hasParams !== hasPlaceholders) {
+    throw new Error('パラメータとプレースホルダーの数が一致しません');
+  }
+
   const pool = getPool();
   const client = await pool.connect();
   
   try {
     const result = await client.query<T>(text, params);
     return result;
+  } catch (error) {
+    console.error('Database query error:', { 
+      error: error instanceof Error ? error.message : String(error),
+      query: text.substring(0, 100) + '...', // クエリの一部をログ出力
+      paramCount: params?.length || 0
+    });
+    throw error;
   } finally {
     client.release();
   }
@@ -121,7 +198,7 @@ export class RequestDAO {
    */
   static async create(data: Omit<OTCRequest, 'id' | 'created_at' | 'updated_at'>): Promise<OTCRequest> {
     // Import secure ID generation
-    const { generateSecureRequestId } = await import('./security/secureId.js');
+    const { generateSecureRequestId } = await import('./security/secureId');
     
     // Generate custom request ID
     const requestId = generateSecureRequestId({
@@ -135,7 +212,7 @@ export class RequestDAO {
       INSERT INTO ada_requests (
         id, currency, amount_mode, amount_or_rule_json, recipient, 
         ttl_slot, status, created_by
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      ) VALUES (security/secureId, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *
     `, [
       requestId,
@@ -156,7 +233,7 @@ export class RequestDAO {
    */
   static async findById(id: string): Promise<OTCRequest | null> {
     const result = await query<OTCRequest>(`
-      SELECT * FROM ada_requests WHERE id = $1
+      SELECT * FROM ada_requests WHERE id = security/secureId
     `, [id]);
     
     return result.rows[0] || null;
@@ -175,11 +252,11 @@ export class RequestDAO {
   static async updateStatus(id: string, status: RequestStatus): Promise<boolean> {
     const result = await query(`
       UPDATE ada_requests 
-      SET status = $1, updated_at = CURRENT_TIMESTAMP 
+      SET status = security/secureId, updated_at = CURRENT_TIMESTAMP 
       WHERE id = $2
     `, [status, id]);
     
-    return result.rowCount > 0;
+    return (result.rowCount ?? 0) > 0;
   }
   
   /**
@@ -188,7 +265,7 @@ export class RequestDAO {
   static async findByAdmin(adminId: string, limit = 50, offset = 0): Promise<OTCRequest[]> {
     const result = await query<OTCRequest>(`
       SELECT * FROM ada_requests 
-      WHERE created_by = $1 
+      WHERE created_by = security/secureId 
       ORDER BY created_at DESC 
       LIMIT $2 OFFSET $3
     `, [adminId, limit, offset]);
@@ -202,7 +279,7 @@ export class RequestDAO {
   static async findExpired(currentSlot: number): Promise<OTCRequest[]> {
     const result = await query<OTCRequest>(`
       SELECT * FROM ada_requests 
-      WHERE ttl_slot < $1 AND status IN ('REQUESTED', 'SIGNED')
+      WHERE ttl_slot < security/secureId AND status IN ('REQUESTED', 'SIGNED')
     `, [currentSlot]);
     
     return result.rows;
@@ -224,7 +301,7 @@ export class PreSignedDAO {
     metadata?: Record<string, unknown>;
   }): Promise<string> {
     // Import encryption utilities dynamically to avoid circular dependencies
-    const { encryptPreSignedData, generateIntegrityHash } = await import('./encryption.js');
+    const { encryptPreSignedData, generateIntegrityHash } = await import('./encryption');
     
     // Encrypt sensitive data
     const encryptedData = encryptPreSignedData({
@@ -243,7 +320,7 @@ export class PreSignedDAO {
     });
 
     // Assemble complete signed transaction hex
-    const { assembleSignedTransaction } = await import('./signingUtils.js');
+    const { assembleSignedTransaction } = await import('./signingUtils');
     let signedTxHex = '';
     try {
       signedTxHex = assembleSignedTransaction(data.tx_body_hex, data.witness_set_hex);
@@ -256,7 +333,7 @@ export class PreSignedDAO {
         request_id, tx_hash, tx_body_encrypted, witness_set_encrypted, 
         encryption_meta, integrity_hash, fee_lovelace, ttl_slot, 
         wallet_used, signed_tx_hex, metadata
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      ) VALUES (security/secureId, $2, $3, $4, $5, $6, $7, $8, $9, security/secureId0, security/secureId1)
       RETURNING id
     `, [
       data.request_id,
@@ -286,7 +363,7 @@ export class PreSignedDAO {
         (tx_body_encrypted IS NOT NULL) as has_tx_body,
         (witness_set_encrypted IS NOT NULL) as has_witness_data
       FROM ada_presigned 
-      WHERE request_id = $1
+      WHERE request_id = security/secureId
     `, [requestId]);
     
     const row = result.rows[0];
@@ -311,7 +388,7 @@ export class PreSignedDAO {
    */
   static async getCompleteData(requestId: string): Promise<Record<string, unknown> | null> {
     const result = await query(`
-      SELECT * FROM ada_presigned WHERE request_id = $1
+      SELECT * FROM ada_presigned WHERE request_id = security/secureId
     `, [requestId]);
     
     const row = result.rows[0];
@@ -319,7 +396,7 @@ export class PreSignedDAO {
 
     try {
       // Import decryption utilities
-      const { decryptPreSignedData, verifyIntegrityHash } = await import('./encryption.js');
+      const { decryptPreSignedData, verifyIntegrityHash } = await import('./encryption');
 
       // Verify integrity first
       const integrityValid = verifyIntegrityHash({
@@ -366,10 +443,10 @@ export class PreSignedDAO {
    */
   static async delete(requestId: string): Promise<boolean> {
     const result = await query(`
-      DELETE FROM ada_presigned WHERE request_id = $1
+      DELETE FROM ada_presigned WHERE request_id = security/secureId
     `, [requestId]);
     
-    return result.rowCount > 0;
+    return (result.rowCount ?? 0) > 0;
   }
 
   /**
@@ -378,11 +455,11 @@ export class PreSignedDAO {
   static async updateMetadata(requestId: string, metadata: Record<string, unknown>): Promise<boolean> {
     const result = await query(`
       UPDATE ada_presigned 
-      SET metadata = $1, updated_at = CURRENT_TIMESTAMP 
+      SET metadata = security/secureId, updated_at = CURRENT_TIMESTAMP 
       WHERE request_id = $2
     `, [JSON.stringify(metadata), requestId]);
     
-    return result.rowCount > 0;
+    return (result.rowCount ?? 0) > 0;
   }
 
   /**
@@ -399,7 +476,7 @@ export class PreSignedDAO {
           request_id, tx_hash, tx_body_encrypted, witness_set_encrypted,
           encryption_meta, integrity_hash, signed_at
         FROM ada_presigned 
-        WHERE request_id = $1
+        WHERE request_id = security/secureId
       `, [requestId]);
       
       const row = result.rows[0];
@@ -411,7 +488,7 @@ export class PreSignedDAO {
         };
       }
 
-      const checks: Record<string, unknown> = {
+      const checks: Record<string, boolean | unknown> = {
         exists: true,
         has_tx_body: !!row.tx_body_encrypted,
         has_witness_set: !!row.witness_set_encrypted,
@@ -424,7 +501,7 @@ export class PreSignedDAO {
       // Check integrity hash
       if (row.integrity_hash) {
         try {
-          const { verifyIntegrityHash } = await import('./encryption.js');
+          const { verifyIntegrityHash } = await import('./encryption');
           checks.integrity_valid = verifyIntegrityHash({
             requestId: row.request_id as string,
             txHash: row.tx_hash as string,
@@ -461,10 +538,10 @@ export class PreSignedDAO {
                           checks.has_encryption_meta &&
                           checks.encryption_meta_valid;
 
-      const healthy = checks.exists && 
-                     checks.has_tx_body && 
-                     checks.has_witness_set && 
-                     checks.encryption_meta_valid && 
+      const healthy = Boolean(checks.exists) && 
+                     Boolean(checks.has_tx_body) && 
+                     Boolean(checks.has_witness_set) && 
+                     Boolean(checks.encryption_meta_valid) && 
                      (checks.integrity_valid !== false);
 
       return {
@@ -493,7 +570,7 @@ export class PreSignedDAO {
         r.status as request_status, r.amount_mode
       FROM ada_presigned p
       JOIN ada_requests r ON p.request_id = r.id
-      WHERE r.status = $1
+      WHERE r.status = security/secureId
       ORDER BY p.signed_at DESC
       LIMIT $2
     `, [status, limit]);
@@ -511,7 +588,7 @@ export class PreSignedDAO {
         r.status, r.amount_mode, r.recipient
       FROM ada_presigned p
       JOIN ada_requests r ON p.request_id = r.id
-      WHERE p.ttl_slot BETWEEN $1 AND $2
+      WHERE p.ttl_slot BETWEEN security/secureId AND $2
         AND r.status = 'SIGNED'
       ORDER BY p.ttl_slot ASC
     `, [currentSlot, currentSlot + bufferSlots]);
@@ -540,7 +617,7 @@ export class TransactionDAO {
         request_id, tx_hash, tx_body_hex, witness_set_hex, fee_lovelace, 
         submission_mode, submitted_at, status, fail_reason
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      VALUES (security/secureId, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING *
     `, [
       data.request_id,
@@ -567,14 +644,14 @@ export class TransactionDAO {
   ): Promise<boolean> {
     const result = await query(`
       UPDATE ada_txs 
-      SET status = $1, 
-          confirmed_at = CASE WHEN $1 = 'CONFIRMED' THEN CURRENT_TIMESTAMP ELSE confirmed_at END,
+      SET status = security/secureId, 
+          confirmed_at = CASE WHEN security/secureId = 'CONFIRMED' THEN CURRENT_TIMESTAMP ELSE confirmed_at END,
           fail_reason = $3,
           updated_at = CURRENT_TIMESTAMP
       WHERE id = $2
     `, [status, id, failReason || null]);
     
-    return result.rowCount > 0;
+    return (result.rowCount ?? 0) > 0;
   }
   
   /**
@@ -587,14 +664,14 @@ export class TransactionDAO {
   ): Promise<boolean> {
     const result = await query(`
       UPDATE ada_txs 
-      SET status = $1, 
-          confirmed_at = CASE WHEN $1 = 'CONFIRMED' THEN CURRENT_TIMESTAMP ELSE confirmed_at END,
+      SET status = security/secureId, 
+          confirmed_at = CASE WHEN security/secureId = 'CONFIRMED' THEN CURRENT_TIMESTAMP ELSE confirmed_at END,
           fail_reason = $3,
           updated_at = CURRENT_TIMESTAMP
       WHERE tx_hash = $2
     `, [status, txHash, failReason || null]);
     
-    return result.rowCount > 0;
+    return (result.rowCount ?? 0) > 0;
   }
   
   /**
@@ -602,7 +679,7 @@ export class TransactionDAO {
    */
   static async findByHash(txHash: string): Promise<TransactionData | null> {
     const result = await query<TransactionData>(`
-      SELECT * FROM ada_txs WHERE tx_hash = $1
+      SELECT * FROM ada_txs WHERE tx_hash = security/secureId
     `, [txHash]);
     
     return result.rows[0] || null;
@@ -613,7 +690,7 @@ export class TransactionDAO {
    */
   static async getByRequestId(requestId: string): Promise<TransactionData | null> {
     const result = await query<TransactionData>(`
-      SELECT * FROM ada_txs WHERE request_id = $1 ORDER BY submitted_at DESC LIMIT 1
+      SELECT * FROM ada_txs WHERE request_id = security/secureId ORDER BY submitted_at DESC LIMIT 1
     `, [requestId]);
     
     return result.rows[0] || null;
@@ -632,7 +709,7 @@ export class TransactionDAO {
       FROM ada_txs t
       LEFT JOIN ada_requests r ON t.request_id = r.id
       ORDER BY t.submitted_at DESC 
-      LIMIT $1
+      LIMIT security/secureId
     `, [limit]);
     
     return result.rows;
@@ -650,7 +727,7 @@ export class TransactionDAO {
         r.currency
       FROM ada_txs t
       LEFT JOIN ada_requests r ON t.request_id = r.id
-      WHERE t.status = $1
+      WHERE t.status = security/secureId
       ORDER BY t.submitted_at DESC 
       LIMIT $2
     `, [status, limit]);
@@ -681,6 +758,11 @@ export class TransactionDAO {
    * Get failed transactions that might need retry
    */
   static async getRetryable(hoursBack = 24): Promise<TransactionData[]> {
+    // 入力値検証
+    if (hoursBack < 1 || hoursBack > 168) { // 1時間から168時間（1週間）まで
+      throw new Error('無効な時間範囲です');
+    }
+
     const result = await query<TransactionData>(`
       SELECT 
         t.*,
@@ -691,10 +773,10 @@ export class TransactionDAO {
       FROM ada_txs t
       LEFT JOIN ada_requests r ON t.request_id = r.id
       WHERE t.status = 'FAILED' 
-        AND t.submitted_at > NOW() - INTERVAL '${hoursBack} hours'
+        AND t.submitted_at > NOW() - INTERVAL 'security/secureId hours'
         AND r.status = 'SIGNED'
       ORDER BY t.submitted_at DESC
-    `);
+    `, [hoursBack]);
     
     return result.rows;
   }
@@ -709,6 +791,11 @@ export class TransactionDAO {
     failed: number;
     success_rate: number;
   }> {
+    // 入力値検証
+    if (hoursBack < 1 || hoursBack > 168) { // 1時間から168時間（1週間）まで
+      throw new Error('無効な時間範囲です');
+    }
+
     const result = await query(`
       SELECT 
         COUNT(*) as total,
@@ -716,8 +803,8 @@ export class TransactionDAO {
         COUNT(CASE WHEN status = 'CONFIRMED' THEN 1 END) as confirmed,
         COUNT(CASE WHEN status = 'FAILED' THEN 1 END) as failed
       FROM ada_txs 
-      WHERE submitted_at > NOW() - INTERVAL '${hoursBack} hours'
-    `);
+      WHERE submitted_at > NOW() - INTERVAL 'security/secureId hours'
+    `, [hoursBack]);
     
     const row = result.rows[0];
     const total = parseInt(row.total as string);
@@ -738,10 +825,10 @@ export class TransactionDAO {
    */
   static async delete(id: string): Promise<boolean> {
     const result = await query(`
-      DELETE FROM ada_txs WHERE id = $1
+      DELETE FROM ada_txs WHERE id = security/secureId
     `, [id]);
     
-    return result.rowCount > 0;
+    return (result.rowCount ?? 0) > 0;
   }
 
   /**
@@ -792,7 +879,7 @@ export class AuditDAO {
       INSERT INTO audit_logs (
         admin_id, action, resource_type, resource_id, 
         details, ip_address, user_agent
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+      ) VALUES (security/secureId, $2, $3, $4, $5, $6, $7)
     `, [adminId, action, resourceType, resourceId, details, ipAddress, userAgent]);
   }
 
@@ -812,7 +899,7 @@ export class AuditDAO {
       INSERT INTO audit_logs (
         admin_id, event_type, resource_type, resource_id, 
         details, ip_address, user_agent
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+      ) VALUES (security/secureId, $2, $3, $4, $5, $6, $7)
     `, [
       data.user_id,
       data.event_type,
@@ -825,7 +912,7 @@ export class AuditDAO {
   }
 
   /**
-   * Get audit logs with filters
+   * Get audit logs with filters (セキュアなフィルタリング付き)
    */
   static async getFilteredLogs(filters: {
     adminId?: string;
@@ -837,10 +924,28 @@ export class AuditDAO {
     limit?: number;
     offset?: number;
   }): Promise<Record<string, unknown>[]> {
-    let whereClause = '';
+    // 入力値検証とサニタイゼーション
+    const limit = Math.min(Math.max(filters.limit || 100, 1), 1000); // 1-1000の範囲
+    const offset = Math.max(filters.offset || 0, 0);
+
+    if (filters.adminId && (typeof filters.adminId !== 'string' || filters.adminId.length > 100)) {
+      throw new Error('無効なadminIdです');
+    }
+
+    if (filters.eventType && (typeof filters.eventType !== 'string' || filters.eventType.length > 50)) {
+      throw new Error('無効なeventTypeです');
+    }
+
+    if (filters.resourceType && (typeof filters.resourceType !== 'string' || filters.resourceType.length > 50)) {
+      throw new Error('無効なresourceTypeです');
+    }
+
+    if (filters.resourceId && (typeof filters.resourceId !== 'string' || filters.resourceId.length > 100)) {
+      throw new Error('無効なresourceIdです');
+    }
+
     const params: unknown[] = [];
     let paramIndex = 1;
-
     const conditions: string[] = [];
 
     if (filters.adminId) {
@@ -879,12 +984,10 @@ export class AuditDAO {
       paramIndex++;
     }
 
-    if (conditions.length > 0) {
-      whereClause = 'WHERE ' + conditions.join(' AND ');
-    }
+    const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
 
-    const limit = filters.limit || 100;
-    const offset = filters.offset || 0;
+    // LIMITとOFFSETをパラメータ化
+    params.push(limit, offset);
 
     const result = await query(`
       SELECT 
@@ -894,7 +997,7 @@ export class AuditDAO {
       ${whereClause}
       ORDER BY created_at DESC 
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
-    `, [...params, limit, offset]);
+    `, params);
 
     return result.rows;
   }
@@ -913,7 +1016,7 @@ export class SessionDAO {
   ): Promise<void> {
     await query(`
       INSERT INTO admin_sessions (admin_id, session_token, expires_at, ip_address, user_agent)
-      VALUES ($1, $2, $3, $4, $5)
+      VALUES (security/secureId, $2, $3, $4, $5)
     `, [adminId, sessionToken, expiresAt, ipAddress, userAgent]);
   }
   
@@ -921,9 +1024,10 @@ export class SessionDAO {
    * Find session by token
    */
   static async findByToken(sessionToken: string): Promise<AdminSession | null> {
-    const result = await query<AdminSession & { 
-      expires_at: Date;
+    const result = await query<{
+      id: string;
       admin_id: string;
+      email: string;
       created_at: Date;
       ip_address: string;
       user_agent: string;
@@ -931,18 +1035,19 @@ export class SessionDAO {
       SELECT s.*, a.email 
       FROM admin_sessions s
       JOIN admins a ON s.admin_id = a.id
-      WHERE s.session_token = $1 AND s.expires_at > CURRENT_TIMESTAMP
+      WHERE s.session_token = security/secureId AND s.expires_at > CURRENT_TIMESTAMP
     `, [sessionToken]);
     
     const row = result.rows[0];
     if (!row) return null;
     
     return {
-      adminId: row.admin_id as string,
-      email: row.email as string,
-      loginTime: row.created_at as Date,
-      ipAddress: row.ip_address as string,
-      userAgent: row.user_agent as string,
+      id: row.id,
+      adminId: row.admin_id,
+      email: row.email,
+      loginTime: row.created_at,
+      ipAddress: row.ip_address,
+      userAgent: row.user_agent,
     };
   }
   
@@ -951,10 +1056,10 @@ export class SessionDAO {
    */
   static async delete(sessionToken: string): Promise<boolean> {
     const result = await query(`
-      DELETE FROM admin_sessions WHERE session_token = $1
+      DELETE FROM admin_sessions WHERE session_token = security/secureId
     `, [sessionToken]);
     
-    return result.rowCount > 0;
+    return (result.rowCount ?? 0) > 0;
   }
   
   /**
@@ -965,7 +1070,7 @@ export class SessionDAO {
       DELETE FROM admin_sessions WHERE expires_at <= CURRENT_TIMESTAMP
     `);
     
-    return result.rowCount;
+    return result.rowCount ?? 0;
   }
 }
 

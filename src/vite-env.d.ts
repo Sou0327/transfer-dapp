@@ -113,6 +113,10 @@ declare module 'tronweb' {
 
 // 環境変数の型定義を拡張
 interface ImportMetaEnv {
+  readonly NODE_ENV: string
+  readonly DEV: boolean
+  readonly PROD: boolean
+  readonly SSR: boolean
   readonly VITE_APP_NAME: string
   readonly VITE_APP_VERSION: string
   readonly VITE_CHAIN_ID: string
@@ -126,6 +130,7 @@ interface ImportMetaEnv {
   readonly VITE_CARDANO_NETWORK: string
   readonly VITE_BLOCKFROST_PROJECT_ID: string
   readonly VITE_BLOCKFROST_API_URL: string
+  readonly VITE_BLOCKFROST_API_KEY: string
   readonly VITE_CSL_WASM_URL?: string
   readonly VITE_ENABLE_PERFORMANCE_MONITORING?: string
   readonly VITE_LOG_LEVEL?: string

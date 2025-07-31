@@ -203,7 +203,7 @@ export const useUtxoManager = (): UseUtxoManagerReturn => {
       setState(prev => ({
         ...prev,
         isLoading: false,
-        error: error.message || 'Failed to fetch UTxOs',
+        error: error instanceof Error ? error.message : 'Failed to fetch UTxOs',
       }));
     }
   }, [isConnected, api]);

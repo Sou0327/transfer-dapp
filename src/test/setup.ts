@@ -174,6 +174,118 @@ console.warn = (message: unknown, ...args: unknown[]) => {
   originalConsoleWarn(message, ...args)
 }
 
+// Cardano Serialization Library のモック
+const mockCSL = {
+  Address: {
+    from_bech32: vi.fn().mockReturnValue({}),
+    from_bytes: vi.fn().mockReturnValue({
+      to_bech32: vi.fn().mockReturnValue('addr_test1234567890abcdef'),
+      payment_cred: vi.fn().mockReturnValue({
+        to_keyhash: vi.fn().mockReturnValue({
+          to_bytes: vi.fn().mockReturnValue(new Uint8Array(28))
+        })
+      })
+    }),
+    new: vi.fn().mockReturnValue({})
+  },
+  TransactionBuilder: {
+    new: vi.fn().mockReturnValue({
+      add_input: vi.fn(),
+      add_output: vi.fn(),
+      build: vi.fn().mockReturnValue({
+        to_bytes: vi.fn().mockReturnValue(new Uint8Array(100))
+      })
+    })
+  },
+  BigNum: {
+    from_str: vi.fn().mockReturnValue({}),
+    zero: vi.fn().mockReturnValue({})
+  },
+  TransactionInput: {
+    new: vi.fn().mockReturnValue({})
+  },
+  TransactionOutput: {
+    new: vi.fn().mockReturnValue({})
+  },
+  Value: {
+    new: vi.fn().mockReturnValue({}),
+    coin: vi.fn().mockReturnValue({})
+  },
+  TransactionHash: {
+    from_bytes: vi.fn().mockReturnValue({})
+  },
+  hash_transaction: vi.fn().mockReturnValue({
+    to_bytes: vi.fn().mockReturnValue(new Uint8Array(32))
+  })
+}
+
+// CSL モジュールをモック
+vi.mock('@emurgo/cardano-serialization-lib-browser', () => mockCSL)
+vi.mock('@emurgo/cardano-serialization-lib-nodejs', () => mockCSL)
+
+// CSLを使用するファイルをモック
+vi.mock('@/lib/cardano/lazyCSL', () => ({
+  loadCSL: vi.fn().mockResolvedValue(mockCSL),
+  preloadCSL: vi.fn(),
+  getCSLState: vi.fn().mockReturnValue({ loaded: true, loading: false, module: mockCSL }),
+  getCSLMetrics: vi.fn().mockReturnValue({ loadTime: 100, cacheHits: 0 }),
+  LazyCSL: {
+    createAddress: vi.fn().mockResolvedValue({}),
+    createTransactionBuilder: vi.fn().mockResolvedValue({}),
+    bigNumFromStr: vi.fn().mockResolvedValue({}),
+    createTxInput: vi.fn().mockResolvedValue({}),
+    createTxOutput: vi.fn().mockResolvedValue({}),
+    calculateMinFee: vi.fn().mockResolvedValue({}),
+    hashTransaction: vi.fn().mockResolvedValue({}),
+    transactionFromHex: vi.fn().mockResolvedValue({}),
+    transactionToHex: vi.fn().mockResolvedValue(''),
+    createMetadata: vi.fn().mockResolvedValue({}),
+    parseMetadata: vi.fn().mockResolvedValue({})
+  },
+  useCSL: vi.fn().mockReturnValue({ loaded: true, loading: false, load: vi.fn() }),
+  CSLLoading: vi.fn(({ children }) => children),
+  withCSL: vi.fn((Component) => Component)
+}))
+
+vi.mock('@/lib/signingUtils', () => ({
+  signTransaction: vi.fn().mockResolvedValue('signed-tx-hex'),
+  createTransactionWitness: vi.fn().mockResolvedValue({})
+}))
+
+vi.mock('@/lib/txBuilders', () => ({
+  buildTransaction: vi.fn().mockResolvedValue({}),
+  calculateFee: vi.fn().mockResolvedValue('1000000')
+}))
+
+// Zustand stores with CSL dependencies をモック
+vi.mock('@/stores/slices/utxoSlice', () => ({
+  createUtxoSlice: vi.fn(() => ({
+    utxo: {
+      utxos: [],
+      selectedUtxos: [],
+      isLoading: false,
+      error: null,
+      totalAda: '0',
+      selectionStrategy: 'largest'
+    },
+    setUtxos: vi.fn(),
+    selectUtxo: vi.fn(),
+    deselectUtxo: vi.fn(),
+    clearUtxoSelection: vi.fn(),
+    refreshUtxos: vi.fn().mockResolvedValue([]),
+    updateUtxoSelectionStrategy: vi.fn()
+  }))
+}))
+
+// TransferForm and related components をモック
+vi.mock('@/components/TransferForm', () => ({
+  TransferForm: vi.fn(({ children }) => children || 'Mocked TransferForm')
+}))
+
+vi.mock('@/components/EnhancedTransferForm', () => ({
+  EnhancedTransferForm: vi.fn(({ children }) => children || 'Mocked EnhancedTransferForm')
+}))
+
 // エラーハンドリングのモック（必要に応じて有効化）
 // vi.mock('@/utils/errorHandler', () => ({
 //   errorHandler: {

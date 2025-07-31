@@ -4,6 +4,7 @@
  * Requirements: 7.1, 7.2, 7.3, 7.4, 7.5
  */
 import { PreSignedDAO, RequestDAO, AuditDAO } from './database';
+import { RequestStatus } from '../types/otc/index';
 import { webSocketService } from './websocket';
 
 interface UTxOInfo {
@@ -30,8 +31,8 @@ export class UTxOMonitorService {
   private isRunning = false;
   private intervalId: NodeJS.Timeout | null = null;
   private readonly MONITORING_INTERVAL = 30000; // 30 seconds
-  private readonly MAX_RETRIES = 3;
-  private readonly BACKUP_INTERVAL = 120000; // 2 minutes for backup checks
+
+
   
   private monitoredRequests = new Map<string, MonitoredRequest>();
   private currentSlot = 0;
@@ -102,13 +103,13 @@ export class UTxOMonitorService {
       const selectedUtxos = metadata?.selected_utxos || [];
 
       const monitoredRequest: MonitoredRequest = {
-        id: preSignedData.id,
+        id: preSignedData.id as string,
         request_id: requestId,
-        tx_hash: preSignedData.tx_hash,
-        ttl_slot: preSignedData.ttl_slot,
+        tx_hash: preSignedData.tx_hash as string,
+        ttl_slot: preSignedData.ttl_slot as number,
         selected_utxos: selectedUtxos,
-        wallet_used: preSignedData.wallet_used,
-        signed_at: preSignedData.signed_at,
+        wallet_used: preSignedData.wallet_used as string,
+        signed_at: preSignedData.signed_at as string,
         last_check: new Date(),
         check_count: 0
       };
@@ -148,18 +149,18 @@ export class UTxOMonitorService {
           : request.metadata;
 
         const monitoredRequest: MonitoredRequest = {
-          id: request.id,
-          request_id: request.request_id,
-          tx_hash: request.tx_hash,
-          ttl_slot: request.ttl_slot,
+          id: request.id as string,
+          request_id: request.request_id as string,
+          tx_hash: request.tx_hash as string,
+          ttl_slot: request.ttl_slot as number,
           selected_utxos: metadata?.selected_utxos || [],
-          wallet_used: request.wallet_used,
-          signed_at: request.signed_at,
+          wallet_used: request.wallet_used as string,
+          signed_at: request.signed_at as string,
           last_check: new Date(0), // Force initial check
           check_count: 0
         };
 
-        this.monitoredRequests.set(request.request_id, monitoredRequest);
+        this.monitoredRequests.set(request.request_id as string, monitoredRequest);
       }
 
       console.log(`📋 Loaded ${signedRequests.length} signed requests for monitoring`);
@@ -240,7 +241,7 @@ export class UTxOMonitorService {
       console.log(`⏰ Request ${request.request_id} TTL expired (current: ${this.currentSlot}, ttl: ${request.ttl_slot})`);
       
       // Update status to EXPIRED
-      await RequestDAO.updateStatus(request.request_id, 'EXPIRED');
+      await RequestDAO.updateStatus(request.request_id, RequestStatus.EXPIRED);
       
       // Remove from monitoring
       this.removeRequest(request.request_id);
@@ -423,7 +424,7 @@ export class UTxOMonitorService {
     console.log(`💥 Request ${request.request_id} has ${consumedUtxos.length} consumed UTxOs`);
     
     // Update status to FAILED
-    await RequestDAO.updateStatus(request.request_id, 'FAILED');
+    await RequestDAO.updateStatus(request.request_id, RequestStatus.FAILED);
     
     // Remove from monitoring
     this.removeRequest(request.request_id);
@@ -537,7 +538,7 @@ export class UTxOMonitorService {
   private cleanupCompletedRequests(): void {
     const completedRequests: string[] = [];
     
-    for (const [requestId, request] of this.monitoredRequests.entries()) {
+    for (const [requestId, request] of Array.from(this.monitoredRequests.entries())) {
       // Remove requests that have been checked many times without changes
       if (request.check_count > 1000) { // ~8.3 hours of monitoring
         completedRequests.push(requestId);
@@ -632,8 +633,8 @@ export class UTxOMonitorService {
         request_id: req.request_id,
         ttl_slot: req.ttl_slot,
         time_remaining: Math.max(0, req.ttl_slot - this.currentSlot),
-        utxo_count: req.selected_utxos.length,
-        check_count: req.check_count,
+        utxos: req.selected_utxos.length,
+        checked_count: req.check_count,
         last_check: req.last_check
       }))
     };

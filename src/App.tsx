@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useCallback } from 'react'
 import { YoroiConnectButton } from './components/YoroiConnectButton'
 import { YoroiConnectionStatus } from './components/YoroiConnectionStatus'
 import { SmartUTxOTable } from './components/SmartUTxOTable'
@@ -7,7 +7,7 @@ import { ErrorBoundary } from './components/ErrorBoundary'
 // import { Card, CardHeader, CardBody, Alert, LoadingSpinner } from './components/common'
 import { useYoroiConnect } from './hooks/useYoroiConnect'
 import { useUtxoManager } from './hooks/useUtxoManager'
-import { OptimizationUtils, useOptimizedState, usePerformanceMonitor } from './lib/performance/reactOptimization'
+// Performance optimization imports removed - using standard React hooks
 import './App.css'
 
 /**
@@ -20,8 +20,8 @@ const AppHeader = React.memo<{
   activeView: 'dashboard' | 'transfer';
   onViewChange: (view: 'dashboard' | 'transfer') => void;
 }>(({ isConnected, activeView, onViewChange }) => {
-  const handleDashboardClick = OptimizationUtils.useStableCallback(() => onViewChange('dashboard'));
-  const handleTransferClick = OptimizationUtils.useStableCallback(() => onViewChange('transfer'));
+  const handleDashboardClick = React.useCallback(() => onViewChange('dashboard'), [onViewChange]);
+  const handleTransferClick = React.useCallback(() => onViewChange('transfer'), [onViewChange]);
 
   return (
     <header className="bg-white border-b border-gray-200 shadow-sm">
@@ -92,8 +92,8 @@ const MobileNavigation = React.memo<{
   activeView: 'dashboard' | 'transfer';
   onViewChange: (view: 'dashboard' | 'transfer') => void;
 }>(({ isConnected, activeView, onViewChange }) => {
-  const handleDashboardClick = OptimizationUtils.useStableCallback(() => onViewChange('dashboard'));
-  const handleTransferClick = OptimizationUtils.useStableCallback(() => onViewChange('transfer'));
+  const handleDashboardClick = React.useCallback(() => onViewChange('dashboard'), [onViewChange]);
+  const handleTransferClick = React.useCallback(() => onViewChange('transfer'), [onViewChange]);
 
   if (!isConnected) return null;
 
@@ -212,15 +212,14 @@ WelcomeScreen.displayName = 'WelcomeScreen';
  * Cardano基本送金dApp
  */
 const App: React.FC = () => {
-  // Performance monitoring in development
-  usePerformanceMonitor('App');
+  // Performance monitoring removed
 
   const { isConnected, error: connectionError, networkId } = useYoroiConnect()
   const { utxos, isLoading: utxosLoading, error: utxoError } = useUtxoManager()
   
   // Use optimized state to prevent unnecessary re-renders
-  const [activeView, setActiveView] = useOptimizedState<'dashboard' | 'transfer'>('dashboard')
-  const [error, setError] = useOptimizedState<string | null>(null)
+  const [activeView, setActiveView] = React.useState<'dashboard' | 'transfer'>('dashboard')
+  const [error, setError] = React.useState<string | null>(null)
 
   // Memoize error state computation
   const displayError = useMemo(() => {
@@ -243,28 +242,29 @@ const App: React.FC = () => {
   }, [debugInfo]);
 
   // Stable callback for clearing error
-  const clearError = OptimizationUtils.useStableCallback(() => {
+  const clearError = React.useCallback(() => {
     setError(null);
-  });
+  }, []);
 
   // Stable callback for view changes
-  const handleViewChange = OptimizationUtils.useStableCallback((view: 'dashboard' | 'transfer') => {
+  const handleViewChange = useCallback((view: 'dashboard' | 'transfer') => {
     setActiveView(view);
-  });
+  }, []);
 
   // Stable callbacks for transfer events
-  const handleTransferComplete = OptimizationUtils.useStableCallback((txHash: string) => {
+  const handleTransferComplete = useCallback((txHash: string) => {
     console.log('Transfer completed:', txHash);
     // ダッシュボードに戻る
     setActiveView('dashboard');
     // 成功メッセージを表示（後でトースト通知に置き換え予定）
-    alert(`送金が完了しました！\nトランザクションハッシュ: ${txHash}`);
-  });
+    alert(`送金が完了しました！
+トランザクションハッシュ: ${txHash}`);
+  }, []);
 
-  const handleTransferError = OptimizationUtils.useStableCallback((errorMessage: string) => {
+  const handleTransferError = useCallback((errorMessage: string) => {
     console.error('Transfer error:', errorMessage);
     setError(errorMessage);
-  });
+  }, []);
 
   // Memoize connection info for connected state
   const connectionInfo = useMemo(() => {

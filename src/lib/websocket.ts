@@ -1,10 +1,20 @@
 /**
- * WebSocket Client for Real-time Status Updates
- * Handles real-time communication for OTC request status changes
+ * セキュアなWebSocketクライアント - リアルタイムステータス更新
+ * OTCリクエストステータス変更のリアルタイム通信を処理
  */
+import * as React from 'react';
 import { io, Socket } from 'socket.io-client';
+// Auth utilities for token management
+const authUtils = {
+  getToken: (): string | null => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      return localStorage.getItem('auth_token');
+    }
+    return null;
+  }
+};
 
-export interface StatusUpdate {
+export interface StatusUpdate extends Record<string, unknown> {
   request_id: string;
   status: 'REQUESTED' | 'SIGNED' | 'SUBMITTED' | 'CONFIRMED' | 'FAILED' | 'EXPIRED';
   tx_hash?: string;
@@ -34,6 +44,9 @@ interface WebSocketEventHandlers {
   onConnect?: () => void;
   onDisconnect?: () => void;
   onError?: (error: string) => void;
+  onAuthRequired?: () => void;
+  onAuthSuccess?: () => void;
+  onAuthFailed?: (reason: string) => void;
 }
 
 class WebSocketService {
@@ -41,103 +54,217 @@ class WebSocketService {
   private handlers: WebSocketEventHandlers = {};
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
-  private reconnectDelay = 1000; // Start with 1 second
+  private reconnectDelay = 1000; // 1秒から開始
+  private _isAuthenticated = false;
+  private authToken: string | null = null;
+  private connectionId: string | null = null;
 
   /**
-   * Initialize WebSocket connection
+   * セキュアなWebSocket接続初期化
    */
   connect(serverUrl?: string): void {
     if (this.socket?.connected) {
-      console.warn('WebSocket already connected');
+      console.warn('WebSocketは既に接続されています');
       return;
     }
 
-    const url = serverUrl || 
-                 (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:4000');
+    // URLのバリデーション
+    let url = serverUrl;
+    if (!url) {
+      if (typeof window !== 'undefined') {
+        url = window.location.origin;
+      } else {
+        url = process.env.WEBSOCKET_URL || 'http://localhost:4000';
+      }
+    }
 
-    console.log('🔌 Connecting to WebSocket server:', url);
+    // URLのセキュリティチェック
+    try {
+      const parsedUrl = new URL(url);
+      if (!['http:', 'https:', 'ws:', 'wss:'].includes(parsedUrl.protocol)) {
+        throw new Error('無効なWebSocket URLプロトコルです');
+      }
+    } catch (error) {
+      console.error('無効なWebSocket URL:', url, error);
+      this.handlers.onError?.('無効なWebSocket URLです');
+      return;
+    }
 
+    console.log('🔌 WebSocketサーバーに接続中:', url);
+
+    // 認証トークンの取得
+    this.authToken = authUtils.getToken();
+    
     this.socket = io(url, {
-      transports: ['websocket', 'polling'],
-      upgrade: true,
-      rememberUpgrade: true,
+      transports: ['websocket'], // websocketのみを使用（セキュリティ強化）
+      upgrade: false,
       autoConnect: true,
       reconnection: true,
       reconnectionAttempts: this.maxReconnectAttempts,
       reconnectionDelay: this.reconnectDelay,
+      reconnectionDelayMax: 5000, // 最大5秒
       timeout: 10000,
-      forceNew: false
+      forceNew: false,
+      auth: {
+        token: this.authToken
+      },
+      extraHeaders: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-Client-Type': 'transfer-dapp'
+      }
     });
 
     this.setupEventListeners();
   }
 
   /**
-   * Setup WebSocket event listeners
+   * セキュアなWebSocketイベントリスナー設定
    */
   private setupEventListeners(): void {
     if (!this.socket) return;
 
-    // Connection events
+    // 接続イベント
     this.socket.on('connect', () => {
-      console.log('✅ WebSocket connected');
+      console.log('✅ WebSocketが接続されました');
       this.reconnectAttempts = 0;
+      this.connectionId = this.socket?.id || null;
+      
+      // 認証トークンがある場合は認証を実行
+      if (this.authToken) {
+        this.authenticate();
+      } else {
+        this.handlers.onAuthRequired?.();
+      }
+      
       this.handlers.onConnect?.();
     });
 
     this.socket.on('disconnect', (reason) => {
-      console.log('❌ WebSocket disconnected:', reason);
+      console.log('❌ WebSocketが切断されました:', reason);
+      this._isAuthenticated = false;
+      this.connectionId = null;
       this.handlers.onDisconnect?.();
     });
 
-    this.socket.on('connect_error', (error) => {
-      console.error('🔌 WebSocket connection error:', error);
+    this.socket.on('connect_error', (_error) => {
+      console.error('🔌 WebSocket接続エラー:', _error);
       this.reconnectAttempts++;
       
       if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-        this.handlers.onError?.('Connection failed after maximum retry attempts');
+        this.handlers.onError?.('最大再試行回数後に接続に失敗しました');
       }
     });
 
-    // Business logic events
+    // 認証イベント
+    this.socket.on('authenticated', () => {
+      console.log('✅ WebSocket認証成功');
+      this._isAuthenticated = true;
+      this.handlers.onAuthSuccess?.();
+    });
+
+    this.socket.on('authentication_failed', (data: { reason: string }) => {
+      console.error('❌ WebSocket認証失敗:', data.reason);
+      this._isAuthenticated = false;
+      this.handlers.onAuthFailed?.(data.reason);
+    });
+
+    this.socket.on('auth_required', () => {
+      console.warn('🔒 WebSocket認証が必要です');
+      this.handlers.onAuthRequired?.();
+    });
+
+    // ビジネスロジックイベント (認証済みのみ受信)
     this.socket.on('request_updated', (update: StatusUpdate) => {
-      console.log('📊 Request status update:', update);
+      if (!this._isAuthenticated) {
+        console.warn('認証されていない状態でのステータス更新を無視します');
+        return;
+      }
+      
+      // データ検証
+      if (!this.isValidStatusUpdate(update)) {
+        console.error('無効なステータス更新データ:', update);
+        return;
+      }
+      
+      console.log('📊 リクエストステータス更新:', update);
       this.handlers.onStatusUpdate?.(update);
     });
 
     this.socket.on('ttl_update', (update: TTLUpdate) => {
-      console.log('⏰ TTL update:', update);
+      if (!this._isAuthenticated) return;
+      
+      if (!this.isValidTTLUpdate(update)) {
+        console.error('無効なTTL更新データ:', update);
+        return;
+      }
+      
+      console.log('⏰ TTL更新:', update);
       this.handlers.onTTLUpdate?.(update);
     });
 
     this.socket.on('utxo_update', (update: UTxOUpdate) => {
-      console.log('💰 UTxO update:', update);
+      if (!this._isAuthenticated) return;
+      
+      if (!this.isValidUTxOUpdate(update)) {
+        console.error('無効なUTxO更新データ:', update);
+        return;
+      }
+      
+      console.log('💰 UTxO更新:', update);
       this.handlers.onUTxOUpdate?.(update);
     });
 
-    // Error handling
+    // エラーハンドリング
     this.socket.on('error', (error) => {
-      console.error('🚨 WebSocket error:', error);
-      this.handlers.onError?.(error.toString());
+      console.error('🚨 WebSocketエラー:', error);
+      this.handlers.onError?.(typeof error === 'string' ? error : '不明なエラーが発生しました');
     });
 
-    // Admin-specific events
+    // 管理者専用イベント
     this.socket.on('admin_alert', (alert: { type: string; message: string; timestamp?: number; severity?: string }) => {
-      console.warn('🚨 Admin alert:', alert);
+      if (!this._isAuthenticated) return;
+      
+      if (!this.isValidAdminAlert(alert)) {
+        console.error('無効な管理者アラート:', alert);
+        return;
+      }
+      
+      console.warn('🚨 管理者アラート:', alert);
+    });
+
+    // レート制限イベント
+    this.socket.on('rate_limit_exceeded', (data: { limit: number; reset_time: number }) => {
+      console.warn('🚨 レート制限超過:', data);
+      this.handlers.onError?.(`レート制限を超過しました。${new Date(data.reset_time).toLocaleTimeString()}以降に再試行してください。`);
     });
   }
 
   /**
-   * Subscribe to request updates
+   * リクエスト更新の購読（認証済みのみ）
    */
   subscribeToRequest(requestId: string): void {
     if (!this.socket?.connected) {
-      console.warn('WebSocket not connected, cannot subscribe to request');
+      console.warn('WebSocketが接続されていないため、リクエストを購読できません');
       return;
     }
 
-    console.log('🔔 Subscribing to request updates:', requestId);
-    this.socket.emit('subscribe_request', { request_id: requestId });
+    if (!this._isAuthenticated) {
+      console.warn('認証されていないため、リクエストを購読できません');
+      this.handlers.onAuthRequired?.();
+      return;
+    }
+
+    // リクエストIDの検証
+    if (!this.isValidRequestId(requestId)) {
+      console.error('無効なリクエストID:', requestId);
+      return;
+    }
+
+    console.log('🔔 リクエスト更新を購読中:', requestId);
+    this.socket.emit('subscribe_request', { 
+      request_id: requestId,
+      timestamp: Date.now()
+    });
   }
 
   /**
@@ -153,16 +280,31 @@ class WebSocketService {
   }
 
   /**
-   * Subscribe to admin dashboard updates
+   * 管理者ダッシュボード更新の購読（認証済みのみ）
    */
   subscribeToAdminUpdates(adminId: string): void {
     if (!this.socket?.connected) {
-      console.warn('WebSocket not connected, cannot subscribe to admin updates');
+      console.warn('WebSocketが接続されていないため、管理者更新を購読できません');
       return;
     }
 
-    console.log('👤 Subscribing to admin updates:', adminId);
-    this.socket.emit('subscribe_admin', { admin_id: adminId });
+    if (!this._isAuthenticated) {
+      console.warn('認証されていないため、管理者更新を購読できません');
+      this.handlers.onAuthRequired?.();
+      return;
+    }
+
+    // 管理者IDの検証
+    if (!adminId || typeof adminId !== 'string' || adminId.length > 100) {
+      console.error('無効な管理者ID:', adminId);
+      return;
+    }
+
+    console.log('👤 管理者更新を購読中:', adminId);
+    this.socket.emit('subscribe_admin', { 
+      admin_id: adminId,
+      timestamp: Date.now()
+    });
   }
 
   /**
@@ -173,15 +315,38 @@ class WebSocketService {
   }
 
   /**
-   * Send a message to server
+   * セキュアなメッセージ送信
    */
   emit(event: string, data: unknown): void {
     if (!this.socket?.connected) {
-      console.warn('WebSocket not connected, cannot emit event:', event);
+      console.warn('WebSocketが接続されていないため、イベントを送信できません:', event);
       return;
     }
 
-    this.socket.emit(event, data);
+    if (!this._isAuthenticated && event !== 'authenticate') {
+      console.warn('認証されていないため、イベントを送信できません:', event);
+      this.handlers.onAuthRequired?.();
+      return;
+    }
+
+    // イベント名の検証
+    if (!this.isValidEventName(event)) {
+      console.error('無効なイベント名:', event);
+      return;
+    }
+
+    // データサイズ制限（100KB）
+    const dataStr = JSON.stringify(data);
+    if (dataStr.length > 100000) {
+      console.error('データサイズが大きすぎます:', dataStr.length);
+      return;
+    }
+
+    this.socket.emit(event, {
+      ...data as Record<string, unknown>,
+      timestamp: Date.now(),
+      connection_id: this.connectionId
+    });
   }
 
   /**
@@ -213,10 +378,101 @@ class WebSocketService {
   }
 
   /**
-   * Get current socket instance (for debugging)
+   * 認証処理
+   */
+  private authenticate(): void {
+    if (!this.socket || !this.authToken) return;
+
+    this.socket.emit('authenticate', {
+      token: this.authToken,
+      timestamp: Date.now(),
+      client_type: 'transfer-dapp'
+    });
+  }
+
+  /**
+   * データ検証メソッド
+   */
+  private isValidStatusUpdate(update: unknown): update is StatusUpdate {
+    if (!update || typeof update !== 'object') return false;
+    const u = update as Record<string, unknown>;
+    return typeof u.request_id === 'string' && 
+           typeof u.status === 'string' &&
+           typeof u.timestamp === 'string' &&
+           u.request_id.length > 0 &&
+           u.request_id.length <= 100;
+  }
+
+  private isValidTTLUpdate(update: unknown): update is TTLUpdate {
+    if (!update || typeof update !== 'object') return false;
+    const u = update as Record<string, unknown>;
+    return typeof u.request_id === 'string' && 
+           typeof u.ttl_slot === 'number' &&
+           typeof u.current_slot === 'number' &&
+           u.request_id.length > 0 &&
+           u.request_id.length <= 100;
+  }
+
+  private isValidUTxOUpdate(update: unknown): update is UTxOUpdate {
+    if (!update || typeof update !== 'object') return false;
+    const u = update as Record<string, unknown>;
+    return typeof u.request_id === 'string' && 
+           typeof u.utxo_consumed === 'boolean' &&
+           u.request_id.length > 0 &&
+           u.request_id.length <= 100;
+  }
+
+  private isValidAdminAlert(alert: unknown): alert is { type: string; message: string; timestamp?: number; severity?: string } {
+    if (!alert || typeof alert !== 'object') return false;
+    const a = alert as Record<string, unknown>;
+    return typeof a.type === 'string' && 
+           typeof a.message === 'string' &&
+           a.type.length > 0 &&
+           a.type.length <= 50 &&
+           a.message.length > 0 &&
+           a.message.length <= 500;
+  }
+
+  private isValidRequestId(requestId: string): boolean {
+    return typeof requestId === 'string' && 
+           requestId.length > 0 && 
+           requestId.length <= 100 &&
+           /^[a-zA-Z0-9_-]+$/.test(requestId);
+  }
+
+  private isValidEventName(event: string): boolean {
+    const allowedEvents = [
+      'authenticate', 'subscribe_request', 'unsubscribe_request', 
+      'subscribe_admin', 'ping', 'heartbeat'
+    ];
+    return typeof event === 'string' && 
+           event.length > 0 && 
+           event.length <= 50 &&
+           allowedEvents.includes(event);
+  }
+
+  /**
+   * 現在のソケットインスタンスを取得（デバッグ用）
    */
   getSocket(): Socket | null {
     return this.socket;
+  }
+
+  /**
+   * 認証状態を取得
+   */
+  isAuthenticated(): boolean {
+    return this._isAuthenticated;
+  }
+
+  /**
+   * 認証トークンを更新
+   */
+  updateAuthToken(token: string): void {
+    this.authToken = token;
+    if (this.socket?.connected) {
+      this.authenticate();
+    }
   }
 }
 
@@ -261,7 +517,7 @@ export function useWebSocket(handlers?: WebSocketEventHandlers) {
       // Don't disconnect here as other components might be using it
       // webSocketService.disconnect();
     };
-  }, []);
+  }, [handlers]);
 
   return {
     isConnected,
@@ -304,7 +560,7 @@ export function useRequestStatus(requestId?: string) {
       subscribe(requestId);
       return () => unsubscribe(requestId);
     }
-  }, [requestId, isConnected]);
+  }, [requestId, isConnected, subscribe, unsubscribe]);
 
   return {
     status,
@@ -314,5 +570,3 @@ export function useRequestStatus(requestId?: string) {
   };
 }
 
-// Import React for hooks
-import * as React from 'react';

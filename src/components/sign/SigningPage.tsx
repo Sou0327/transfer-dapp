@@ -4,7 +4,19 @@
  */
 import React, { useState, useCallback, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { OTCRequest, RequestStatus, FixedAmount, RateBasedRule } from '../../types/otc/index';
+import { OTCRequest, RequestStatus, FixedAmount, RateBasedRule, SweepRule, TransactionBuildResult, UTxO } from '../../types/otc/index';
+
+/**
+ * WebSocket message types for type safety
+ */
+interface WebSocketMessage {
+  type: string;
+  request_id?: string;
+  status?: RequestStatus;
+  transactionDetails?: TransactionDetails;
+  expired?: boolean;
+  [key: string]: unknown;
+}
 
 import { TxPreview } from '../TxPreview';
 // SigningFlow import removed - not used in current implementation
@@ -15,6 +27,14 @@ import { SigningSuccess } from './SigningSuccess';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import { useWallet } from '../../hooks/useWallet';
 
+interface TransactionDetails {
+  txHash: string;
+  amount: string;
+  fee: string;
+  recipient: string;
+  confirmations: number;
+}
+
 interface SigningPageState {
   loading: boolean;
   error: string | null;
@@ -22,11 +42,11 @@ interface SigningPageState {
   request: OTCRequest | null;
   showWalletModal: boolean;
   showTxPreview: boolean;
-  txData: unknown | null;
-  utxos: unknown[] | null;
+  txData: TransactionBuildResult | null;
+  utxos: UTxO[] | null;
   signedTx: string | null;
   submissionStatus: 'idle' | 'submitting' | 'submitted' | 'confirmed' | 'failed';
-  transactionDetails: unknown | null;
+  transactionDetails: TransactionDetails | null;
   currentStep: 'connect' | 'review' | 'sign' | 'submit' | 'confirm';
 }
 
@@ -49,7 +69,7 @@ export const SigningPage: React.FC = () => {
     currentStep: 'connect'
   });
 
-  const { selectedWallet, connect, disconnect, getUtxos, getBalance, signTransaction: walletSignTx, availableWallets } = useWallet();
+  const { selectedWallet, connect, disconnect, getUtxos, signTransaction: walletSignTx, availableWallets } = useWallet();
   const { isConnected: wsConnected, lastMessage, sendMessage } = useWebSocket();
 
   // Helper function to set error with type
@@ -119,28 +139,29 @@ export const SigningPage: React.FC = () => {
       sendMessage({ type: 'subscribe_request', request_id: requestId });
       
       // Listen for request updates (via lastMessage)
-      if (lastMessage && lastMessage.type === 'request_updated' && lastMessage.request_id === requestId) {
+      const message = lastMessage as WebSocketMessage;
+      if (lastMessage && message.type === 'request_updated' && message.request_id === requestId && message.status) {
         setState(prev => ({
           ...prev,
-          request: prev.request ? { ...prev.request, status: lastMessage.status } : null
+          request: prev.request ? { ...prev.request, status: message.status! } : null
         }));
         
         // Update submission status based on request status
-        if (lastMessage.status === 'SUBMITTED') {
+        if (message.status === 'SUBMITTED') {
           setState(prev => ({ ...prev, submissionStatus: 'submitted' }));
-        } else if (lastMessage.status === 'CONFIRMED') {
+        } else if (message.status === 'CONFIRMED') {
           setState(prev => ({ 
             ...prev, 
             submissionStatus: 'confirmed',
-            transactionDetails: lastMessage.transactionDetails || prev.transactionDetails
+            transactionDetails: message.transactionDetails || prev.transactionDetails
           }));
-        } else if (lastMessage.status === 'FAILED') {
+        } else if (message.status === 'FAILED') {
           setState(prev => ({ ...prev, submissionStatus: 'failed' }));
         }
       }
 
       // Listen for TTL updates
-      if (lastMessage && lastMessage.type === 'ttl_update' && lastMessage.request_id === requestId && lastMessage.expired) {
+      if (lastMessage && message.type === 'ttl_update' && message.request_id === requestId && message.expired) {
         setState(prev => ({
           ...prev,
           request: prev.request ? { ...prev.request, status: RequestStatus.EXPIRED } : null
@@ -214,29 +235,50 @@ export const SigningPage: React.FC = () => {
       
       const protocolParams = await response.json();
 
+      // Get wallet API
+      if (!window.cardano || !window.cardano[selectedWallet.toLowerCase()]) {
+        setError('選択されたウォレットが見つかりません', 'wallet');
+        return;
+      }
+      
+      const walletApi = window.cardano[selectedWallet.toLowerCase()];
+      const api = await walletApi.enable();
+
+      // Get wallet addresses
+      const changeAddress = await api.getChangeAddress();
+      const destinationAddress = state.request.recipient;
+
+      // Create TxBuilder config
+      const txBuilderConfig = {
+        protocolParams: protocolParams.params,
+        api: api,
+        changeAddress,
+        destinationAddress,
+        ttlOffset: 7200 // 2 hours in slots
+      };
+
       // Import transaction builders
       const { FixedAmountTxBuilder, SweepTxBuilder, RateBasedTxBuilder } = await import('../../lib/txBuilders');
 
+      // Parse amount_or_rule_json based on amount_mode
+      const amountRule = state.request.amount_or_rule_json;
+
       switch (state.request.amount_mode) {
         case 'fixed':
-          txBuilder = new FixedAmountTxBuilder(protocolParams.params);
+          txBuilder = new FixedAmountTxBuilder(txBuilderConfig, amountRule as FixedAmount);
           break;
         case 'sweep':
-          txBuilder = new SweepTxBuilder(protocolParams.params);
+          txBuilder = new SweepTxBuilder(txBuilderConfig, amountRule as SweepRule);
           break;
         case 'rate_based':
-          txBuilder = new RateBasedTxBuilder(protocolParams.params);
+          txBuilder = new RateBasedTxBuilder(txBuilderConfig, amountRule as RateBasedRule);
           break;
         default:
           setError('不明な金額モードです', 'validation');
           return;
       }
 
-      const txData = await txBuilder.buildTransaction(
-        utxos,
-        state.request.recipient,
-        state.request.amount_or_rule_json
-      );
+      const txData = await txBuilder.buildTransaction();
 
       setState(prev => ({ 
         ...prev, 
@@ -263,7 +305,7 @@ export const SigningPage: React.FC = () => {
         setError('トランザクションの構築に失敗しました。UTxOの残高や接続を確認してください。', 'unknown');
       }
     }
-  }, [state.request, selectedWallet, clearError, setError, getUtxos, getBalance]);
+  }, [state.request, selectedWallet, clearError, setError, getUtxos]);
 
   // Handle transaction signing
   const handleSignTransaction = useCallback(async (txHex: string) => {
@@ -393,7 +435,7 @@ export const SigningPage: React.FC = () => {
   // Check if request is expired or invalid
   const isRequestValid = state.request && 
     state.request.status === RequestStatus.REQUESTED && 
-    new Date(state.request.ttl_absolute || Date.now() + 900000) > new Date();
+    state.request.ttl_absolute ? new Date(state.request.ttl_absolute) > new Date() : true;
 
   // Show loading state
   if (state.loading && !state.request) {
@@ -417,8 +459,8 @@ export const SigningPage: React.FC = () => {
           <div className="text-center mb-8">
             <div className="mx-auto h-12 w-12 flex items-center justify-center bg-orange-500 rounded-full mb-4">
               <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
               </svg>
             </div>
             <h1 className="text-2xl font-bold text-gray-900 mb-2">ADA送金の署名</h1>
@@ -447,14 +489,14 @@ export const SigningPage: React.FC = () => {
   // Show invalid/expired request
   if (state.request && !isRequestValid) {
     const isExpired = state.request.status === RequestStatus.EXPIRED || 
-                     new Date(state.request.ttl_absolute) <= new Date();
+                     (state.request.ttl_absolute ? new Date(state.request.ttl_absolute) <= new Date() : false);
     
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="max-w-md w-full bg-white shadow-lg rounded-lg p-6 text-center">
           <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-yellow-100 mb-4">
             <svg className="h-6 w-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
           <h3 className="text-lg font-medium text-gray-900 mb-2">
@@ -483,7 +525,7 @@ export const SigningPage: React.FC = () => {
           <div className="text-center mb-8">
             <div className="mx-auto h-12 w-12 flex items-center justify-center bg-green-500 rounded-full mb-4">
               <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
               </svg>
             </div>
             <h1 className="text-2xl font-bold text-gray-900 mb-2">送金完了</h1>
@@ -534,8 +576,8 @@ export const SigningPage: React.FC = () => {
         <div className="text-center mb-8">
           <div className="mx-auto h-12 w-12 flex items-center justify-center bg-orange-500 rounded-full mb-4">
             <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
             </svg>
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">ADA送金の署名</h1>
@@ -557,7 +599,7 @@ export const SigningPage: React.FC = () => {
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-medium text-gray-900">送金詳細</h3>
                 <CountdownBadge 
-                  targetTime={new Date(state.request.ttl_absolute)}
+                  targetTime={state.request.ttl_absolute ? new Date(state.request.ttl_absolute) : new Date(Date.now() + 900000)}
                   onExpire={() => setState(prev => ({ 
                     ...prev, 
                     request: prev.request ? { ...prev.request, status: RequestStatus.EXPIRED } : null 
@@ -578,7 +620,7 @@ export const SigningPage: React.FC = () => {
                   <div><strong>status:</strong> {state.request.status}</div>
                   <div><strong>recipient:</strong> {state.request.recipient}</div>
                   <div><strong>created_at:</strong> {state.request.created_at}</div>
-                  <div><strong>ttl_absolute:</strong> {state.request.ttl_absolute}</div>
+                  <div><strong>ttl_absolute:</strong> {state.request.ttl_absolute ? state.request.ttl_absolute.toString() : 'undefined'}</div>
                 </div>
               </details>
             </div>
@@ -620,7 +662,7 @@ export const SigningPage: React.FC = () => {
                 <div>
                   <dt className="text-sm font-medium text-gray-500">有効期限</dt>
                   <dd className="mt-1 text-sm text-gray-900">
-                    {new Date(state.request.ttl_absolute).toLocaleString('ja-JP')}
+                    {state.request.ttl_absolute ? new Date(state.request.ttl_absolute).toLocaleString('ja-JP') : '未設定'}
                   </dd>
                 </div>
               </div>
@@ -702,7 +744,7 @@ export const SigningPage: React.FC = () => {
               <div className="text-center py-8">
                 <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 mb-4">
                   <svg className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
                 <h3 className="text-lg font-medium text-gray-900 mb-2">送信完了</h3>
@@ -716,10 +758,10 @@ export const SigningPage: React.FC = () => {
                 <div className="flex items-center justify-center mb-4">
                   <div className="flex items-center bg-green-50 px-3 py-2 rounded-md">
                     <svg className="h-5 w-5 text-green-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
                     </svg>
                     <span className="text-sm font-medium text-green-700">
-                      {selectedWallet.name} 接続済み
+                      {selectedWallet} 接続済み
                     </span>
                   </div>
                 </div>
@@ -781,7 +823,7 @@ export const SigningPage: React.FC = () => {
                     className="text-gray-400 hover:text-gray-500 focus:outline-none focus:text-gray-500 transition ease-in-out duration-150"
                   >
                     <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   </button>
                 </div>
@@ -825,7 +867,7 @@ export const SigningPage: React.FC = () => {
                           </div>
                           <div className="flex-shrink-0">
                             <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
                             </svg>
                           </div>
                         </button>
@@ -849,11 +891,13 @@ export const SigningPage: React.FC = () => {
 
         {state.showTxPreview && state.txData && selectedWallet && (
           <TxPreview
-            txData={state.txData}
-            utxos={state.utxos || []}
-            onConfirm={handleSignTransaction}
+            txResult={state.txData}
+            onConfirm={() => {
+              if (state.txData?.txHex) {
+                handleSignTransaction(state.txData.txHex);
+              }
+            }}
             onCancel={() => setState(prev => ({ ...prev, showTxPreview: false }))}
-            walletName={selectedWallet.name}
           />
         )}
       </div>

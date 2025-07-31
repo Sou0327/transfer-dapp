@@ -244,7 +244,7 @@ export const useEnhancedUtxoManager = (): UseEnhancedUtxoManagerReturn => {
       setState(prev => ({
         ...prev,
         isLoading: false,
-        error: error.message || 'Failed to fetch UTxOs',
+        error: (error as Error).message || 'Failed to fetch UTxOs',
       }));
     }
   }, [isConnected, api]);

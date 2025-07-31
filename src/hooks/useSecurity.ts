@@ -54,9 +54,9 @@ export interface UseSecurityReturn extends SecurityState {
  */
 export const useSecurity = (options: UseSecurityOptions = {}): UseSecurityReturn => {
   const {
-    autoInitialize = true,
+    autoInitialize = false,
     config = {},
-    enableHealthCheck = true,
+    enableHealthCheck = false,
     healthCheckInterval = 5 * 60 * 1000 // 5 minutes
   } = options;
 
@@ -188,31 +188,31 @@ export const useSecurity = (options: UseSecurityOptions = {}): UseSecurityReturn
         // Business events
         if (action === 'request_created') {
           logBusinessEvent.requestCreated(
-            details.requestId,
-            details.amount,
-            details.mode,
-            details.userId
+            details.requestId as string,
+            details.amount as string,
+            details.mode as string,
+            details.userId as string
           );
         } else if (action === 'transaction_signed') {
           logBusinessEvent.transactionSigned(
-            details.requestId,
-            details.txHash,
-            details.walletUsed
+            details.requestId as string,
+            details.txHash as string,
+            details.walletUsed as string
           );
         }
       } else if (type.startsWith('security.')) {
         // Security events
         if (action === 'suspicious_activity') {
           logSecurityEvent.suspiciousActivity(
-            details.description,
-            details.ipAddress,
+            details.description as string,
+            details.ipAddress as string,
             details
           );
         } else if (action === 'rate_limit_exceeded') {
           logSecurityEvent.rateLimitExceeded(
-            details.ipAddress,
-            details.endpoint,
-            details.requestCount
+            details.ipAddress as string,
+            details.endpoint as string,
+            details.requestCount as number
           );
         }
       }

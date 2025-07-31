@@ -1,5 +1,5 @@
 import React from 'react';
-import { OptimizationUtils } from '../../lib/performance/reactOptimization';
+// Performance optimization imports removed - using standard React hooks
 
 export interface ButtonProps {
   children: React.ReactNode;
@@ -45,11 +45,11 @@ export const Button: React.FC<ButtonProps> = React.memo(({
   className = '',
   fullWidth = false,
 }) => {
-  const stableOnClick = OptimizationUtils.useStableCallback(() => {
+  const stableOnClick = React.useCallback(() => {
     if (!disabled && !loading && onClick) {
       onClick();
     }
-  });
+  }, [disabled, loading, onClick]);
 
   const buttonClasses = React.useMemo(() => {
     const baseClasses = 'font-bold rounded transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2';

@@ -3,6 +3,8 @@
  * Tracks selected UTxOs for monitoring purposes
  */
 
+import { MultiAsset } from '../types/cardano';
+
 
 export interface TrackedUTxO {
   txHash: string;
@@ -25,6 +27,46 @@ export interface UTxOSelectionResult {
 }
 
 /**
+ * Interface for UTxO selection summary data
+ */
+interface UTxOSelectionSummary {
+  total_input_value?: string;
+  change_amount?: string;
+}
+
+/**
+ * Interface for UTxO validation data
+ */
+interface UTxOValidationData {
+  selected_utxos?: Array<{
+    txHash?: string;
+    address?: string;  
+    outputIndex?: number;
+  }>;
+}
+
+/**
+ * Convert MultiAsset to assets array format
+ */
+function convertMultiAssetToAssets(multiasset?: MultiAsset): TrackedUTxO['assets'] {
+  if (!multiasset) return [];
+  
+  const assets: TrackedUTxO['assets'] = [];
+  
+  for (const [policyId, assets_] of Object.entries(multiasset)) {
+    for (const [assetName, amount] of Object.entries(assets_)) {
+      assets.push({
+        policyId,
+        assetName,
+        amount
+      });
+    }
+  }
+  
+  return assets;
+}
+
+/**
  * Convert CSL UTxOs to trackable format
  */
 export function convertUTxOsForTracking(
@@ -33,17 +75,20 @@ export function convertUTxOsForTracking(
     tx_hash?: string;
     outputIndex?: number;
     output_index?: number;
-    amount: unknown;
+    amount: {
+      coin: string | number;
+      multiasset?: Record<string, Record<string, string>>;
+    };
     address: string;
   }>, 
-  selectionStrategy: 'greedy' | 'random' | 'manual' = 'greedy' // eslint-disable-line @typescript-eslint/no-unused-vars
+
 ): TrackedUTxO[] {
   return utxos.map(utxo => ({
-    txHash: utxo.txHash || utxo.tx_hash,
-    outputIndex: utxo.outputIndex || utxo.output_index,
+    txHash: (utxo.txHash || utxo.tx_hash) as string,
+    outputIndex: (utxo.outputIndex || utxo.output_index) as number,
     address: utxo.address,
-    amount: utxo.amount,
-    assets: utxo.assets || []
+    amount: String(utxo.amount.coin || '0'),
+    assets: convertMultiAssetToAssets(utxo.amount.multiasset)
   }));
 }
 
@@ -75,7 +120,10 @@ export function extractUTxOsFromTransactionResult(
     txHash: string;
     outputIndex: number;
     address: string;
-    amount: unknown;
+    amount: {
+      coin: string | number;
+      multiasset?: Record<string, Record<string, string>>;
+    };
   }>
 ): UTxOSelectionResult | null {
   try {
@@ -88,9 +136,9 @@ export function extractUTxOsFromTransactionResult(
 
     return {
       selected_utxos: trackedUtxos,
-      total_input_value: summary?.total_input_value || '0',
-      change_amount: summary?.change_amount || '0',
-      fee_paid: txBuilderResult.fee,
+      total_input_value: (summary as UTxOSelectionSummary)?.total_input_value || '0',
+      change_amount: (summary as UTxOSelectionSummary)?.change_amount || '0',
+      fee_paid: txBuilderResult.fee as string,
       selection_strategy: 'greedy' // Default assumption
     };
 
@@ -108,11 +156,12 @@ export function validateUTxOTrackingData(data: unknown): data is UTxOSelectionRe
     return false;
   }
 
-  if (!Array.isArray(data.selected_utxos)) {
+  const dataObj = data as UTxOValidationData;
+  if (!Array.isArray(dataObj.selected_utxos)) {
     return false;
   }
 
-  for (const utxo of data.selected_utxos) {
+  for (const utxo of dataObj.selected_utxos) {
     if (!utxo.txHash || !utxo.address || typeof utxo.outputIndex !== 'number') {
       return false;
     }

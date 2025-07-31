@@ -37,6 +37,22 @@ export interface AuditLogEntry {
   details: Record<string, unknown>;
 }
 
+interface RateLimiterStats {
+  totalKeys: number;
+  blockedKeys: number;  
+  activeKeys: number;
+  topRequesters: Array<{ key: string; requests: number; blocked: boolean }>;
+}
+
+interface CsrfStats {
+  tokens_generated: number;
+  tokens_validated: number;
+  validation_failures: number;
+  total: number;
+  active: number;
+  expired: number;
+}
+
 export interface AuditFilter {
   limit: number;
   offset: number;
@@ -50,8 +66,7 @@ export interface AuditFilter {
 }
 
 // Mock functions for development (replace with actual API calls)
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const queryAuditLogs = async (_filter: AuditFilter): Promise<AuditLogEntry[]> => {
+const queryAuditLogs = async (_filter: AuditFilter): Promise<AuditLogEntry[]> => { // eslint-disable-line @typescript-eslint/no-unused-vars
   // Mock audit logs for development
   return [
     {
@@ -69,14 +84,7 @@ const queryAuditLogs = async (_filter: AuditFilter): Promise<AuditLogEntry[]> =>
   ];
 };
 
-const getAuditStatistics = () => {
-  return {
-    total_events: 100,
-    events_today: 5,
-    critical_alerts: 0,
-    failed_logins: 2
-  };
-};
+
 
 const getRateLimiterStats = () => {
   return {
@@ -112,7 +120,10 @@ interface SecurityDashboardProps {
 export const SecurityDashboard: React.FC<SecurityDashboardProps> = ({
   className = ''
 }) => {
-  const security = useSecurity();
+  const security = useSecurity({ 
+    autoInitialize: false, 
+    enableHealthCheck: false 
+  });
   const [activeTab, setActiveTab] = useState<'overview' | 'audit' | 'ratelimit' | 'config'>('overview');
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [auditFilter, setAuditFilter] = useState<AuditFilter>({
@@ -120,10 +131,9 @@ export const SecurityDashboard: React.FC<SecurityDashboardProps> = ({
     offset: 0
   });
   const [isRefreshing, setIsRefreshing] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [auditStats, setAuditStats] = useState<Record<string, unknown> | null>(null);
-  const [rateLimitStats, setRateLimitStats] = useState<Record<string, unknown> | null>(null);
-  const [csrfStats, setCsrfStats] = useState<Record<string, unknown> | null>(null);
+
+  const [rateLimitStats, setRateLimitStats] = useState<RateLimiterStats | null>(null);
+  const [csrfStats, setCsrfStats] = useState<CsrfStats | null>(null);
 
   // Refresh all data
   const refreshData = useCallback(async () => {
@@ -141,17 +151,29 @@ export const SecurityDashboard: React.FC<SecurityDashboardProps> = ({
 
   // Initialize stats
   useEffect(() => {
-    setAuditStats(getAuditStatistics());
-    setRateLimitStats(getRateLimiterStats());
-    setCsrfStats(getCsrfStats());
+    setRateLimitStats(getRateLimiterStats() as RateLimiterStats);
+    setCsrfStats(getCsrfStats() as CsrfStats);
   }, []);
 
   // Auto-refresh every 30 seconds
   useEffect(() => {
-    refreshData();
-    const interval = setInterval(refreshData, 30000);
+    const performRefresh = async () => {
+      setIsRefreshing(true);
+      try {
+        await security.performHealthCheck();
+        const logs = await queryAuditLogs(auditFilter);
+        setAuditLogs(logs);
+      } catch (error) {
+        console.error('Failed to refresh security data:', error);
+      } finally {
+        setIsRefreshing(false);
+      }
+    };
+
+    performRefresh();
+    const interval = setInterval(performRefresh, 30000);
     return () => clearInterval(interval);
-  }, [refreshData]);
+  }, [security, auditFilter]);
 
   // Format timestamp
   const formatTimestamp = (timestamp: string | number): string => {
@@ -229,7 +251,7 @@ export default SecurityDashboard;
           ].map(tab => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => setActiveTab(tab.id as 'overview' | 'audit' | 'ratelimit' | 'config')}
               className={`py-4 px-1 border-b-2 font-medium text-sm ${
                 activeTab === tab.id
                   ? 'border-orange-500 text-orange-600'
@@ -415,7 +437,7 @@ export default SecurityDashboard;
                     value={auditFilter.outcome || ''}
                     onChange={(e) => setAuditFilter(prev => ({
                       ...prev,
-                      outcome: e.target.value ? e.target.value as 'success' | 'failure' | 'warning' : undefined
+                      outcome: e.target.value ? e.target.value as 'success' | 'failure' | 'pending' : undefined
                     }))}
                     className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
                   >

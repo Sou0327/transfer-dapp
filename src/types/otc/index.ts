@@ -77,6 +77,9 @@ export interface OTCRequest {
   ttl_absolute?: Date;
   destination_address?: string; // alias for recipient
   amount_rule?: AmountOrRule; // alias for amount_or_rule_json
+  
+  // Index signature for Record<string, unknown> compatibility
+  [key: string]: unknown;
 }
 
 // Pre-signed Data Model
@@ -99,6 +102,9 @@ export interface TransactionData {
   confirmed_at?: Date;
   status: "SUBMITTED" | "CONFIRMED" | "FAILED";
   fail_reason?: string;
+  
+  // Index signature for Record<string, unknown> compatibility
+  [key: string]: unknown;
 }
 
 // CIP-30 Provider Types
@@ -249,11 +255,18 @@ export interface LoginCredentials {
 }
 
 export interface AdminSession {
+  id: string;
   adminId: string;
   email: string;
+  name?: string;
+  role?: string;
+  permissions?: string[];
   loginTime: Date;
   ipAddress?: string;
   userAgent?: string;
+  createdAt?: string;
+  expiresAt?: string;
+  isActive?: boolean;
 }
 
 // WebSocket Event Types

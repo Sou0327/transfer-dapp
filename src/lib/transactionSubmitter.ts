@@ -3,6 +3,7 @@
  * Handles both server-side and wallet-side transaction submission with retry logic
  */
 import { RequestDAO, PreSignedDAO, TransactionDAO, AuditDAO } from './database.js';
+import { RequestStatus } from '../types/otc/index.js';
 
 export interface SubmissionConfig {
   mode: 'server' | 'wallet';
@@ -59,7 +60,7 @@ export class TransactionSubmitter {
   async submitTransaction(requestId: string, options?: {
     mode?: 'server' | 'wallet';
     priority?: 'normal' | 'high';
-    walletApi?: unknown; // CIP-30 API for wallet mode
+    walletApi?: Record<string, unknown>; // CIP-30 API for wallet mode
   }): Promise<SubmissionResult> {
     // Check if submission is already in progress
     if (this.activeSubmissions.has(requestId)) {
@@ -136,7 +137,7 @@ export class TransactionSubmitter {
     }
 
     // Update request status to SUBMITTING
-    await RequestDAO.updateStatus(requestId, 'SUBMITTING');
+    await RequestDAO.updateStatus(requestId, RequestStatus.SUBMITTING);
 
     // Log submission start
     await AuditDAO.log({
@@ -160,12 +161,12 @@ export class TransactionSubmitter {
         let txHash: string;
 
         if (mode === 'server') {
-          txHash = await this._submitViaServer(preSignedData);
+          txHash = await this._submitViaServer(preSignedData as { signed_tx_hex: string; tx_hash: string; });
         } else {
           if (!options?.walletApi) {
             throw new Error('Wallet API required for wallet submission mode');
           }
-          txHash = await this._submitViaWallet(preSignedData, options.walletApi);
+          txHash = await this._submitViaWallet(preSignedData as { signed_tx_hex: string; tx_hash: string; }, options.walletApi);
         }
 
         // Success - record transaction
@@ -173,16 +174,16 @@ export class TransactionSubmitter {
         await TransactionDAO.create({
           request_id: requestId,
           tx_hash: txHash,
-          tx_body_hex: preSignedData.tx_body_hex,
-          witness_set_hex: preSignedData.witness_set_hex,
-          fee_lovelace: preSignedData.fee_lovelace,
+          tx_body_hex: preSignedData.tx_body_hex as string,
+          witness_set_hex: preSignedData.witness_set_hex as string,
+          fee_lovelace: preSignedData.fee_lovelace as string,
           submission_mode: mode,
           submitted_at: submittedAt,
           status: 'SUBMITTED'
         });
 
         // Update request status
-        await RequestDAO.updateStatus(requestId, 'SUBMITTED');
+        await RequestDAO.updateStatus(requestId, RequestStatus.SUBMITTED);
 
         // Start block confirmation monitoring
         try {
@@ -244,7 +245,7 @@ export class TransactionSubmitter {
     }
 
     // All attempts failed
-    await RequestDAO.updateStatus(requestId, 'FAILED');
+    await RequestDAO.updateStatus(requestId, RequestStatus.FAILED);
 
     // Log final failure
     await AuditDAO.log({
@@ -330,7 +331,7 @@ export class TransactionSubmitter {
   ): Promise<string> {
     try {
       // Submit transaction through wallet
-      const txHash = await walletApi.submitTx(preSignedData.signed_tx_hex);
+      const txHash = await (walletApi.submitTx as (txHex: string) => Promise<string>)(preSignedData.signed_tx_hex);
       
       // Validate returned hash
       if (txHash !== preSignedData.tx_hash) {

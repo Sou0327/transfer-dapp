@@ -2,7 +2,7 @@
  * Encryption Utilities for Pre-Signed Data
  * Handles secure storage of witness sets and transaction bodies
  */
-import { createHash, randomBytes, createCipher, createDecipher, pbkdf2Sync } from 'crypto';
+import { createHash, randomBytes, createCipheriv, createDecipheriv, pbkdf2Sync } from 'crypto';
 
 interface EncryptedData {
   encrypted: string;
@@ -19,18 +19,29 @@ interface EncryptionOptions {
   iterations?: number;
 }
 
-// Default encryption settings
+// セキュアなデフォルト暗号化設定
 const DEFAULT_OPTIONS: Required<EncryptionOptions> = {
-  algorithm: 'aes-256-cbc',
+  algorithm: 'aes-256-gcm', // AES-GCMで認証付き暗号化
   keyLength: 32,
-  iterations: 100000
+  iterations: 210000 // OWASP推奨値を上回る
 };
 
 /**
- * Generate a secure encryption key from password and salt
+ * セキュアな暗号化キーをパスワードとソルトから生成
  */
 function deriveKey(password: string, salt: Buffer, keyLength: number, iterations: number): Buffer {
-  return pbkdf2Sync(password, salt, iterations, keyLength, 'sha256');
+  // 入力値検証
+  if (!password || password.length < 8) {
+    throw new Error('パスワードは8文字以上である必要があります');
+  }
+  if (!salt || salt.length < 16) {
+    throw new Error('ソルトは16バイト以上である必要があります');
+  }
+  if (iterations < 210000) {
+    throw new Error('反復回数は210000回以上である必要があります');
+  }
+  
+  return pbkdf2Sync(password, salt, iterations, keyLength, 'sha512'); // SHA-512を使用
 }
 
 /**
@@ -42,34 +53,51 @@ export function encryptSensitiveData(
   options: EncryptionOptions = {}
 ): EncryptedData {
   try {
+    // 入力値検証
+    if (!data || typeof data !== 'string') {
+      throw new Error('暗号化するデータが無効です');
+    }
+    if (!password || typeof password !== 'string') {
+      throw new Error('パスワードが無効です');
+    }
+    
     const opts = { ...DEFAULT_OPTIONS, ...options };
     
-    // Generate random salt and IV
-    const salt = randomBytes(16);
+    // セキュアなランダム値生成
+    const salt = randomBytes(32); // ソルトサイズを増加
     const iv = randomBytes(16);
     
-    // Derive encryption key
+    // 暗号化キー生成
     const key = deriveKey(password, salt, opts.keyLength, opts.iterations);
     
-    // Create cipher
-    const cipher = createCipher(opts.algorithm, key.toString('hex'));
-    cipher.setIV(iv);
+    let encrypted: string;
+    let authTag: string = '';
     
-    // Encrypt data
-    let encrypted = cipher.update(data, 'utf8', 'hex');
-    encrypted += cipher.final('hex');
+    if (opts.algorithm === 'aes-256-gcm') {
+      // GCMモードで認証付き暗号化
+      const cipher = createCipheriv(opts.algorithm, key, iv) as any;
+      encrypted = cipher.update(data, 'utf8', 'hex');
+      encrypted += cipher.final('hex');
+      authTag = cipher.getAuthTag().toString('hex');
+    } else {
+      // レガシーモード（CBC）
+      const cipher = createCipheriv(opts.algorithm, key, iv);
+      encrypted = cipher.update(data, 'utf8', 'hex');
+      encrypted += cipher.final('hex');
+    }
     
     return {
       encrypted,
       iv: iv.toString('hex'),
       salt: salt.toString('hex'),
       algorithm: opts.algorithm,
-      keyDerivation: 'pbkdf2',
-      iterations: opts.iterations
+      keyDerivation: 'pbkdf2-sha512',
+      iterations: opts.iterations,
+      ...(authTag && { authTag })
     };
     
-  } catch {
-    throw new Error(`Encryption failed: ${error}`);
+  } catch (error) {
+    throw new Error(`暗号化に失敗しました: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -77,31 +105,46 @@ export function encryptSensitiveData(
  * Decrypt sensitive data
  */
 export function decryptSensitiveData(
-  encryptedData: EncryptedData,
+  encryptedData: EncryptedData & { authTag?: string },
   password: string
 ): string {
   try {
-    const { encrypted, iv, salt, algorithm, iterations } = encryptedData;
+    // 入力値検証
+    if (!validateEncryptionData(encryptedData)) {
+      throw new Error('無効な暗号化データです');
+    }
+    if (!password || typeof password !== 'string') {
+      throw new Error('パスワードが無効です');
+    }
     
-    // Convert hex strings back to buffers
+    const { encrypted, iv, salt, algorithm, iterations, authTag } = encryptedData;
+    
+    // Hex文字列をBufferに変換
     const saltBuffer = Buffer.from(salt, 'hex');
     const ivBuffer = Buffer.from(iv, 'hex');
     
-    // Derive same key
+    // 同じキーを生成
     const key = deriveKey(password, saltBuffer, 32, iterations);
     
-    // Create decipher
-    const decipher = createDecipher(algorithm, key.toString('hex'));
-    decipher.setIV(ivBuffer);
+    let decrypted: string;
     
-    // Decrypt data
-    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
+    if (algorithm === 'aes-256-gcm' && authTag) {
+      // GCMモードで認証タグを検証
+      const decipher = createDecipheriv(algorithm, key, ivBuffer) as any;
+      decipher.setAuthTag(Buffer.from(authTag, 'hex'));
+      decrypted = decipher.update(encrypted, 'hex', 'utf8');
+      decrypted += decipher.final('utf8');
+    } else {
+      // レガシーモード（CBC）
+      const decipher = createDecipheriv(algorithm, key, ivBuffer);
+      decrypted = decipher.update(encrypted, 'hex', 'utf8');
+      decrypted += decipher.final('utf8');
+    }
     
     return decrypted;
     
-  } catch {
-    throw new Error(`Decryption failed: ${error}`);
+  } catch (error) {
+    throw new Error(`復号化に失敗しました: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -112,13 +155,26 @@ export function generateEncryptionPassword(
   requestId: string,
   masterSecret?: string
 ): string {
-  const secret = masterSecret || process.env.ENCRYPTION_MASTER_KEY || 'default-key-change-in-production';
+  // 入力値検証
+  if (!requestId || typeof requestId !== 'string' || requestId.length < 8) {
+    throw new Error('リクエストIDは8文字以上である必要があります');
+  }
   
-  // Combine request ID with master secret
-  const combined = `${requestId}:${secret}:${Date.now()}`;
+  const secret = masterSecret || process.env.ENCRYPTION_MASTER_KEY;
   
-  // Generate secure hash
-  return createHash('sha256').update(combined).digest('hex');
+  if (!secret || secret === 'default-key-change-in-production') {
+    throw new Error('ENCRYPTION_MASTER_KEY環境変数が設定されていないか、デフォルト値のままです');
+  }
+  
+  if (secret.length < 32) {
+    throw new Error('マスターシークレットは32文字以上である必要があります');
+  }
+  
+  // タイムスタンプを除外して再現性を確保
+  const combined = `${requestId}:${secret}`;
+  
+  // セキュアなハッシュ生成
+  return createHash('sha512').update(combined).digest('hex');
 }
 
 /**
@@ -163,7 +219,7 @@ export function encryptPreSignedData(data: {
       encryptionMeta: JSON.stringify(encryptionMeta)
     };
     
-  } catch {
+  } catch (error) {
     throw new Error(`Pre-signed data encryption failed: ${error}`);
   }
 }
@@ -217,7 +273,7 @@ export function decryptPreSignedData(
       metadata: meta.metadata
     };
     
-  } catch {
+  } catch (error) {
     throw new Error(`Pre-signed data decryption failed: ${error}`);
   }
 }
@@ -250,28 +306,32 @@ export function verifyIntegrityHash(
   try {
     const calculatedHash = generateIntegrityHash(data);
     return calculatedHash === expectedHash;
-  } catch {
+  } catch (error) {
     console.error('Integrity verification failed:', error);
     return false;
   }
 }
 
 /**
- * Secure deletion of sensitive data from memory
+ * メモリからの機密データのセキュアな削除
  */
 export function secureClearString(str: string): void {
   try {
-    // In JavaScript, we can't truly overwrite memory, but we can at least 
-    // encourage garbage collection and make it harder to recover
+    // JavaScriptでは真のメモリ上書はできないが、
+    // ガベージコレクションを促進し、復元を困難にする
     if (typeof str === 'string' && str.length > 0) {
-      // Create a new string of the same length filled with random data
-      const randomData = randomBytes(str.length).toString('hex').substring(0, str.length);
-      // This doesn't actually overwrite the original string in memory,
-      // but it's a best-effort attempt
+      // 同じ長さのランダムデータで置き換えを試行
+      const randomData = randomBytes(Math.ceil(str.length / 2)).toString('hex').substring(0, str.length);
+      // 元の文字列を上書きしようとする（完全ではないがベストエフォート）
       str = randomData;
+      
+      // ガベージコレクションを積極的に実行
+      if (global.gc) {
+        global.gc();
+      }
     }
   } catch {
-    // Ignore errors in secure clear
+    // セキュアクリアでのエラーは無視
   }
 }
 
@@ -295,7 +355,7 @@ export function rotateEncryptionKey(
     
     return newEncryptedData;
     
-  } catch {
+  } catch (error) {
     throw new Error(`Key rotation failed: ${error}`);
   }
 }
@@ -317,13 +377,13 @@ export function validateEncryptionData(data: EncryptedData): boolean {
       return false;
     }
     
-    // Check algorithm
-    if (!['aes-256-cbc', 'aes-256-gcm'].includes(data.algorithm)) {
+    // アルゴリズムチェック（GCMを優先）
+    if (!['aes-256-gcm', 'aes-256-cbc'].includes(data.algorithm)) {
       return false;
     }
     
-    // Check iterations
-    if (data.iterations < 10000) {
+    // 反復回数チェック（OWASP 2023推奨値）
+    if (data.iterations < 210000) {
       return false;
     }
     

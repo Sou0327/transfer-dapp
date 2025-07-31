@@ -6,15 +6,20 @@
     "module": "ESNext",
     "skipLibCheck": true,
 
-    /* Bundler mode */
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
+    /* Module Resolution */
+    "moduleResolution": "node",
+    "allowImportingTsExtensions": false,
     "verbatimModuleSyntax": false,
     "moduleDetection": "force",
     "noEmit": true,
     "jsx": "react-jsx",
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+
+    /* Additional settings for import.meta.env */
+    "downlevelIteration": true,
 
     /* Path mapping */
     "baseUrl": ".",
@@ -29,7 +34,8 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["src"],
+  "include": ["src", "src/vite-env.d.ts"],
+  "types": ["vite/client"],
   "exclude": [
     "src/**/*.test.ts", 
     "src/**/*.test.tsx", 

@@ -4,7 +4,6 @@
  */
 
 // Admin components
-// eslint-disable-next-line react-refresh/only-export-components
 export { SecurityDashboard } from '../admin/SecurityDashboard';
 
 // Hooks
@@ -17,7 +16,7 @@ export * from '../../lib/security';
 
 // Security wrapper components
 import React, { useEffect, useState } from 'react';
-import { useSecurity } from '../../hooks/useSecurity';
+import { useSecurity, useRateLimit, useCsrfProtection } from '../../hooks/useSecurity';
 
 interface SecurityProviderProps {
   children: React.ReactNode;

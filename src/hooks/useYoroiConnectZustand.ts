@@ -5,11 +5,12 @@
 
 // React imports removed - not needed for this Zustand implementation
 import { useWalletConnection, useWalletActions } from '../stores';
+import { CIP30Api } from '../types/cardano';
 
 interface UseYoroiConnectReturn {
   isConnected: boolean;
   isConnecting: boolean;
-  api: Record<string, unknown> | null;
+  api: CIP30Api | null;
   networkId: number | null;
   address: string | null;
   error: string | null;
@@ -32,7 +33,7 @@ export const useYoroiConnect = (): UseYoroiConnectReturn => {
       await walletConnection.connect();
     } catch (error: unknown) {
       console.error('Enhanced connect failed:', error);
-      setError(error.message || 'Connection failed');
+      setError((error as Error).message || 'Connection failed');
     }
   };
 

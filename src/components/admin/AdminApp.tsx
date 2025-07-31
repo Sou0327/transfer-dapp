@@ -51,25 +51,7 @@ export const AdminApp: React.FC = () => {
     try {
       // setRequestsLoading(true); // Removed since variable was removed
       
-      // 開発環境ではモックデータを使用
-      if (import.meta.env.NODE_ENV === 'development' || import.meta.env.DEV) {
-        const mockRequests: OTCRequest[] = [
-          {
-            id: 'req_' + Date.now(),
-            currency: 'ADA',
-            amount_mode: 'fixed',
-            amount_or_rule_json: { amount: '100000000' }, // 100 ADA in lovelace
-            recipient: 'addr1qxyz...example',
-            ttl_slot: 12345678,
-            status: RequestStatus.REQUESTED,
-            created_by: 'admin',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          }
-        ];
-        setRequests(mockRequests);
-        return;
-      }
+      // 実際のAPIからデータを取得
 
       const authFetch = createAuthenticatedFetch();
       const response = await authFetch('/api/ada/requests');
@@ -85,36 +67,7 @@ export const AdminApp: React.FC = () => {
 
   // Create new request
   const handleCreateRequest = useCallback(async (requestData: CreateRequestRequest): Promise<CreateRequestResponse> => {
-    // 開発環境ではモックレスポンスを返す
-    if (import.meta.env.NODE_ENV === 'development' || import.meta.env.DEV) {
-      const mockRequestId = 'req_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-      const mockSignUrl = `${window.location.origin}/sign?request=${mockRequestId}&ttl=${Date.now() + 15 * 60 * 1000}`;
-      
-      console.log('🎯 モック請求作成:', { mockRequestId, mockSignUrl });
-      
-      // 新しい請求をリストに追加
-      const newRequest: OTCRequest = {
-        id: mockRequestId,
-        currency: requestData.currency,
-        amount_mode: requestData.amount_mode,
-        amount_or_rule_json: requestData.amount_or_rule,
-        recipient: requestData.recipient,
-        ttl_slot: Math.floor((Date.now() + requestData.ttl_minutes * 60 * 1000) / 1000),
-        status: RequestStatus.REQUESTED,
-        created_by: 'admin',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      
-      setRequests(prev => [newRequest, ...prev]);
-      
-      return {
-        requestId: mockRequestId,
-        signUrl: mockSignUrl,
-        qrData: mockSignUrl,
-        status: "REQUESTED" as const,
-      };
-    }
+    // 実際のAPIで請求を作成
 
     const authFetch = createAuthenticatedFetch();
     
@@ -172,12 +125,7 @@ export const AdminApp: React.FC = () => {
 
   // Generate new signing link
   const handleGenerateLink = useCallback(async (id: string): Promise<string> => {
-    // 開発環境では新しいリンクを生成
-    if (import.meta.env.NODE_ENV === 'development' || import.meta.env.DEV) {
-      const newSignUrl = `${window.location.origin}/sign?request=${id}&ttl=${Date.now() + 15 * 60 * 1000}&regenerated=true`;
-      console.log('新しいリンクが生成されました:', newSignUrl);
-      return newSignUrl;
-    }
+    // 実際のAPIでリンクを生成
 
     const authFetch = createAuthenticatedFetch();
     

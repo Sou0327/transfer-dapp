@@ -49,7 +49,7 @@ export {
 // Security configuration
 import { initializeIntegritySystem } from './integrity';
 import { initializeRateLimiter } from './rateLimiter';
-import { initializeSecuritySystem } from './middleware';
+import { initializeSecuritySystem as initializeSecurityMiddleware } from './middleware';
 import { AuditEventType, AuditSeverity, logAuditEvent } from './auditLog';
 
 export interface SecuritySystemConfig {
@@ -127,7 +127,7 @@ export const initializeSecuritySystem = async (
 
     // Initialize security middleware
     try {
-      initializeSecuritySystem();
+      initializeSecurityMiddleware();
       securitySystemStatus.auditLogging = true;
     } catch (error) {
       errors.push(`Security middleware initialization failed: ${error}`);
@@ -322,18 +322,11 @@ export const requireSecuritySystem = (): void => {
  * Export types for external use
  */
 export type {
-  SecuritySystemConfig,
-  SecuritySystemStatus,
-  SecurityContext,
-  SecurityPolicy,
-  SecurityResult,
   AuditLogEntry,
   AuditEventType,
   AuditSeverity,
-  RateLimitRule,
-  RateLimitResult,
-  IntegrityResult,
-  IntegrityMetadata
+  AuditFilter,
+  AuditStatistics
 } from './auditLog';
 
 export type {

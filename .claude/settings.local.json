@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "WebFetch(domain:docs.testsprite.com)"
+      "WebFetch(domain:docs.testsprite.com)",
+      "Bash(npm audit:*)",
+      "Bash(uv:*)",
+      "Bash(curl:*)"
     ],
     "deny": []
   }

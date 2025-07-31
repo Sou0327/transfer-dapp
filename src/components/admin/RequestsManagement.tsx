@@ -278,10 +278,10 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
         return `${(parseInt(fixedAmount.amount) / 1_000_000).toFixed(6)} ADA`;
       }
       case 'sweep':
-        return 'All ADA (Sweep)';
+        return '全ADA（スイープ）';
       case 'rate_based': {
         const rateAmount = request.amount_or_rule_json as RateBasedRule;
-        return `¥${rateAmount.fiat_amount.toLocaleString()} (Rate-based)`;
+        return `¥${rateAmount.fiat_amount.toLocaleString()} (レート基準)`;
       }
       default:
         return 'Unknown';
@@ -312,24 +312,24 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
     <div className={`space-y-6 ${className}`}>
       {/* Header */}
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900">請求管理</h1>
-        <div className="flex space-x-2">
+        <h1 className="text-3xl font-bold text-gray-900 tracking-tight">リクエスト管理</h1>
+        <div className="flex space-x-1 bg-gray-200 p-1 rounded-lg">
           <button
             onClick={() => setActiveTab('list')}
-            className={`px-4 py-2 rounded-md font-medium transition-colors ${
+            className={`px-4 py-2 rounded-md text-sm font-semibold transition-colors ${
               activeTab === 'list'
-                ? 'bg-orange-500 text-white'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                ? 'bg-white text-gray-800 shadow-sm'
+                : 'bg-transparent text-gray-600 hover:bg-gray-100'
             }`}
           >
-            請求一覧
+            リクエスト一覧
           </button>
           <button
             onClick={() => setActiveTab('create')}
-            className={`px-4 py-2 rounded-md font-medium transition-colors ${
+            className={`px-4 py-2 rounded-md text-sm font-semibold transition-colors ${
               activeTab === 'create'
-                ? 'bg-orange-500 text-white'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                ? 'bg-white text-gray-800 shadow-sm'
+                : 'bg-transparent text-gray-600 hover:bg-gray-100'
             }`}
           >
             新規作成
@@ -340,59 +340,59 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
       {/* Tab Content */}
       {activeTab === 'list' ? (
         /* Requests List */
-        <div className="bg-white shadow overflow-hidden sm:rounded-md">
-          <div className="px-4 py-5 sm:px-6">
-            <h3 className="text-lg leading-6 font-medium text-gray-900">
-              請求一覧 ({requests.length})
+        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm">
+          <div className="px-6 py-5">
+            <h3 className="text-xl font-semibold text-gray-900">
+              リクエスト一覧 ({requests.length})
             </h3>
-            <p className="mt-1 max-w-2xl text-sm text-gray-500">
-              作成された請求の管理
+            <p className="mt-1 text-sm text-gray-600">
+              作成されたすべてのOTCリクエストを管理します。
             </p>
           </div>
           
           {requests.length === 0 ? (
-            <div className="px-4 py-12 text-center">
-              <p className="text-gray-500">まだ請求が作成されていません</p>
+            <div className="px-6 py-16 text-center border-t border-gray-200">
+              <p className="text-gray-500">まだリクエストは作成されていません。</p>
             </div>
           ) : (
             <ul className="divide-y divide-gray-200">
               {requests.map((request) => (
-                <li key={request.id} className="px-4 py-4 hover:bg-gray-50">
+                <li key={request.id} className="px-6 py-5 hover:bg-gray-50 transition-colors">
                   <div className="flex items-center justify-between">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center space-x-3">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(request.status)}`}>
+                      <div className="flex items-center space-x-4">
+                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(request.status)}`}>
                           {request.status}
                         </span>
-                        <p className="text-sm font-medium text-gray-900 truncate">
+                        <p className="text-md font-semibold text-gray-800 truncate">
                           {formatAmount(request)}
                         </p>
                       </div>
-                      <div className="mt-1 flex items-center space-x-2 text-sm text-gray-500">
+                      <div className="mt-2 flex items-center space-x-3 text-sm text-gray-500 font-mono">
                         <span>ID: {request.id.slice(0, 8)}...</span>
-                        <span>•</span>
-                        <span>{new Date(request.created_at).toLocaleString('ja-JP')}</span>
-                        <span>•</span>
-                        <span>TTL: Slot {request.ttl_slot}</span>
+                        <span className="text-gray-300">•</span>
+                        <span>{new Date(request.created_at).toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                        <span className="text-gray-300">•</span>
+                        <span>TTL: スロット {request.ttl_slot}</span>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-3">
                       {/* Status Update Buttons */}
                       {request.status === RequestStatus.REQUESTED && (
                         <button
                           onClick={() => handleStatusUpdate(request.id, RequestStatus.EXPIRED)}
-                          className="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded"
+                          className="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold px-4 py-2 rounded-lg transition-colors shadow-sm border border-gray-200"
                         >
-                          失効
+                          期限切れにする
                         </button>
                       )}
                       
                       {/* Generate Link Button */}
                       <button
                         onClick={() => handleGenerateLink(request.id)}
-                        className="text-sm bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-1 rounded"
+                        className="text-sm bg-gray-800 hover:bg-gray-900 text-white font-semibold px-4 py-2 rounded-lg transition-colors shadow-sm"
                       >
-                        リンク生成
+                        リンクを生成
                       </button>
                     </div>
                   </div>
@@ -403,27 +403,29 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
         </div>
       ) : (
         /* Create Request Form */
-        <div className="bg-white shadow sm:rounded-lg">
-          <div className="px-4 py-5 sm:p-6">
-            <h3 className="text-lg leading-6 font-medium text-gray-900">
-              新規請求作成
+        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm">
+          <div className="px-6 py-5">
+            <h3 className="text-xl font-semibold text-gray-900">
+              新規リクエスト作成
             </h3>
-            <div className="mt-2 max-w-xl text-sm text-gray-500">
-              <p>OTC取引用の請求を作成します</p>
-            </div>
+            <p className="mt-1 text-sm text-gray-600">
+              OTC取引のための新しいリクエストを作成します。
+            </p>
+          </div>
+          <div className="px-6 py-6 border-t border-gray-200">
 
-            <form onSubmit={handleCreateRequest} className="mt-5 space-y-6">
+            <form onSubmit={handleCreateRequest} className="space-y-8">
               {/* Error Display */}
               {createError && (
-                <div className="bg-red-50 border border-red-200 rounded-md p-4">
+                <div className="bg-red-50 border border-red-300 rounded-xl p-4">
                   <div className="flex">
                     <div className="flex-shrink-0">
-                      <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                      <svg className="h-5 w-5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                       </svg>
                     </div>
                     <div className="ml-3">
-                      <p className="text-sm text-red-800">{createError}</p>
+                      <p className="text-sm font-medium text-red-800">{createError}</p>
                     </div>
                   </div>
                 </div>
@@ -431,29 +433,33 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
 
               {/* Amount Mode Selection */}
               <div>
-                <label className="text-base font-medium text-gray-900">金額モード</label>
-                <p className="text-sm leading-5 text-gray-500">請求の金額設定方法を選択してください</p>
+                <label className="text-base font-semibold text-gray-900">金額モード</label>
+                <p className="text-sm text-gray-600">リクエスト金額の決定方法を選択します。</p>
                 <fieldset className="mt-4">
                   <legend className="sr-only">金額モード</legend>
-                  <div className="space-y-4">
+                  <div className="space-y-5">
                     {[
-                      { value: 'fixed', label: '固定額', description: '指定した金額を送金' },
-                      { value: 'sweep', label: 'Sweep（全額）', description: 'ADAを全額送金（手数料除く）' },
-                      { value: 'rate_based', label: 'レート計算', description: '法定通貨金額をレートで計算' },
+                      { value: 'fixed', label: '固定額', description: '指定した額のADAを送信します。' },
+                      { value: 'sweep', label: 'スイープ', description: '手数料を差し引いた、利用可能なすべてのADAを送信します。' },
+                      { value: 'rate_based', label: 'レート基準', description: '法定通貨の価値からADAの量を計算します。' },
                     ].map((option) => (
-                      <div key={option.value} className="flex items-center">
-                        <input
-                          id={option.value}
-                          name="amount_mode"
-                          type="radio"
-                          checked={formData.amount_mode === option.value}
-                          onChange={() => handleInputChange('amount_mode', option.value)}
-                          className="focus:ring-orange-500 h-4 w-4 text-orange-600 border-gray-300"
-                        />
-                        <label htmlFor={option.value} className="ml-3 block text-sm font-medium text-gray-700">
-                          {option.label}
-                          <span className="block text-sm text-gray-500">{option.description}</span>
-                        </label>
+                      <div key={option.value} className="relative flex items-start">
+                        <div className="flex items-center h-5">
+                          <input
+                            id={option.value}
+                            name="amount_mode"
+                            type="radio"
+                            checked={formData.amount_mode === option.value}
+                            onChange={() => handleInputChange('amount_mode', option.value)}
+                            className="focus:ring-gray-500 h-4 w-4 text-gray-800 border-gray-300"
+                          />
+                        </div>
+                        <div className="ml-3 text-sm">
+                          <label htmlFor={option.value} className="font-medium text-gray-800">
+                            {option.label}
+                          </label>
+                          <p className="text-gray-500">{option.description}</p>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -463,165 +469,179 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
               {/* Amount Mode Specific Fields */}
               {formData.amount_mode === 'fixed' && (
                 <div>
-                  <label htmlFor="fixed_amount" className="block text-sm font-medium text-gray-700">
-                    固定金額 (ADA) *
+                  <label htmlFor="fixed_amount" className="block text-sm font-semibold text-gray-800">
+                    固定額 (ADA) *
                   </label>
-                  <input
-                    type="number"
-                    id="fixed_amount"
-                    step="0.000001"
-                    min="0"
-                    value={formData.fixed_amount}
-                    onChange={(e) => handleInputChange('fixed_amount', e.target.value)}
-                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
-                    placeholder="100.000000"
-                  />
+                  <div className="mt-2">
+                    <input
+                      type="number"
+                      id="fixed_amount"
+                      step="0.000001"
+                      min="0"
+                      value={formData.fixed_amount}
+                      onChange={(e) => handleInputChange('fixed_amount', e.target.value)}
+                      className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-gray-500 focus:border-gray-500 sm:text-sm"
+                      placeholder="100.000000"
+                    />
+                  </div>
                 </div>
               )}
 
               {formData.amount_mode === 'sweep' && (
-                <div className="space-y-4">
-                  <div className="flex items-center">
-                    <input
-                      id="ada_only"
-                      type="checkbox"
-                      checked={formData.ada_only}
-                      onChange={(e) => handleInputChange('ada_only', e.target.checked)}
-                      className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
-                    />
-                    <label htmlFor="ada_only" className="ml-2 block text-sm text-gray-900">
-                      ADAのみ（トークンを含むUTxOを除外）
-                    </label>
+                <div className="space-y-5">
+                  <div className="relative flex items-start">
+                    <div className="flex items-center h-5">
+                      <input
+                        id="ada_only"
+                        type="checkbox"
+                        checked={formData.ada_only}
+                        onChange={(e) => handleInputChange('ada_only', e.target.checked)}
+                        className="h-4 w-4 text-gray-800 focus:ring-gray-500 border-gray-300 rounded"
+                      />
+                    </div>
+                    <div className="ml-3 text-sm">
+                      <label htmlFor="ada_only" className="font-medium text-gray-800">
+                        ADAのみ
+                      </label>
+                      <p className="text-gray-500">他のトークンを含むUTxOを除外します。</p>
+                    </div>
                   </div>
                   <div>
-                    <label htmlFor="exclude_utxos" className="block text-sm font-medium text-gray-700">
+                    <label htmlFor="exclude_utxos" className="block text-sm font-semibold text-gray-800">
                       除外するUTxO（カンマ区切り）
                     </label>
-                    <input
-                      type="text"
-                      id="exclude_utxos"
-                      value={formData.exclude_utxos}
-                      onChange={(e) => handleInputChange('exclude_utxos', e.target.value)}
-                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
-                      placeholder="txhash1#0, txhash2#1"
-                    />
+                    <div className="mt-2">
+                      <input
+                        type="text"
+                        id="exclude_utxos"
+                        value={formData.exclude_utxos}
+                        onChange={(e) => handleInputChange('exclude_utxos', e.target.value)}
+                        className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-gray-500 focus:border-gray-500 sm:text-sm"
+                        placeholder="txhash#index, txhash#index, ..."
+                      />
+                    </div>
                   </div>
                 </div>
               )}
 
               {formData.amount_mode === 'rate_based' && (
-                <div className="space-y-4">
+                <div className="space-y-5">
                   <div>
-                    <label htmlFor="fiat_amount" className="block text-sm font-medium text-gray-700">
-                      法定通貨金額 (JPY) *
+                    <label htmlFor="fiat_amount" className="block text-sm font-semibold text-gray-800">
+                      法定通貨額 (JPY) *
                     </label>
-                    <input
-                      type="number"
-                      id="fiat_amount"
-                      step="1"
-                      min="0"
-                      value={formData.fiat_amount}
-                      onChange={(e) => handleInputChange('fiat_amount', e.target.value)}
-                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
-                      placeholder="100000"
-                    />
+                    <div className="mt-2">
+                      <input
+                        type="number"
+                        id="fiat_amount"
+                        step="1"
+                        min="0"
+                        value={formData.fiat_amount}
+                        onChange={(e) => handleInputChange('fiat_amount', e.target.value)}
+                        className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-gray-500 focus:border-gray-500 sm:text-sm"
+                        placeholder="100000"
+                      />
+                    </div>
                   </div>
                   <div>
-                    <label htmlFor="rate_source" className="block text-sm font-medium text-gray-700">
+                    <label htmlFor="rate_source" className="block text-sm font-semibold text-gray-800">
                       レートソース
                     </label>
-                    <select
-                      id="rate_source"
-                      value={formData.rate_source}
-                      onChange={(e) => handleInputChange('rate_source', e.target.value)}
-                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
-                    >
-                      <option value="coingecko">CoinGecko</option>
-                      <option value="coinbase">Coinbase</option>
-                      <option value="binance">Binance</option>
-                    </select>
+                    <div className="mt-2">
+                      <select
+                        id="rate_source"
+                        value={formData.rate_source}
+                        onChange={(e) => handleInputChange('rate_source', e.target.value)}
+                        className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-gray-500 focus:border-gray-500 sm:text-sm"
+                      >
+                        <option value="coingecko">CoinGecko</option>
+                        <option value="coinbase">Coinbase</option>
+                        <option value="binance">Binance</option>
+                      </select>
+                    </div>
                   </div>
                   <div>
-                    <label htmlFor="upper_limit_ada" className="block text-sm font-medium text-gray-700">
+                    <label htmlFor="upper_limit_ada" className="block text-sm font-semibold text-gray-800">
                       ADA上限額 *
                     </label>
-                    <input
-                      type="number"
-                      id="upper_limit_ada"
-                      step="0.000001"
-                      min="0"
-                      value={formData.upper_limit_ada}
-                      onChange={(e) => handleInputChange('upper_limit_ada', e.target.value)}
-                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
-                      placeholder="3000.000000"
-                    />
+                    <div className="mt-2">
+                      <input
+                        type="number"
+                        id="upper_limit_ada"
+                        step="0.000001"
+                        min="0"
+                        value={formData.upper_limit_ada}
+                        onChange={(e) => handleInputChange('upper_limit_ada', e.target.value)}
+                        className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-gray-500 focus:border-gray-500 sm:text-sm"
+                        placeholder="3000.000000"
+                      />
+                    </div>
                   </div>
                   <div>
-                    <label htmlFor="slippage_bps" className="block text-sm font-medium text-gray-700">
+                    <label htmlFor="slippage_bps" className="block text-sm font-semibold text-gray-800">
                       スリッページ (bps) *
                     </label>
-                    <input
-                      type="number"
-                      id="slippage_bps"
-                      step="1"
-                      min="0"
-                      max="1000"
-                      value={formData.slippage_bps}
-                      onChange={(e) => handleInputChange('slippage_bps', e.target.value)}
-                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
-                      placeholder="100"
-                    />
-                    <p className="mt-1 text-sm text-gray-500">100 bps = 1%</p>
+                    <div className="mt-2">
+                      <input
+                        type="number"
+                        id="slippage_bps"
+                        step="1"
+                        min="0"
+                        max="1000"
+                        value={formData.slippage_bps}
+                        onChange={(e) => handleInputChange('slippage_bps', e.target.value)}
+                        className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-gray-500 focus:border-gray-500 sm:text-sm"
+                        placeholder="100"
+                      />
+                    </div>
+                    <p className="mt-2 text-sm text-gray-500">100 bps = 1%</p>
                   </div>
                 </div>
               )}
 
               {/* Common Fields */}
               <div>
-                <label htmlFor="recipient" className="block text-sm font-medium text-gray-700">
+                <label htmlFor="recipient" className="block text-sm font-semibold text-gray-800">
                   送金先アドレス *
                 </label>
-                <input
-                  type="text"
-                  id="recipient"
-                  value={formData.recipient}
-                  onChange={(e) => handleInputChange('recipient', e.target.value)}
-                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
-                  placeholder="addr1..."
-                />
+                <div className="mt-2">
+                  <input
+                    type="text"
+                    id="recipient"
+                    value={formData.recipient}
+                    onChange={(e) => handleInputChange('recipient', e.target.value)}
+                    className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-gray-500 focus:border-gray-500 sm:text-sm font-mono"
+                    placeholder="addr1..."
+                  />
+                </div>
               </div>
 
               <div>
-                <label htmlFor="ttl_minutes" className="block text-sm font-medium text-gray-700">
-                  TTL (分) *
+                <label htmlFor="ttl_minutes" className="block text-sm font-semibold text-gray-800">
+                  有効期間 (TTL) *
                 </label>
-                <input
-                  type="number"
-                  id="ttl_minutes"
-                  min="5"
-                  max="15"
-                  value={formData.ttl_minutes}
-                  onChange={(e) => handleInputChange('ttl_minutes', parseInt(e.target.value))}
-                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
-                />
-                <p className="mt-1 text-sm text-gray-500">署名の有効期限（5分〜15分）</p>
+                <p className="text-sm text-gray-500 mt-1">リクエストが有効な期間（5〜15分）。</p>
+                <div className="mt-2">
+                  <input
+                    type="number"
+                    id="ttl_minutes"
+                    min="5"
+                    max="15"
+                    value={formData.ttl_minutes}
+                    onChange={(e) => handleInputChange('ttl_minutes', parseInt(e.target.value, 10))}
+                    className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-gray-500 focus:border-gray-500 sm:text-sm"
+                  />
+                </div>
               </div>
 
               {/* Submit Button */}
-              <div>
+              <div className="border-t border-gray-200 pt-8">
                 <button
                   type="submit"
                   disabled={isCreating}
-                  className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-base font-semibold text-white bg-gray-800 hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all duration-200"
                 >
-                  {isCreating ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      作成中...
-                    </>
-                  ) : (
-                    '請求を作成'
-                  )}
+                  {isCreating ? '作成中...' : 'リクエストを作成'}
                 </button>
               </div>
             </form>
@@ -630,11 +650,11 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
             {generatedRequest && (
               <div className="mt-8 p-6 bg-green-50 border border-green-200 rounded-md">
                 <h4 className="text-lg font-medium text-green-900 mb-4">
-                  請求が作成されました！
+                  リクエストが作成されました！
                 </h4>
                 <div className="space-y-4">
                   <div>
-                    <p className="text-sm font-medium text-green-700">請求ID:</p>
+                    <p className="text-sm font-medium text-green-700">リクエストID:</p>
                     <p className="text-sm text-green-800 font-mono">{generatedRequest.requestId}</p>
                   </div>
                   <div>

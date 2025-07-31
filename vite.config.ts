@@ -96,6 +96,17 @@ export default defineConfig(({ mode }) => {
       setupFiles: ['./src/test/setup.ts'],
       // テストファイルのパターン
       include: ['src/**/*.{test,spec}.{js,ts,jsx,tsx}'],
+      // アライアス設定
+      alias: {
+        '@emurgo/cardano-serialization-lib-browser': new URL('./src/__mocks__/@emurgo/cardano-serialization-lib-browser.ts', import.meta.url).pathname,
+      },
+      // 依存関係設定  
+      server: {
+        deps: {
+          // WASMモジュールを外部として除外
+          external: ['@emurgo/cardano-serialization-lib-browser'],
+        },
+      },
       // カバレッジ設定
       coverage: {
         reporter: ['text', 'json', 'html'],

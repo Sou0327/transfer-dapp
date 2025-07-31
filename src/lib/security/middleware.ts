@@ -3,7 +3,7 @@
  * Comprehensive security middleware for request protection and validation
  */
 
-import { generateCsrfToken } from './secureId';
+// Using generateCsrfToken defined in this file
 import { checkCompositeRateLimit, DEFAULT_RATE_LIMITS } from './rateLimiter';
 import { logSecurityEvent, logAuditEvent, AuditEventType, AuditSeverity } from './auditLog';
 
@@ -319,9 +319,9 @@ export class CsrfTokenManager {
 
   private cleanup(): void {
     const now = Date.now();
-    for (const [_token, info] of this.tokens.entries()) { // eslint-disable-line @typescript-eslint/no-unused-vars
+    for (const [_token, info] of this.tokens.entries()) {
       if (now > info.expires) {
-        this.tokens.delete(token);
+        this.tokens.delete(_token);
       }
     }
   }
@@ -385,7 +385,12 @@ export const securityMiddleware = (
         return {
           allowed: false,
           reason: 'Rate limit exceeded',
-          rateLimitInfo: rateLimitResult,
+          rateLimitInfo: {
+            limit: rateLimitResult.ip.limit,
+            remaining: rateLimitResult.ip.remaining,
+            reset: rateLimitResult.ip.reset,
+            retryAfter: rateLimitResult.ip.retryAfter
+          },
           headers: {
             ...results.headers,
             'Retry-After': Math.ceil((rateLimitResult.ip.retryAfter || 60000) / 1000).toString()
@@ -393,7 +398,12 @@ export const securityMiddleware = (
         };
       }
 
-      results.rateLimitInfo = rateLimitResult;
+      results.rateLimitInfo = {
+        limit: rateLimitResult.ip.limit,
+        remaining: rateLimitResult.ip.remaining,
+        reset: rateLimitResult.ip.reset,
+        retryAfter: rateLimitResult.ip.retryAfter
+      };
     }
 
     // 2. HTTPS enforcement
@@ -568,10 +578,10 @@ export const securityUtils = {
   }): SecurityContext => {
     return {
       ip: req.ip || 'unknown',
-      userAgent: req.headers?.['user-agent'],
+      userAgent: (req.headers as Record<string, string> | undefined)?.['user-agent'],
       requestId: req.headers?.['x-request-id'] || `req_${Date.now()}`,
       timestamp: Date.now(),
-      csrfToken: req.headers?.['x-csrf-token'] || req.body?.csrfToken,
+      csrfToken: req.headers?.['x-csrf-token'] || (req.body?.csrfToken as string),
       origin: req.headers?.origin,
       referer: req.headers?.referer
     };
