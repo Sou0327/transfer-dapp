@@ -1,17 +1,17 @@
 {
-  "buildCommand": "npm ci --omit=optional && npm run build",
+  "buildCommand": "npm ci && npm run build",
   "outputDirectory": "dist",
-  "installCommand": "npm ci --omit=optional",
+  "installCommand": "npm ci",
   "framework": "vite",
   "env": {
     "NODE_ENV": "production",
-    "npm_config_optional": "false",
+    "npm_config_optional": "true",
     "SKIP_ENV_VALIDATION": "true"
   },
   "build": {
     "env": {
       "NODE_ENV": "production",
-      "npm_config_optional": "false",
+      "npm_config_optional": "true",
       "SKIP_ENV_VALIDATION": "true"
     }
   }
