@@ -217,3 +217,5 @@ export const TxPreview: React.FC<TxPreviewProps> = ({
     </div>
   );
 };
+
+export default TxPreview;

@@ -384,3 +384,5 @@ export const EnhancedTransferForm: React.FC<EnhancedTransferFormProps> = ({
     </div>
   );
 };
+
+export default EnhancedTransferForm;

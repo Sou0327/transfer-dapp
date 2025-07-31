@@ -3,7 +3,7 @@
  * React hooks for integrating security features into components
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   initializeSecuritySystem,
   getSecuritySystemStatus,
@@ -45,7 +45,7 @@ export interface UseSecurityReturn extends SecurityState {
   generateRequestId: () => string;
   validateRequestId: (id: string, expectedPrefix?: string) => boolean;
   checkRateLimit: (ip: string, endpoint?: string) => Promise<boolean>;
-  logEvent: (type: string, action: string, details?: Record<string, any>) => void;
+  logEvent: (type: string, action: string, details?: Record<string, unknown>) => void;
   resetSecurity: () => void;
 }
 
@@ -182,7 +182,7 @@ export const useSecurity = (options: UseSecurityOptions = {}): UseSecurityReturn
   }, []);
 
   // Log security/business event
-  const logEvent = useCallback((type: string, action: string, details: Record<string, any> = {}): void => {
+  const logEvent = useCallback((type: string, action: string, details: Record<string, unknown> = {}): void => {
     try {
       if (type.startsWith('business.')) {
         // Business events

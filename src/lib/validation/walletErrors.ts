@@ -110,9 +110,9 @@ export const WalletErrorPatterns = {
 export interface WalletError {
   code: CIP30ErrorCode;
   message: string;
-  originalError?: any;
+  originalError?: unknown;
   walletName?: string;
-  context?: Record<string, any>;
+  context?: Record<string, unknown>;
   timestamp: number;
   recoverable: boolean;
   userFriendlyMessage: string;
@@ -412,7 +412,7 @@ export class WalletErrorClassifier {
     }
   }
   
-  public static classifyError(error: any, walletName?: string, context?: Record<string, any>): WalletError {
+  public static classifyError(error: unknown, walletName?: string, context?: Record<string, unknown>): WalletError {
     let code = CIP30ErrorCode.UNKNOWN_ERROR;
     let message = 'Unknown error';
     
@@ -489,7 +489,7 @@ export class ErrorRecoveryExecutor {
       onComplete?: (success: boolean) => void;
     }
   ): Promise<boolean> {
-    const { walletName, requestId, onProgress, onComplete } = context;
+    const { walletName, requestId: _requestId, onProgress, onComplete } = context; // eslint-disable-line @typescript-eslint/no-unused-vars
     const actionKey = `${walletName || 'unknown'}_${action.id}`;
     
     try {
@@ -528,7 +528,7 @@ export class ErrorRecoveryExecutor {
   private async handleRetry(
     actionKey: string,
     action: RecoveryAction,
-    context: any
+    context: Record<string, unknown>
   ): Promise<boolean> {
     const currentRetryCount = this.retryCount.get(actionKey) || 0;
     
@@ -553,7 +553,7 @@ export class ErrorRecoveryExecutor {
   
   private async handleReconnect(
     walletName?: string,
-    context?: any
+    context?: Record<string, unknown>
   ): Promise<boolean> {
     if (!walletName || !window.cardano) {
       return false;
@@ -577,7 +577,7 @@ export class ErrorRecoveryExecutor {
   
   private async handleRefresh(
     action: RecoveryAction,
-    context: any
+    context: Record<string, unknown>
   ): Promise<boolean> {
     // Emit refresh event for the application to handle
     if (action.id === 'refresh_utxos') {
@@ -648,7 +648,7 @@ export const WalletErrorUtils = {
     requestId?: string;
     ip?: string;
     userAgent?: string;
-  }): Record<string, any> => {
+  }): Record<string, unknown> => {
     return {
       walletName: req.walletName,
       requestId: req.requestId,

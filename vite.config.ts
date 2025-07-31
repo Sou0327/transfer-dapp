@@ -59,9 +59,17 @@ export default defineConfig(({ mode }) => {
     
     // 開発サーバー設定
     server: {
-      port: 3000,
+      port: 4000, // 現在の4000ポートに合わせる
       open: false,
       cors: true,
+      // APIプロキシ設定 - /api/* リクエストをバックエンドサーバーに転送
+      proxy: {
+        '/api': {
+          target: 'http://localhost:3001',
+          changeOrigin: true,
+          secure: false,
+        },
+      },
       // HTTPS設定（環境変数で制御）
       https: env.VITE_ENABLE_HTTPS === 'true' ? {} : false,
       // セキュリティヘッダー設定
@@ -85,7 +93,7 @@ export default defineConfig(({ mode }) => {
     test: {
       globals: true,
       environment: 'jsdom',
-      setupFiles: ['./src/tests/setup.ts'],
+      setupFiles: ['./src/test/setup.ts'],
       // テストファイルのパターン
       include: ['src/**/*.{test,spec}.{js,ts,jsx,tsx}'],
       // カバレッジ設定

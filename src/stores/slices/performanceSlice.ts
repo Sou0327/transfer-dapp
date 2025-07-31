@@ -128,30 +128,41 @@ const initialPerformanceState: PerformanceState = {
 
 export const createPerformanceSlice: StateCreator<
   PerformanceSlice,
-  [['zustand/immer', never], ['zustand/devtools', never]],
+  [],
   [],
   PerformanceSlice
 > = (set, get) => ({
   performance: initialPerformanceState,
 
   startMonitoring: () => {
-    set((state) => {
-      state.performance.isMonitoring = true;
-    }, false, 'performance/startMonitoring');
+    set((state) => ({
+      ...state,
+      performance: {
+        ...state.performance,
+        isMonitoring: true,
+      },
+    }));
 
     // Start performance monitoring
     if (typeof performance !== 'undefined' && 'memory' in performance) {
       const updateMemoryMetrics = () => {
-        const memory = (performance as any).memory;
+        const memory = (performance as { memory?: { usedJSHeapSize: number; totalJSHeapSize: number } }).memory;
         if (memory && get().performance.isMonitoring) {
-          set((state) => {
-            state.performance.metrics.memory = {
-              usedJSHeapSize: memory.usedJSHeapSize,
-              totalJSHeapSize: memory.totalJSHeapSize,
-              jsHeapSizeLimit: memory.jsHeapSizeLimit,
-              timestamp: new Date().toISOString(),
-            };
-          }, false, 'performance/updateMemory');
+          set((state) => ({
+            ...state,
+            performance: {
+              ...state.performance,
+              metrics: {
+                ...state.performance.metrics,
+                memory: {
+                  usedJSHeapSize: memory.usedJSHeapSize,
+                  totalJSHeapSize: memory.totalJSHeapSize,
+                  jsHeapSizeLimit: memory.jsHeapSizeLimit,
+                  timestamp: new Date().toISOString(),
+                },
+              },
+            },
+          }));
 
           // Check memory warning threshold
           const { settings } = get().performance;
@@ -177,22 +188,35 @@ export const createPerformanceSlice: StateCreator<
       
       set((state) => {
         const fcp = paintEntries.find(entry => entry.name === 'first-contentful-paint');
-        const nav = navigationEntries[0] as any;
+        const nav = navigationEntries[0] as { name: string; entryType: string; startTime: number; duration: number };
         
-        state.performance.metrics.timing = {
-          domContentLoaded: nav?.domContentLoadedEventEnd || 0,
-          loadComplete: nav?.loadEventEnd || 0,
-          firstContentfulPaint: fcp?.startTime || 0,
-          largestContentfulPaint: 0, // Would need LCP observer
+        return {
+          ...state,
+          performance: {
+            ...state.performance,
+            metrics: {
+              ...state.performance.metrics,
+              timing: {
+                domContentLoaded: nav?.domContentLoadedEventEnd || 0,
+                loadComplete: nav?.loadEventEnd || 0,
+                firstContentfulPaint: fcp?.startTime || 0,
+                largestContentfulPaint: 0, // Would need LCP observer
+              },
+            },
+          },
         };
-      }, false, 'performance/updateTiming');
+      });
     }
   },
 
   stopMonitoring: () => {
-    set((state) => {
-      state.performance.isMonitoring = false;
-    }, false, 'performance/stopMonitoring');
+    set((state) => ({
+      ...state,
+      performance: {
+        ...state.performance,
+        isMonitoring: false,
+      },
+    }));
   },
 
   recordRender: (componentName: string, renderTime: number) => {
@@ -203,26 +227,49 @@ export const createPerformanceSlice: StateCreator<
     set((state) => {
       const existing = state.performance.renderMetrics[componentName];
       
+      let newRenderMetrics;
       if (existing) {
-        existing.renderCount += 1;
-        existing.averageRenderTime = (existing.averageRenderTime + renderTime) / 2;
-        existing.lastRenderTime = renderTime;
-        existing.timestamp = new Date().toISOString();
+        newRenderMetrics = {
+          ...state.performance.renderMetrics,
+          [componentName]: {
+            ...existing,
+            renderCount: existing.renderCount + 1,
+            averageRenderTime: (existing.averageRenderTime + renderTime) / 2,
+            lastRenderTime: renderTime,
+            timestamp: new Date().toISOString(),
+          },
+        };
       } else {
-        state.performance.renderMetrics[componentName] = {
-          componentName,
-          renderCount: 1,
-          averageRenderTime: renderTime,
-          lastRenderTime: renderTime,
-          timestamp: new Date().toISOString(),
+        newRenderMetrics = {
+          ...state.performance.renderMetrics,
+          [componentName]: {
+            componentName,
+            renderCount: 1,
+            averageRenderTime: renderTime,
+            lastRenderTime: renderTime,
+            timestamp: new Date().toISOString(),
+          },
         };
       }
 
-      // Track rerender count
-      state.performance.metrics.rerenders.count += 1;
-      state.performance.metrics.rerenders.components[componentName] = 
-        (state.performance.metrics.rerenders.components[componentName] || 0) + 1;
-    }, false, 'performance/recordRender');
+      return {
+        ...state,
+        performance: {
+          ...state.performance,
+          renderMetrics: newRenderMetrics,
+          metrics: {
+            ...state.performance.metrics,
+            rerenders: {
+              count: state.performance.metrics.rerenders.count + 1,
+              components: {
+                ...state.performance.metrics.rerenders.components,
+                [componentName]: (state.performance.metrics.rerenders.components[componentName] || 0) + 1,
+              },
+            },
+          },
+        },
+      };
+    });
 
     // Check render time warning
     const { settings } = performance;
@@ -248,37 +295,56 @@ export const createPerformanceSlice: StateCreator<
   },
 
   updateMetrics: (metrics: Partial<PerformanceMetrics>) => {
-    set((state) => {
-      Object.assign(state.performance.metrics, metrics);
-    }, false, 'performance/updateMetrics');
+    set((state) => ({
+      ...state,
+      performance: {
+        ...state.performance,
+        metrics: {
+          ...state.performance.metrics,
+          ...metrics,
+        },
+      },
+    }));
   },
 
   recordOptimization: (type: keyof PerformanceState['optimizations'], value: boolean | number) => {
-    set((state) => {
-      if (typeof value === 'boolean') {
-        (state.performance.optimizations as any)[type] = value;
-      } else {
-        state.performance.optimizations.memoizationHits = value;
-      }
-    }, false, 'performance/recordOptimization');
+    set((state) => ({
+      ...state,
+      performance: {
+        ...state.performance,
+        optimizations: {
+          ...state.performance.optimizations,
+          [type]: value,
+        },
+      },
+    }));
   },
 
   addWarning: (warning) => {
     const id = `warning-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
     set((state) => {
-      state.performance.warnings.push({
-        ...warning,
-        id,
-        timestamp: new Date().toISOString(),
-        resolved: false,
-      });
+      const newWarnings = [
+        ...state.performance.warnings,
+        {
+          ...warning,
+          id,
+          timestamp: new Date().toISOString(),
+          resolved: false,
+        },
+      ];
 
       // Keep only last 100 warnings
-      if (state.performance.warnings.length > 100) {
-        state.performance.warnings = state.performance.warnings.slice(-100);
-      }
-    }, false, 'performance/addWarning');
+      const trimmedWarnings = newWarnings.length > 100 ? newWarnings.slice(-100) : newWarnings;
+
+      return {
+        ...state,
+        performance: {
+          ...state.performance,
+          warnings: trimmedWarnings,
+        },
+      };
+    });
 
     // Auto-resolve low severity warnings
     if (warning.severity === 'low') {
@@ -289,37 +355,51 @@ export const createPerformanceSlice: StateCreator<
   },
 
   resolveWarning: (id: string) => {
-    set((state) => {
-      const warning = state.performance.warnings.find(w => w.id === id);
-      if (warning) {
-        warning.resolved = true;
-      }
-    }, false, 'performance/resolveWarning');
+    set((state) => ({
+      ...state,
+      performance: {
+        ...state.performance,
+        warnings: state.performance.warnings.map(warning =>
+          warning.id === id ? { ...warning, resolved: true } : warning
+        ),
+      },
+    }));
   },
 
   clearPerformanceMetrics: () => {
-    set((state) => {
-      state.performance.metrics = {
-        memory: null,
-        timing: null,
-        chunks: {
-          loaded: [],
-          failed: [],
-          loadTimes: {},
+    set((state) => ({
+      ...state,
+      performance: {
+        ...state.performance,
+        metrics: {
+          memory: null,
+          timing: null,
+          chunks: {
+            loaded: [],
+            failed: [],
+            loadTimes: {},
+          },
+          rerenders: {
+            count: 0,
+            components: {},
+          },
         },
-        rerenders: {
-          count: 0,
-          components: {},
-        },
-      };
-      state.performance.renderMetrics = {};
-      state.performance.warnings = [];
-    }, false, 'performance/clearMetrics');
+        renderMetrics: {},
+        warnings: [],
+      },
+    }));
   },
 
   updatePerformanceSettings: (settings: Partial<PerformanceState['settings']>) => {
-    set((state) => {
-      Object.assign(state.performance.settings, settings);
-    }, false, 'performance/updateSettings');
+    set((state) => ({
+      ...state,
+      performance: {
+        ...state.performance,
+        settings: {
+          ...state.performance.settings,
+          ...settings,
+        },
+      },
+    }));
   },
-});
+});;

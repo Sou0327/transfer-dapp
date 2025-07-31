@@ -54,7 +54,8 @@ export const SigningSuccess: React.FC<SigningSuccessProps> = ({
     });
   };
 
-  // Get block explorer URL
+  // Get block explorer URL - Future use for "View on Explorer" button
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const getExplorerUrl = (txHash: string): string => {
     return `https://cardanoscan.io/transaction/${txHash}`;
   };

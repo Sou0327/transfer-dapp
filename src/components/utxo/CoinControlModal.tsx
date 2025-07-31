@@ -6,7 +6,6 @@ import React, { useState, useCallback, useMemo } from 'react';
 import { UTxO } from '../../types/cardano';
 import { 
   SELECTION_STRATEGIES,
-  UTxOSelectionStrategy,
   analyzeUtxos,
   isSelectionSufficient 
 } from '../../lib/utxoSelection';
@@ -167,6 +166,7 @@ export const CoinControlModal: React.FC<CoinControlModalProps> = ({
                       value={strategy.name}
                       checked={selectedStrategy === strategy.name}
                       onChange={(e) => setSelectedStrategy(e.target.value)}
+
                       className="mt-1 text-orange-600 focus:ring-orange-500"
                     />
                     <div className="ml-2">
@@ -332,3 +332,5 @@ export const CoinControlModal: React.FC<CoinControlModalProps> = ({
     </div>
   );
 };
+
+export default CoinControlModal;

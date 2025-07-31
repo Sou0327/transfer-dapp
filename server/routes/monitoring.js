@@ -2,8 +2,8 @@
  * Monitoring API Routes
  * Handles UTxO monitoring and TTL management
  */
-import { utxoMonitorService } from '../../src/lib/utxoMonitor.js';
-import { AuditDAO } from '../../src/lib/database.js';
+import { utxoMonitorService } from '../../src/lib/utxoMonitor.ts';
+import { AuditDAO } from '../../src/lib/database.ts';
 
 export async function monitoringRoutes(fastify, options) {
   

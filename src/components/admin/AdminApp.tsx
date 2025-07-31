@@ -22,10 +22,9 @@ import {
 type AdminTab = 'dashboard' | 'requests' | 'transactions' | 'security' | 'monitoring' | 'settings';
 
 export const AdminApp: React.FC = () => {
-  const { session, loading: authLoading, error: authError, login, logout } = useAdminAuth();
+  const { session, loading: authLoading, login, logout } = useAdminAuth();
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
   const [requests, setRequests] = useState<OTCRequest[]>([]);
-  const [requestsLoading, setRequestsLoading] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
 
@@ -50,7 +49,7 @@ export const AdminApp: React.FC = () => {
     if (!session) return;
 
     try {
-      setRequestsLoading(true);
+      // setRequestsLoading(true); // Removed since variable was removed
       
       // 開発環境ではモックデータを使用
       if (import.meta.env.NODE_ENV === 'development' || import.meta.env.DEV) {
@@ -63,6 +62,7 @@ export const AdminApp: React.FC = () => {
             recipient: 'addr1qxyz...example',
             ttl_slot: 12345678,
             status: RequestStatus.REQUESTED,
+            created_by: 'admin',
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           }
@@ -79,7 +79,7 @@ export const AdminApp: React.FC = () => {
     } catch (error) {
       console.error('Failed to fetch requests:', error);
     } finally {
-      setRequestsLoading(false);
+      // setRequestsLoading(false); // Removed since variable was removed
     }
   }, [session]);
 
@@ -101,6 +101,7 @@ export const AdminApp: React.FC = () => {
         recipient: requestData.recipient,
         ttl_slot: Math.floor((Date.now() + requestData.ttl_minutes * 60 * 1000) / 1000),
         status: RequestStatus.REQUESTED,
+        created_by: 'admin',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
@@ -110,6 +111,8 @@ export const AdminApp: React.FC = () => {
       return {
         requestId: mockRequestId,
         signUrl: mockSignUrl,
+        qrData: mockSignUrl,
+        status: "REQUESTED" as const,
       };
     }
 
@@ -221,6 +224,7 @@ export const AdminApp: React.FC = () => {
           <p className="text-gray-600">認証状態を確認中...</p>
         </div>
       </div>
+
     );
   }
 
@@ -246,7 +250,7 @@ export const AdminApp: React.FC = () => {
               <h1 className="text-2xl font-bold text-gray-900">₳ OTC管理システム</h1>
             </div>
             <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-500">管理者: {session.username}</span>
+              <span className="text-sm text-gray-500">管理者: {session.email}</span>
               <button
                 onClick={() => logout()}
                 className="text-sm text-gray-500 hover:text-gray-700"
@@ -307,3 +311,5 @@ export const AdminApp: React.FC = () => {
     </div>
   );
 };
+
+export default AdminApp;

@@ -9,7 +9,7 @@ export interface StatusUpdate {
   status: 'REQUESTED' | 'SIGNED' | 'SUBMITTED' | 'CONFIRMED' | 'FAILED' | 'EXPIRED';
   tx_hash?: string;
   timestamp: string;
-  details?: any;
+  details?: unknown;
 }
 
 export interface TTLUpdate {
@@ -122,7 +122,7 @@ class WebSocketService {
     });
 
     // Admin-specific events
-    this.socket.on('admin_alert', (alert: any) => {
+    this.socket.on('admin_alert', (alert: { type: string; message: string; timestamp?: number; severity?: string }) => {
       console.warn('🚨 Admin alert:', alert);
     });
   }
@@ -175,7 +175,7 @@ class WebSocketService {
   /**
    * Send a message to server
    */
-  emit(event: string, data: any): void {
+  emit(event: string, data: unknown): void {
     if (!this.socket?.connected) {
       console.warn('WebSocket not connected, cannot emit event:', event);
       return;

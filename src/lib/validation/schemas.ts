@@ -446,7 +446,7 @@ export const APIResponseSchemas = {
     error: z.object({
       code: z.string().min(1),
       message: z.string().min(1),
-      details: z.record(z.any()).optional(),
+      details: z.record(z.unknown()).optional(),
       stack: z.string().optional() // Only in development
     }),
     timestamp: BaseSchemas.timestamp
@@ -516,7 +516,7 @@ export const WebSocketSchemas = {
       'subscribe', 'unsubscribe', 'ping', 'request_update', 
       'transaction_update', 'system_status'
     ]),
-    payload: z.record(z.any()).optional(),
+    payload: z.record(z.unknown()).optional(),
     requestId: z.string().optional(),
     timestamp: BaseSchemas.timestamp
   }),
@@ -527,7 +527,7 @@ export const WebSocketSchemas = {
       'request_created', 'request_updated', 'transaction_signed',
       'transaction_submitted', 'transaction_confirmed', 'system_alert'
     ]),
-    payload: z.record(z.any()),
+    payload: z.record(z.unknown()),
     timestamp: BaseSchemas.timestamp
   })
 };

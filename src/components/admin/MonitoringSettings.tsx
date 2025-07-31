@@ -3,7 +3,7 @@
  * Configure and control monitoring services (UTxO, block confirmation)
  */
 import React, { useState, useCallback, useEffect } from 'react';
-import { useAdminAuth, createAuthenticatedFetch } from '../../hooks/useAdminAuth';
+import { createAuthenticatedFetch } from '../../hooks/useAdminAuth';
 
 interface MonitoringStatus {
   utxo_service: {
@@ -29,7 +29,7 @@ interface ServiceConfig {
 }
 
 export const MonitoringSettings: React.FC = () => {
-  const { session } = useAdminAuth();
+  // const { session } = useAdminAuth(); // Removed to fix build warning
   const [status, setStatus] = useState<MonitoringStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

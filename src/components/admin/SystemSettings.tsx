@@ -3,7 +3,7 @@
  * General system configurations and maintenance functions
  */
 import React, { useState, useCallback, useEffect } from 'react';
-import { useAdminAuth, createAuthenticatedFetch } from '../../hooks/useAdminAuth';
+import { createAuthenticatedFetch } from '../../hooks/useAdminAuth';
 
 interface SystemInfo {
   version: string;
@@ -25,7 +25,7 @@ interface DatabaseStats {
 }
 
 export const SystemSettings: React.FC = () => {
-  const { session } = useAdminAuth();
+  // const { session } = useAdminAuth(); // Removed to fix build warning
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
   const [dbStats, setDbStats] = useState<DatabaseStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -209,6 +209,7 @@ export const SystemSettings: React.FC = () => {
       <div className="flex items-center justify-center py-12">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
       </div>
+
     );
   }
 
@@ -488,3 +489,5 @@ export const SystemSettings: React.FC = () => {
     </div>
   );
 };
+
+export default SystemSettings;

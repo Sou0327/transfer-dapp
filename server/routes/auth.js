@@ -1,7 +1,7 @@
 /**
  * Authentication API Routes
  */
-import { AuthenticationService } from '../../src/lib/auth.js';
+import { AuthenticationService } from '../../src/lib/auth.ts';
 
 export async function authRoutes(fastify, options) {
   // Login endpoint

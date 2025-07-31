@@ -6,7 +6,6 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { UTxO } from '../../types/cardano';
 import { 
   UTxOFilter, 
-  UTxOAnalytics,
   filterUtxos, 
   analyzeUtxos, 
   isAdaOnlyUtxo,
@@ -397,3 +396,5 @@ export const EnhancedUtxoTable: React.FC<EnhancedUtxoTableProps> = ({
     </div>
   );
 };
+
+export default EnhancedUtxoTable;

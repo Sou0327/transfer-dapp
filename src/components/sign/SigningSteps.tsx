@@ -128,3 +128,5 @@ export const SigningSteps: React.FC<SigningStepsProps> = ({
     </div>
   );
 };
+
+export default SigningSteps;

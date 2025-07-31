@@ -3,7 +3,7 @@
  * Comprehensive security middleware for request protection and validation
  */
 
-import { generateCsrfToken, validateSecureId } from './secureId';
+import { generateCsrfToken } from './secureId';
 import { checkCompositeRateLimit, DEFAULT_RATE_LIMITS } from './rateLimiter';
 import { logSecurityEvent, logAuditEvent, AuditEventType, AuditSeverity } from './auditLog';
 
@@ -48,7 +48,12 @@ export interface SecurityResult {
   reason?: string;
   headers?: Record<string, string>;
   redirectUrl?: string;
-  rateLimitInfo?: any;
+  rateLimitInfo?: {
+    limit: number;
+    remaining: number;
+    reset: number;
+    retryAfter?: number;
+  };
 }
 
 export interface SuspiciousPattern {
@@ -314,7 +319,7 @@ export class CsrfTokenManager {
 
   private cleanup(): void {
     const now = Date.now();
-    for (const [token, info] of this.tokens.entries()) {
+    for (const [_token, info] of this.tokens.entries()) { // eslint-disable-line @typescript-eslint/no-unused-vars
       if (now > info.expires) {
         this.tokens.delete(token);
       }
@@ -326,7 +331,7 @@ export class CsrfTokenManager {
     let active = 0;
     let expired = 0;
 
-    for (const [token, info] of this.tokens.entries()) {
+    for (const [_token, info] of this.tokens.entries()) { // eslint-disable-line @typescript-eslint/no-unused-vars
       if (now > info.expires) {
         expired++;
       } else {
@@ -559,7 +564,7 @@ export const securityUtils = {
     ip?: string;
     headers?: Record<string, string>;
     query?: Record<string, string>;
-    body?: any;
+    body?: Record<string, unknown>;
   }): SecurityContext => {
     return {
       ip: req.ip || 'unknown',

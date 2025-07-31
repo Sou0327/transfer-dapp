@@ -1,7 +1,7 @@
 import React from 'react';
 import { Buffer } from 'buffer';
 import { UTxO } from '../types/cardano';
-import { OptimizationUtils, createMemoComponent } from '../lib/performance/reactOptimization';
+import { OptimizationUtils } from '../lib/performance/reactOptimization';
 
 // Buffer polyfill for browser
 window.Buffer = Buffer;

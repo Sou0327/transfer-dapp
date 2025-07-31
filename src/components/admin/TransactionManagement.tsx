@@ -3,7 +3,7 @@
  * Shows transaction history, monitoring status, and submission management
  */
 import React, { useState, useCallback, useEffect } from 'react';
-import { useAdminAuth, createAuthenticatedFetch } from '../../hooks/useAdminAuth';
+import { createAuthenticatedFetch } from '../../hooks/useAdminAuth';
 
 interface TransactionData {
   id: string;
@@ -32,7 +32,7 @@ interface SubmissionStats {
 }
 
 export const TransactionManagement: React.FC = () => {
-  const { session } = useAdminAuth();
+  // const { session } = useAdminAuth(); // Removed to fix build warning
   const [transactions, setTransactions] = useState<TransactionData[]>([]);
   const [stats, setStats] = useState<SubmissionStats | null>(null);
   const [loading, setLoading] = useState(true);

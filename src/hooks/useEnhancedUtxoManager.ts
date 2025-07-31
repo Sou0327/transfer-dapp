@@ -8,13 +8,11 @@ import { UTxO, AssetBalance } from '../types/cardano';
 import { useYoroiConnect } from './useYoroiConnect';
 import {
   SELECTION_STRATEGIES,
-  UTxOSelectionStrategy,
   UTxOFilter,
   UTxOAnalytics,
   filterUtxos,
   analyzeUtxos,
-  isSelectionSufficient,
-  adaOnlyPrioritySelection
+  isSelectionSufficient
 } from '../lib/utxoSelection';
 
 // Buffer polyfill for browser
@@ -241,7 +239,7 @@ export const useEnhancedUtxoManager = (): UseEnhancedUtxoManagerReturn => {
 
       console.log('✅ Enhanced UTxO state updated successfully');
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('❌ Failed to fetch UTxOs:', error);
       setState(prev => ({
         ...prev,

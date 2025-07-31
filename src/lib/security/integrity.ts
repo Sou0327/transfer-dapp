@@ -23,7 +23,7 @@ export interface IntegrityResult {
   error?: string;
 }
 
-export interface SignedData<T = any> {
+export interface SignedData<T = unknown> {
   data: T;
   signature: string;
   publicKey: string;
@@ -74,7 +74,7 @@ const generateHash = async (
  * Generate integrity hash with metadata
  */
 export const generateIntegrityHash = async (
-  data: any,
+  data: unknown,
   options: {
     algorithm?: 'sha256' | 'sha512';
     includeSalt?: boolean;
@@ -120,7 +120,7 @@ export const generateIntegrityHash = async (
  * Verify data integrity
  */
 export const verifyIntegrity = async (
-  data: any,
+  data: unknown,
   expectedHash: string,
   metadata: IntegrityMetadata
 ): Promise<IntegrityResult> => {
@@ -199,7 +199,7 @@ export const generateHMAC = async (
     return Array.from(new Uint8Array(signature))
       .map(b => b.toString(16).padStart(2, '0'))
       .join('');
-  } catch (error) {
+  } catch {
     throw new Error('HMAC generation failed');
   }
 };
@@ -216,7 +216,7 @@ export const verifyHMAC = async (
   try {
     const expectedSignature = await generateHMAC(message, secret, algorithm);
     return expectedSignature === signature;
-  } catch (error) {
+  } catch {
     return false;
   }
 };
@@ -356,7 +356,7 @@ export const transactionIntegrity = {
 
       // Additional validation could be added here using CBOR library
       return true;
-    } catch (error) {
+    } catch {
       return false;
     }
   },
@@ -385,7 +385,7 @@ export const transactionIntegrity = {
 
       // More detailed validation would require CSL integration
       return true;
-    } catch (error) {
+    } catch {
       return false;
     }
   },
@@ -435,7 +435,7 @@ export const requestIntegrity = {
    */
   createRequestHash: async (
     recipient: string,
-    amount: any,
+    amount: unknown,
     mode: string,
     ttl: number
   ): Promise<{ hash: string; metadata: IntegrityMetadata }> => {
@@ -458,7 +458,7 @@ export const requestIntegrity = {
    */
   verifyRequestIntegrity: async (
     recipient: string,
-    amount: any,
+    amount: unknown,
     mode: string,
     ttl: number,
     expectedHash: string,

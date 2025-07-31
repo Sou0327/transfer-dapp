@@ -155,17 +155,21 @@ const calculateTotals = (utxos: UTxO[]): { totalAda: bigint; totalAssets: AssetB
 
 export const createUtxoSlice: StateCreator<
   UtxoSlice,
-  [['zustand/immer', never], ['zustand/devtools', never]],
+  [],
   [],
   UtxoSlice
 > = (set, get) => ({
   utxo: initialUtxoState,
 
   setUtxos: (utxos: UTxO[]) => {
-    set((state) => {
-      state.utxo.utxos = utxos;
-      state.utxo.selectedUtxos = []; // Clear selection when UTxOs change
-    }, false, 'utxo/setUtxos');
+    set((state) => ({
+      ...state,
+      utxo: {
+        ...state.utxo,
+        utxos: utxos,
+        selectedUtxos: [], // Clear selection when UTxOs change
+      },
+    }));
     
     // Recalculate totals after setting UTxOs
     get()._calculateTotals();
@@ -178,31 +182,46 @@ export const createUtxoSlice: StateCreator<
       );
       
       if (!isAlreadySelected) {
-        state.utxo.selectedUtxos.push(utxo);
+        return {
+          ...state,
+          utxo: {
+            ...state.utxo,
+            selectedUtxos: [...state.utxo.selectedUtxos, utxo],
+          },
+        };
       }
-    }, false, 'utxo/selectUtxo');
+      return state;
+    });
   },
 
   deselectUtxo: (utxo: UTxO) => {
-    set((state) => {
-      state.utxo.selectedUtxos = state.utxo.selectedUtxos.filter(
-        selected => !(selected.txHash === utxo.txHash && selected.outputIndex === utxo.outputIndex)
-      );
-    }, false, 'utxo/deselectUtxo');
+    set((state) => ({
+      ...state,
+      utxo: {
+        ...state.utxo,
+        selectedUtxos: state.utxo.selectedUtxos.filter(
+          selected => !(selected.txHash === utxo.txHash && selected.outputIndex === utxo.outputIndex)
+        ),
+      },
+    }));
   },
 
   clearUtxoSelection: () => {
-    set((state) => {
-      state.utxo.selectedUtxos = [];
-    }, false, 'utxo/clearSelection');
+    set((state) => ({
+      ...state,
+      utxo: {
+        ...state.utxo,
+        selectedUtxos: [],
+      },
+    }));
   },
 
   autoSelectForAmount: (requiredLovelace: bigint): boolean => {
     const { utxo } = get();
     
-    const availableUtxos = utxo.utxos.filter(utxo => 
-      !utxo.selectedUtxos?.some(selected => 
-        selected.txHash === utxo.txHash && selected.outputIndex === utxo.outputIndex
+    const availableUtxos = utxo.utxos.filter(utxoItem => 
+      !utxo.selectedUtxos.some(selected => 
+        selected.txHash === utxoItem.txHash && selected.outputIndex === utxoItem.outputIndex
       )
     );
 
@@ -250,9 +269,13 @@ export const createUtxoSlice: StateCreator<
 
     // Check if we have enough
     if (selectedAmount >= requiredLovelace) {
-      set((state) => {
-        state.utxo.selectedUtxos = [...state.utxo.selectedUtxos, ...newSelection];
-      }, false, 'utxo/autoSelect');
+      set((state) => ({
+        ...state,
+        utxo: {
+          ...state.utxo,
+          selectedUtxos: [...state.utxo.selectedUtxos, ...newSelection],
+        },
+      }));
       return true;
     }
 
@@ -260,24 +283,33 @@ export const createUtxoSlice: StateCreator<
   },
 
   refreshUtxos: async () => {
-    const { wallet } = get();
+    const state = get();
+    const wallet = (state as { wallet: { address?: string } }).wallet;
     
     if (!wallet.isConnected || !wallet.api) {
-      set((state) => {
-        state.utxo.error = 'Wallet not connected';
-        state.utxo.utxos = [];
-        state.utxo.selectedUtxos = [];
-        state.utxo.totalAda = BigInt(0);
-        state.utxo.totalAssets = [];
-        state.utxo.isLoading = false;
-      }, false, 'utxo/refreshError');
+      set((state) => ({
+        ...state,
+        utxo: {
+          ...state.utxo,
+          error: 'Wallet not connected',
+          utxos: [],
+          selectedUtxos: [],
+          totalAda: BigInt(0),
+          totalAssets: [],
+          isLoading: false,
+        },
+      }));
       return;
     }
 
-    set((state) => {
-      state.utxo.isLoading = true;
-      state.utxo.error = null;
-    }, false, 'utxo/refreshStart');
+    set((state) => ({
+      ...state,
+      utxo: {
+        ...state.utxo,
+        isLoading: true,
+        error: null,
+      },
+    }));
 
     try {
       // Get UTxOs and change address in parallel
@@ -292,52 +324,76 @@ export const createUtxoSlice: StateCreator<
       // Calculate totals
       const { totalAda, totalAssets } = calculateTotals(parsedUtxos);
 
-      set((state) => {
-        state.utxo.utxos = parsedUtxos;
-        state.utxo.totalAda = totalAda;
-        state.utxo.totalAssets = totalAssets;
-        state.utxo.changeAddress = changeAddr;
-        state.utxo.isLoading = false;
-        state.utxo.error = null;
-        state.utxo.lastRefresh = new Date().toISOString();
-        // Clear selection when refreshing
-        state.utxo.selectedUtxos = [];
-      }, false, 'utxo/refreshSuccess');
+      set((state) => ({
+        ...state,
+        utxo: {
+          ...state.utxo,
+          utxos: parsedUtxos,
+          totalAda: totalAda,
+          totalAssets: totalAssets,
+          changeAddress: changeAddr,
+          isLoading: false,
+          error: null,
+          lastRefresh: new Date().toISOString(),
+          // Clear selection when refreshing
+          selectedUtxos: [],
+        },
+      }));
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to fetch UTxOs:', error);
-      set((state) => {
-        state.utxo.isLoading = false;
-        state.utxo.error = error.message || 'Failed to fetch UTxOs';
-      }, false, 'utxo/refreshError');
+      set((state) => ({
+        ...state,
+        utxo: {
+          ...state.utxo,
+          isLoading: false,
+          error: error.message || 'Failed to fetch UTxOs',
+        },
+      }));
     }
   },
 
   setUtxoError: (error: string | null) => {
-    set((state) => {
-      state.utxo.error = error;
-    }, false, 'utxo/setError');
+    set((state) => ({
+      ...state,
+      utxo: {
+        ...state.utxo,
+        error: error,
+      },
+    }));
   },
 
   setUtxoLoading: (loading: boolean) => {
-    set((state) => {
-      state.utxo.isLoading = loading;
-    }, false, 'utxo/setLoading');
+    set((state) => ({
+      ...state,
+      utxo: {
+        ...state.utxo,
+        isLoading: loading,
+      },
+    }));
   },
 
   updateSelectionStrategy: (strategy: UtxoState['selectionStrategy']) => {
-    set((state) => {
-      state.utxo.selectionStrategy = strategy;
-    }, false, 'utxo/updateStrategy');
+    set((state) => ({
+      ...state,
+      utxo: {
+        ...state.utxo,
+        selectionStrategy: strategy,
+      },
+    }));
   },
 
   _calculateTotals: () => {
     const { utxo } = get();
     const { totalAda, totalAssets } = calculateTotals(utxo.utxos);
     
-    set((state) => {
-      state.utxo.totalAda = totalAda;
-      state.utxo.totalAssets = totalAssets;
-    }, false, 'utxo/calculateTotals');
+    set((state) => ({
+      ...state,
+      utxo: {
+        ...state.utxo,
+        totalAda: totalAda,
+        totalAssets: totalAssets,
+      },
+    }));
   },
 });

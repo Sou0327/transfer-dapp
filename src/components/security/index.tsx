@@ -4,12 +4,15 @@
  */
 
 // Admin components
+// eslint-disable-next-line react-refresh/only-export-components
 export { SecurityDashboard } from '../admin/SecurityDashboard';
 
 // Hooks
+// eslint-disable-next-line react-refresh/only-export-components
 export { useSecurity, useCsrfProtection, useRateLimit, useSecureRequest } from '../../hooks/useSecurity';
 
 // Core security library
+// eslint-disable-next-line react-refresh/only-export-components
 export * from '../../lib/security';
 
 // Security wrapper components
@@ -18,7 +21,7 @@ import { useSecurity } from '../../hooks/useSecurity';
 
 interface SecurityProviderProps {
   children: React.ReactNode;
-  config?: any;
+  config?: Record<string, unknown>;
   fallback?: React.ReactNode;
 }
 

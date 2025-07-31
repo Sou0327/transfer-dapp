@@ -14,8 +14,7 @@ export * from './middleware';
 export {
   generateSecureRequestId as generateRequestId,
   validateSecureId as validateRequestId,
-  generateCsrfToken,
-  validateCsrfToken
+  generateCsrfToken
 } from './secureId';
 
 export {

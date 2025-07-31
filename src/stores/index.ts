@@ -122,7 +122,7 @@ export const subscribeToWalletChanges = (callback: (state: WalletSlice['wallet']
   );
 };
 
-export const subscribeToUtxoChanges = (callback: (utxos: any[]) => void) => {
+export const subscribeToUtxoChanges = (callback: (utxos: UTxO[]) => void) => {
   return useAppStore.subscribe(
     (state) => state.utxo.utxos,
     callback,

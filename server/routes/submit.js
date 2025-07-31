@@ -2,8 +2,8 @@
  * Transaction Submission API Routes
  * Handles transaction submission with retry logic and status monitoring
  */
-import { transactionSubmitter, BatchSubmissionManager, SubmissionQueue } from '../../src/lib/transactionSubmitter.js';
-import { RequestDAO, TransactionDAO, AuditDAO } from '../../src/lib/database.js';
+import { transactionSubmitter, BatchSubmissionManager, SubmissionQueue } from '../../src/lib/transactionSubmitter.ts';
+import { RequestDAO, TransactionDAO, AuditDAO } from '../../src/lib/database.ts';
 
 // Initialize batch manager and queue
 const batchManager = new BatchSubmissionManager(transactionSubmitter);

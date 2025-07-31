@@ -3,8 +3,8 @@
  */
 import { v4 as uuidv4 } from 'uuid';
 import QRCode from 'qrcode';
-import { RequestDAO, PreSignedDAO, TransactionDAO, AuditDAO } from '../../src/lib/database.js';
-import { RequestStatus } from '../../src/types/otc/index.js';
+import { RequestDAO, PreSignedDAO, TransactionDAO, AuditDAO } from '../../src/lib/database.ts';
+import { RequestStatus } from '../../src/types/otc/index.ts';
 
 export async function requestRoutes(fastify, options) {
   // Get current Cardano slot (simplified - should connect to actual node)
@@ -73,7 +73,7 @@ export async function requestRoutes(fastify, options) {
 
       // Generate sign URL
       const baseUrl = process.env.VITE_BASE_URL || `http://localhost:${process.env.PORT || 4000}`;
-      const signUrl = `${baseUrl}/sign?r=${otcRequest.id}`;
+      const signUrl = `${baseUrl}/sign?request=${otcRequest.id}`;
 
       // Generate QR code data
       const qrData = await QRCode.toDataURL(signUrl, {
@@ -130,7 +130,7 @@ export async function requestRoutes(fastify, options) {
       params: {
         type: 'object',
         properties: {
-          id: { type: 'string', format: 'uuid' }
+          id: { type: 'string', minLength: 1 }
         },
         required: ['id']
       },
@@ -277,7 +277,7 @@ export async function requestRoutes(fastify, options) {
       params: {
         type: 'object',
         properties: {
-          id: { type: 'string', format: 'uuid' }
+          id: { type: 'string', minLength: 1 }
         },
         required: ['id']
       },
@@ -381,7 +381,7 @@ export async function requestRoutes(fastify, options) {
       params: {
         type: 'object',
         properties: {
-          id: { type: 'string', format: 'uuid' }
+          id: { type: 'string', minLength: 1 }
         },
         required: ['id']
       },
@@ -414,7 +414,7 @@ export async function requestRoutes(fastify, options) {
 
       // Generate new sign URL
       const baseUrl = process.env.VITE_BASE_URL || `http://localhost:${process.env.PORT || 4000}`;
-      const signUrl = `${baseUrl}/sign?r=${id}&t=${Date.now()}`;
+      const signUrl = `${baseUrl}/sign?request=${id}&t=${Date.now()}`;
 
       // Generate QR code
       const qrData = await QRCode.toDataURL(signUrl, {
@@ -457,7 +457,7 @@ export async function requestRoutes(fastify, options) {
         type: 'object',
         required: ['requestId', 'provider_id', 'txBodyCbor', 'witnessCbor', 'selectedUtxos', 'ttl_slot'],
         properties: {
-          requestId: { type: 'string', format: 'uuid' },
+          requestId: { type: 'string', minLength: 1 },
           provider_id: { type: 'string' },
           txBodyCbor: { type: 'string' },
           witnessCbor: { type: 'string' },

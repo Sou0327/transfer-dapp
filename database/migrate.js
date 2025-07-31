@@ -4,7 +4,7 @@
  * Usage: node database/migrate.js
  */
 
-import { readFileSync } from 'fs';
+import { readFileSync, readdirSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import pg from 'pg';
@@ -34,12 +34,27 @@ async function runMigration() {
   try {
     console.log('🚀 Starting database migration...');
     
+    // Run individual migration files first
+    const migrationsDir = join(__dirname, 'migrations');
+    if (existsSync(migrationsDir)) {
+      console.log('🔄 Running migration files...');
+      const migrationFiles = readdirSync(migrationsDir).filter(f => f.endsWith('.sql')).sort();
+      
+      for (const file of migrationFiles) {
+        const migrationPath = join(migrationsDir, file);
+        const migrationSql = readFileSync(migrationPath, 'utf8');
+        console.log(`  Running ${file}...`);
+        await client.query(migrationSql);
+        console.log(`  ✅ ${file} completed`);
+      }
+    }
+    
     // Read schema SQL file
     const schemaPath = join(__dirname, 'schema.sql');
     const schemaSql = readFileSync(schemaPath, 'utf8');
     
     // Execute schema creation
-    console.log('📋 Creating database schema...');
+    console.log('📋 Creating/updating database schema...');
     await client.query(schemaSql);
     console.log('✅ Database schema created successfully');
     

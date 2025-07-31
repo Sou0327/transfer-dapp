@@ -102,7 +102,7 @@ export const useCIP30Connect = (options: UseCIP30ConnectOptions = {}) => {
               apiVersion,
             });
           }
-        } catch (error) {
+        } catch {
           console.warn(`Failed to detect wallet ${config.id}:`, error);
         }
       }
@@ -110,7 +110,7 @@ export const useCIP30Connect = (options: UseCIP30ConnectOptions = {}) => {
       updateState({ availableWallets: detected, isDetecting: false });
       return detected;
 
-    } catch (error) {
+    } catch {
       const errorMessage = 'ウォレットの検出に失敗しました';
       updateState({ 
         isDetecting: false,
@@ -190,7 +190,7 @@ export const useCIP30Connect = (options: UseCIP30ConnectOptions = {}) => {
 
       console.log(`✅ Connected to ${provider.name} wallet on ${networkId === 1 ? 'Mainnet' : 'Testnet'}`);
 
-    } catch (error) {
+    } catch {
       console.error(`Failed to connect to ${provider.name}:`, error);
 
       let errorMessage = `${provider.name}への接続に失敗しました`;
@@ -270,7 +270,7 @@ export const useCIP30Connect = (options: UseCIP30ConnectOptions = {}) => {
 
       return true;
 
-    } catch (error) {
+    } catch {
       console.warn('Connection validation failed:', error);
       disconnectWallet();
       return false;
@@ -295,7 +295,7 @@ export const useCIP30Connect = (options: UseCIP30ConnectOptions = {}) => {
           const timeout = setTimeout(async () => {
             try {
               await connectWallet(provider);
-            } catch (error) {
+            } catch {
               console.warn('Auto-connect failed:', error);
               // Clear invalid stored data
               localStorage.removeItem(STORAGE_KEYS.CONNECTED_WALLET);
@@ -305,7 +305,7 @@ export const useCIP30Connect = (options: UseCIP30ConnectOptions = {}) => {
 
           return () => clearTimeout(timeout);
         }
-      } catch (error) {
+      } catch {
         console.warn('Failed to parse stored wallet data:', error);
         localStorage.removeItem(STORAGE_KEYS.CONNECTED_WALLET);
         localStorage.removeItem(STORAGE_KEYS.NETWORK_ID);

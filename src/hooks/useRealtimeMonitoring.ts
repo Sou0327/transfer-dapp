@@ -318,7 +318,7 @@ export function useAdminMonitoring(adminId?: string) {
     // Subscribe to admin updates
     webSocketService.subscribeToAdminUpdates(adminId);
 
-    const handleAdminUpdate = (update: any) => {
+    const handleAdminUpdate = (update: Record<string, unknown>) => {
       const { request_id } = update;
       
       setRequests(prev => {

@@ -43,7 +43,7 @@ interface CardanoAPI {
 
 interface WalletAPI {
   getNetworkId(): Promise<number>;
-  getUtxos(amount?: string, paginate?: any): Promise<string[]>;
+  getUtxos(amount?: string, paginate?: Record<string, unknown>): Promise<string[]>;
   getBalance(): Promise<string>;
   getUsedAddresses(): Promise<string[]>;
   getUnusedAddresses(): Promise<string[]>;
@@ -70,29 +70,29 @@ declare module 'tronweb' {
     }
     
     trx: {
-      getAccount: (address: string) => Promise<any>
+      getAccount: (address: string) => Promise<Record<string, unknown>>
       getBalance: (address: string) => Promise<number>
-      getTransactionInfo: (txHash: string) => Promise<any>
-      sendRawTransaction: (signedTransaction: any) => Promise<any>
-      sign: (transaction: any) => Promise<any>
-      getTransaction: (txHash: string) => Promise<any>
-      getCurrentBlock: () => Promise<any>
-      getBlockByNumber: (blockNumber: number) => Promise<any>
+      getTransactionInfo: (txHash: string) => Promise<Record<string, unknown>>
+      sendRawTransaction: (signedTransaction: unknown) => Promise<Record<string, unknown>>
+      sign: (transaction: unknown) => Promise<Record<string, unknown>>
+      getTransaction: (txHash: string) => Promise<Record<string, unknown>>
+      getCurrentBlock: () => Promise<Record<string, unknown>>
+      getBlockByNumber: (blockNumber: number) => Promise<Record<string, unknown>>
     }
     
-    contract: (abi?: any[], address?: string) => any
+    contract: (abi?: Record<string, unknown>[], address?: string) => Record<string, unknown>
     
     utils: {
       accounts: {
-        generateAccount: () => any
+        generateAccount: () => Record<string, unknown>
       }
       crypto: {
         getBase58CheckAddress: (hex: string) => string
         decodeBase58Address: (base58: string) => string
       }
       abi: {
-        encodeParams: (types: string[], values: any[]) => string
-        decodeParams: (types: string[], data: string) => any[]
+        encodeParams: (types: string[], values: unknown[]) => string
+        decodeParams: (types: string[], data: string) => unknown[]
       }
       code: {
         hexStr2byteArray: (str: string) => number[]
@@ -104,7 +104,7 @@ declare module 'tronweb' {
     isAddress: (address: string) => boolean
     
     static providers: {
-      HttpProvider: new (host: string, timeout?: number, user?: string, password?: string, headers?: Record<string, string>) => any
+      HttpProvider: new (host: string, timeout?: number, user?: string, password?: string, headers?: Record<string, string>) => Record<string, unknown>
     }
   }
   

@@ -1,5 +1,77 @@
 import { ProtocolParams } from '../types/cardano';
 
+// Blockfrost API response types
+interface BlockfrostProtocolParams {
+  min_fee_a: string;
+  min_fee_b: string; 
+  max_tx_size: string;
+  utxo_cost_per_word?: string;
+  coins_per_utxo_word?: string;
+  min_utxo?: string;
+  pool_deposit?: string;
+  key_deposit?: string;
+  max_val_size?: string;
+  max_tx_ex_mem?: string;
+  max_tx_ex_steps?: string;
+  collateral_percent?: string;
+  max_collateral_inputs?: string;
+  price_mem?: string;
+  price_step?: string;
+}
+
+interface BlockfrostEpoch {
+  epoch: number;
+  start_time: number;
+  end_time: number;
+  first_block_time: number;
+  last_block_time: number;
+  block_count: number;
+  tx_count: number;
+  output: string;
+  fees: string;
+  active_stake?: string;
+}
+
+interface BlockfrostUtxo {
+  tx_hash: string;
+  tx_index: number;
+  output_index: number;
+  amount: Array<{
+    unit: string;
+    quantity: string;
+  }>;
+  block: string;
+  data_hash?: string;
+}
+
+interface BlockfrostTransaction {
+  hash: string;
+  block: string;
+  block_height: number;
+  block_time: number;
+  slot: number;
+  index: number;
+  output_amount: Array<{
+    unit: string;
+    quantity: string;
+  }>;
+  fees: string;
+  deposit: string;
+  size: number;
+  invalid_before?: string;
+  invalid_hereafter?: string;
+  utxo_count: number;
+  withdrawal_count: number;
+  mir_cert_count: number;
+  delegation_count: number;
+  stake_cert_count: number;
+  pool_update_count: number;
+  pool_retire_count: number;
+  asset_mint_or_burn_count: number;
+  redeemer_count: number;
+  valid_contract: boolean;
+}
+
 /**
  * Cardano network service using direct Blockfrost REST API
  */
@@ -59,8 +131,8 @@ export class CardanoService {
 
     try {
       const [params, latestEpoch] = await Promise.all([
-        this.request<any>('/epochs/latest/parameters'),
-        this.request<any>('/epochs/latest')
+        this.request<BlockfrostProtocolParams>('/epochs/latest/parameters'),
+        this.request<BlockfrostEpoch>('/epochs/latest')
       ]);
       
       this.protocolParamsCache = {
@@ -94,7 +166,7 @@ export class CardanoService {
    */
   async getCurrentSlot(): Promise<number> {
     try {
-      const latestBlock = await this.request<any>('/blocks/latest');
+      const latestBlock = await this.request<{ slot: number }>('/blocks/latest');
       return latestBlock.slot || 0;
     } catch (error) {
       console.error('Failed to get current slot:', error);
@@ -107,8 +179,8 @@ export class CardanoService {
    */
   async isUtxoAvailable(txHash: string, outputIndex: number): Promise<boolean> {
     try {
-      const utxo = await this.request<any>(`/txs/${txHash}/utxos`);
-      const output = utxo.outputs.find((out: any) => out.output_index === outputIndex);
+      const utxo = await this.request<{ outputs: Array<{ output_index: number; spent: boolean }> }>(`/txs/${txHash}/utxos`);
+      const output = utxo.outputs.find((out) => out.output_index === outputIndex);
       return !!output && !output.spent;
     } catch (error) {
       console.error(`Failed to check UTxO ${txHash}#${outputIndex}:`, error);
@@ -151,9 +223,10 @@ export class CardanoService {
         body: Buffer.from(txCbor, 'hex'),
       });
       return result;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Transaction submission failed:', error);
-      throw new Error(`Transaction submission failed: ${error.message || 'Unknown error'}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Transaction submission failed: ${errorMessage}`);
     }
   }
 
@@ -167,8 +240,8 @@ export class CardanoService {
   }> {
     try {
       const [tx, latestBlock] = await Promise.all([
-        this.request<any>(`/txs/${txHash}`),
-        this.request<any>('/blocks/latest')
+        this.request<BlockfrostTransaction>(`/txs/${txHash}`),
+        this.request<{ height: number }>('/blocks/latest')
       ]);
       
       const confirmed = !!tx.block_height;
@@ -180,23 +253,24 @@ export class CardanoService {
         blockHeight: tx.block_height || undefined,
         confirmations,
       };
-    } catch (error: any) {
-      if (error.message.includes('404')) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('404')) {
         // Transaction not found - likely not yet propagated
         return { confirmed: false };
       }
       
       console.error(`Failed to get transaction status for ${txHash}:`, error);
-      throw new Error(`Failed to get transaction status: ${error.message || 'Unknown error'}`);
+      throw new Error(`Failed to get transaction status: ${errorMessage}`);
     }
   }
 
   /**
    * Get address UTxOs (alternative to wallet API)
    */
-  async getAddressUtxos(address: string): Promise<any[]> {
+  async getAddressUtxos(address: string): Promise<BlockfrostUtxo[]> {
     try {
-      const utxos = await this.request<any[]>(`/addresses/${address}/utxos`);
+      const utxos = await this.request<BlockfrostUtxo[]>(`/addresses/${address}/utxos`);
       return utxos;
     } catch (error) {
       console.error(`Failed to get UTxOs for address ${address}:`, error);

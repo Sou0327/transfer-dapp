@@ -20,7 +20,7 @@ export interface TransactionData {
     address: string;
     amount: string;
   }>;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
   createdAt: string;
 }
 
@@ -74,49 +74,59 @@ const initialTransactionState: TransactionState = {
 
 export const createTransactionSlice: StateCreator<
   TransactionSlice,
-  [['zustand/immer', never], ['zustand/devtools', never]],
+  [],
   [],
   TransactionSlice
-> = (set, get) => ({
+> = (set, _get) => ({ // eslint-disable-line @typescript-eslint/no-unused-vars
   transaction: initialTransactionState,
 
   setTransaction: (transaction: TransactionData) => {
-    set((state) => {
-      state.transaction.current = transaction;
-      state.transaction.status = 'building';
-      state.transaction.error = null;
-      state.transaction.txHash = null;
-    }, false, 'transaction/setTransaction');
+    set((state) => ({
+      ...state,
+      transaction: {
+        ...state.transaction,
+        current: transaction,
+        status: 'building',
+        error: null,
+        txHash: null,
+      },
+    }));
   },
 
   updateTransactionStatus: (status: TransactionState['status'], error?: string) => {
-    set((state) => {
-      state.transaction.status = status;
-      if (error) {
-        state.transaction.error = error;
-      } else if (status !== 'failed') {
-        state.transaction.error = null;
-      }
-    }, false, 'transaction/updateStatus');
+    set((state) => ({
+      ...state,
+      transaction: {
+        ...state.transaction,
+        status: status,
+        error: error || (status !== 'failed' ? null : state.transaction.error),
+      },
+    }));
   },
 
   setTransactionHash: (txHash: string) => {
-    set((state) => {
-      state.transaction.txHash = txHash;
-      if (state.transaction.status === 'submitting') {
-        state.transaction.status = 'completed';
-      }
-    }, false, 'transaction/setTxHash');
+    set((state) => ({
+      ...state,
+      transaction: {
+        ...state.transaction,
+        txHash: txHash,
+        status: state.transaction.status === 'submitting' ? 'completed' : state.transaction.status,
+      },
+    }));
   },
 
   clearTransaction: () => {
-    set((state) => {
-      state.transaction.current = null;
-      state.transaction.status = 'idle';
-      state.transaction.error = null;
-      state.transaction.txHash = null;
-      state.transaction.estimatedFee = BigInt(170_000);
-    }, false, 'transaction/clear');
+    set((state) => ({
+      ...state,
+      transaction: {
+        ...state.transaction,
+        current: null,
+        status: 'idle',
+        error: null,
+        txHash: null,
+        estimatedFee: BigInt(170_000),
+      },
+    }));
   },
 
   addTransactionToHistory: (transaction: TransactionData, txHash: string) => {
@@ -128,20 +138,26 @@ export const createTransactionSlice: StateCreator<
         submittedAt: new Date().toISOString(),
       };
       
-      // Add to beginning of history
-      state.transaction.history.unshift(historyEntry);
+      const newHistory = [historyEntry, ...state.transaction.history];
       
-      // Keep only last 50 transactions
-      if (state.transaction.history.length > 50) {
-        state.transaction.history = state.transaction.history.slice(0, 50);
-      }
-    }, false, 'transaction/addToHistory');
+      return {
+        ...state,
+        transaction: {
+          ...state.transaction,
+          history: newHistory.length > 50 ? newHistory.slice(0, 50) : newHistory,
+        },
+      };
+    });
   },
 
   estimateFee: async (transaction: Partial<TransactionData>) => {
-    set((state) => {
-      state.transaction.isEstimating = true;
-    }, false, 'transaction/estimateStart');
+    set((state) => ({
+      ...state,
+      transaction: {
+        ...state.transaction,
+        isEstimating: true,
+      },
+    }));
 
     try {
       // Simplified fee estimation - in real implementation would use CSL
@@ -156,37 +172,57 @@ export const createTransactionSlice: StateCreator<
       const estimatedSize = (inputCount * 180) + (outputCount * 34) + 10;
       const estimatedFee = baseFeee + (byteFee * BigInt(estimatedSize));
 
-      set((state) => {
-        state.transaction.estimatedFee = estimatedFee;
-        state.transaction.isEstimating = false;
-      }, false, 'transaction/estimateSuccess');
+      set((state) => ({
+        ...state,
+        transaction: {
+          ...state.transaction,
+          estimatedFee: estimatedFee,
+          isEstimating: false,
+        },
+      }));
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Fee estimation failed:', error);
       
-      set((state) => {
-        state.transaction.isEstimating = false;
-        // Use default fee on estimation failure
-        state.transaction.estimatedFee = BigInt(170_000);
-      }, false, 'transaction/estimateError');
+      set((state) => ({
+        ...state,
+        transaction: {
+          ...state.transaction,
+          isEstimating: false,
+          // Use default fee on estimation failure
+          estimatedFee: BigInt(170_000),
+        },
+      }));
     }
   },
 
   setEstimatedFee: (fee: bigint) => {
-    set((state) => {
-      state.transaction.estimatedFee = fee;
-    }, false, 'transaction/setEstimatedFee');
+    set((state) => ({
+      ...state,
+      transaction: {
+        ...state.transaction,
+        estimatedFee: fee,
+      },
+    }));
   },
 
   updateHistoryStatus: (txHash: string, status: 'pending' | 'confirmed' | 'failed') => {
-    set((state) => {
-      const entry = state.transaction.history.find(tx => tx.txHash === txHash);
-      if (entry) {
-        entry.status = status;
-        if (status === 'confirmed' && !entry.confirmedAt) {
-          entry.confirmedAt = new Date().toISOString();
-        }
-      }
-    }, false, 'transaction/updateHistoryStatus');
+    set((state) => ({
+      ...state,
+      transaction: {
+        ...state.transaction,
+        history: state.transaction.history.map(tx => 
+          tx.txHash === txHash 
+            ? {
+                ...tx,
+                status: status,
+                confirmedAt: status === 'confirmed' && !tx.confirmedAt 
+                  ? new Date().toISOString() 
+                  : tx.confirmedAt
+              }
+            : tx
+        ),
+      },
+    }));
   },
 });

@@ -228,6 +228,7 @@ export const SigningFlow: React.FC<SigningFlowProps> = ({
           ウォレットからUTxOを取得し、トランザクションを構築しています
         </p>
       </div>
+
     );
   }
 
@@ -323,3 +324,5 @@ export const SigningFlow: React.FC<SigningFlowProps> = ({
 
   return null;
 };
+
+export default SigningFlow;

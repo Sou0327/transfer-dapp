@@ -2,7 +2,7 @@
  * Pre-Signed Data API Routes
  * Handles secure storage and retrieval of signed transaction data
  */
-import { PreSignedDAO, RequestDAO, AuditDAO } from '../../src/lib/database.js';
+import { PreSignedDAO, RequestDAO, AuditDAO } from '../../src/lib/database.ts';
 
 export async function preSignedRoutes(fastify, options) {
   

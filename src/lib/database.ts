@@ -3,7 +3,7 @@
  */
 import { Pool, PoolClient, QueryResult } from 'pg';
 import { createClient, RedisClientType } from 'redis';
-import { OTCRequest, PreSignedData, TransactionData, AdminSession, RequestStatus } from '../types/otc/index.js';
+import { OTCRequest, TransactionData, AdminSession, RequestStatus } from '../types/otc/index.js';
 
 // Singleton database pool
 let pool: Pool | null = null;
@@ -74,9 +74,9 @@ export async function getRedisClient(): Promise<RedisClientType> {
 /**
  * Execute a database query with connection pooling
  */
-export async function query<T = any>(
+export async function query<T = Record<string, unknown>>(
   text: string, 
-  params?: any[]
+  params?: unknown[]
 ): Promise<QueryResult<T>> {
   const pool = getPool();
   const client = await pool.connect();
@@ -120,13 +120,25 @@ export class RequestDAO {
    * Create a new OTC request
    */
   static async create(data: Omit<OTCRequest, 'id' | 'created_at' | 'updated_at'>): Promise<OTCRequest> {
+    // Import secure ID generation
+    const { generateSecureRequestId } = await import('./security/secureId.js');
+    
+    // Generate custom request ID
+    const requestId = generateSecureRequestId({
+      length: 32,
+      prefix: 'req',
+      includeTimestamp: true,
+      encoding: 'base58'
+    });
+
     const result = await query<OTCRequest>(`
       INSERT INTO ada_requests (
-        currency, amount_mode, amount_or_rule_json, recipient, 
+        id, currency, amount_mode, amount_or_rule_json, recipient, 
         ttl_slot, status, created_by
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *
     `, [
+      requestId,
       data.currency,
       data.amount_mode,
       data.amount_or_rule_json,
@@ -209,7 +221,7 @@ export class PreSignedDAO {
     fee_lovelace: string;
     ttl_slot: number;
     wallet_used: string;
-    metadata?: any;
+    metadata?: Record<string, unknown>;
   }): Promise<string> {
     // Import encryption utilities dynamically to avoid circular dependencies
     const { encryptPreSignedData, generateIntegrityHash } = await import('./encryption.js');
@@ -266,7 +278,7 @@ export class PreSignedDAO {
   /**
    * Get pre-signed data by request ID (metadata only)
    */
-  static async getByRequestId(requestId: string): Promise<any | null> {
+  static async getByRequestId(requestId: string): Promise<Record<string, unknown> | null> {
     const result = await query(`
       SELECT 
         id, request_id, tx_hash, fee_lovelace, ttl_slot, 
@@ -288,7 +300,7 @@ export class PreSignedDAO {
       ttl_slot: row.ttl_slot,
       wallet_used: row.wallet_used,
       signed_at: row.signed_at,
-      metadata: typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata,
+      metadata: typeof row.metadata === 'string' ? JSON.parse(row.metadata as string) : (row.metadata || {}),
       has_tx_body: row.has_tx_body,
       has_witness_data: row.has_witness_data
     };
@@ -297,7 +309,7 @@ export class PreSignedDAO {
   /**
    * Get complete pre-signed data with decryption (admin only)
    */
-  static async getCompleteData(requestId: string): Promise<any | null> {
+  static async getCompleteData(requestId: string): Promise<Record<string, unknown> | null> {
     const result = await query(`
       SELECT * FROM ada_presigned WHERE request_id = $1
     `, [requestId]);
@@ -311,11 +323,11 @@ export class PreSignedDAO {
 
       // Verify integrity first
       const integrityValid = verifyIntegrityHash({
-        requestId: row.request_id,
-        txHash: row.tx_hash,
-        encryptedTxBody: row.tx_body_encrypted,
-        encryptedWitnessSet: row.witness_set_encrypted
-      }, row.integrity_hash);
+        requestId: row.request_id as string,
+        txHash: row.tx_hash as string,
+        encryptedTxBody: row.tx_body_encrypted as string,
+        encryptedWitnessSet: row.witness_set_encrypted as string
+      }, row.integrity_hash as string);
 
       if (!integrityValid) {
         throw new Error('Data integrity check failed');
@@ -323,11 +335,11 @@ export class PreSignedDAO {
 
       // Decrypt sensitive data
       const decryptedData = decryptPreSignedData(
-        row.tx_body_encrypted,
-        row.witness_set_encrypted,
-        row.encryption_meta,
-        row.request_id
-      );
+        row.tx_body_encrypted as string,
+        row.witness_set_encrypted as string,
+        row.encryption_meta as string,
+        row.request_id as string
+      ) as { txBodyHex: string; witnessSetHex: string };
 
       return {
         id: row.id,
@@ -363,7 +375,7 @@ export class PreSignedDAO {
   /**
    * Update metadata
    */
-  static async updateMetadata(requestId: string, metadata: any): Promise<boolean> {
+  static async updateMetadata(requestId: string, metadata: Record<string, unknown>): Promise<boolean> {
     const result = await query(`
       UPDATE ada_presigned 
       SET metadata = $1, updated_at = CURRENT_TIMESTAMP 
@@ -378,7 +390,7 @@ export class PreSignedDAO {
    */
   static async checkIntegrity(requestId: string): Promise<{
     healthy: boolean;
-    checks: any;
+    checks: Record<string, unknown>;
     issues?: string[];
   }> {
     try {
@@ -399,7 +411,7 @@ export class PreSignedDAO {
         };
       }
 
-      const checks: any = {
+      const checks: Record<string, unknown> = {
         exists: true,
         has_tx_body: !!row.tx_body_encrypted,
         has_witness_set: !!row.witness_set_encrypted,
@@ -414,32 +426,32 @@ export class PreSignedDAO {
         try {
           const { verifyIntegrityHash } = await import('./encryption.js');
           checks.integrity_valid = verifyIntegrityHash({
-            requestId: row.request_id,
-            txHash: row.tx_hash,
-            encryptedTxBody: row.tx_body_encrypted,
-            encryptedWitnessSet: row.witness_set_encrypted
-          }, row.integrity_hash);
+            requestId: row.request_id as string,
+            txHash: row.tx_hash as string,
+            encryptedTxBody: row.tx_body_encrypted as string,
+            encryptedWitnessSet: row.witness_set_encrypted as string
+          }, row.integrity_hash as string);
 
           if (!checks.integrity_valid) {
             issues.push('Integrity hash verification failed');
           }
         } catch (error) {
           checks.integrity_valid = false;
-          issues.push('Integrity check error: ' + error.message);
+          issues.push('Integrity check error: ' + (error as Error).message);
         }
       }
 
       // Check encryption metadata
       if (row.encryption_meta) {
         try {
-          const meta = JSON.parse(row.encryption_meta);
+          const meta = JSON.parse(row.encryption_meta as string);
           checks.encryption_meta_valid = !!(meta.algorithm && meta.keyDerivation);
           if (!checks.encryption_meta_valid) {
             issues.push('Invalid encryption metadata');
           }
         } catch (error) {
           checks.encryption_meta_valid = false;
-          issues.push('Encryption metadata parse error');
+          issues.push('Encryption metadata parse error: ' + (error as Error).message);
         }
       }
 
@@ -465,7 +477,7 @@ export class PreSignedDAO {
       return {
         healthy: false,
         checks: { error: true },
-        issues: ['Health check failed: ' + error.message]
+        issues: ['Health check failed: ' + (error as Error).message]
       };
     }
   }
@@ -473,7 +485,7 @@ export class PreSignedDAO {
   /**
    * Get pre-signed data by status for monitoring
    */
-  static async getByStatus(status: string, limit = 100): Promise<any[]> {
+  static async getByStatus(status: string, limit = 100): Promise<Record<string, unknown>[]> {
     const result = await query(`
       SELECT 
         p.id, p.request_id, p.tx_hash, p.fee_lovelace, 
@@ -492,7 +504,7 @@ export class PreSignedDAO {
   /**
    * Get expiring pre-signed data (approaching TTL)
    */
-  static async getExpiring(currentSlot: number, bufferSlots = 300): Promise<any[]> {
+  static async getExpiring(currentSlot: number, bufferSlots = 300): Promise<Record<string, unknown>[]> {
     const result = await query(`
       SELECT 
         p.id, p.request_id, p.tx_hash, p.ttl_slot,
@@ -708,15 +720,15 @@ export class TransactionDAO {
     `);
     
     const row = result.rows[0];
-    const total = parseInt(row.total);
-    const confirmed = parseInt(row.confirmed);
+    const total = parseInt(row.total as string);
+    const confirmed = parseInt(row.confirmed as string);
     const success_rate = total > 0 ? (confirmed / total) * 100 : 0;
 
     return {
       total,
-      submitted: parseInt(row.submitted),
+      submitted: parseInt(row.submitted as string),
       confirmed,
-      failed: parseInt(row.failed),
+      failed: parseInt(row.failed as string),
       success_rate: Math.round(success_rate * 100) / 100
     };
   }
@@ -735,7 +747,7 @@ export class TransactionDAO {
   /**
    * Get transactions with details for monitoring
    */
-  static async getMonitoringData(): Promise<any[]> {
+  static async getMonitoringData(): Promise<Record<string, unknown>[]> {
     const result = await query(`
       SELECT 
         t.id,
@@ -772,7 +784,7 @@ export class AuditDAO {
     action: string,
     resourceType?: string,
     resourceId?: string,
-    details?: any,
+    details?: Record<string, unknown>,
     ipAddress?: string,
     userAgent?: string
   ): Promise<void> {
@@ -792,7 +804,7 @@ export class AuditDAO {
     user_id: string;
     resource_type?: string;
     resource_id?: string;
-    details?: any;
+    details?: Record<string, unknown>;
     ip_address?: string;
     user_agent?: string;
   }): Promise<void> {
@@ -824,9 +836,9 @@ export class AuditDAO {
     toDate?: Date;
     limit?: number;
     offset?: number;
-  }): Promise<any[]> {
+  }): Promise<Record<string, unknown>[]> {
     let whereClause = '';
-    const params: any[] = [];
+    const params: unknown[] = [];
     let paramIndex = 1;
 
     const conditions: string[] = [];
@@ -909,7 +921,13 @@ export class SessionDAO {
    * Find session by token
    */
   static async findByToken(sessionToken: string): Promise<AdminSession | null> {
-    const result = await query<AdminSession & { expires_at: Date }>(`
+    const result = await query<AdminSession & { 
+      expires_at: Date;
+      admin_id: string;
+      created_at: Date;
+      ip_address: string;
+      user_agent: string;
+    }>(`
       SELECT s.*, a.email 
       FROM admin_sessions s
       JOIN admins a ON s.admin_id = a.id
@@ -920,11 +938,11 @@ export class SessionDAO {
     if (!row) return null;
     
     return {
-      adminId: row.admin_id,
-      email: row.email,
-      loginTime: row.created_at,
-      ipAddress: row.ip_address,
-      userAgent: row.user_agent,
+      adminId: row.admin_id as string,
+      email: row.email as string,
+      loginTime: row.created_at as Date,
+      ipAddress: row.ip_address as string,
+      userAgent: row.user_agent as string,
     };
   }
   
@@ -964,18 +982,24 @@ export class CacheService {
   /**
    * Set cache with TTL
    */
-  static async set(key: string, value: any, ttlSeconds = 300): Promise<void> {
+  static async set(key: string, value: unknown, ttlSeconds = 300): Promise<void> {
     if (!this.redis) await this.init();
-    await this.redis.setEx(key, ttlSeconds, JSON.stringify(value));
+    const stringValue = JSON.stringify(value ?? {});
+    await this.redis.setEx(key, ttlSeconds, stringValue);
   }
   
   /**
    * Get cached value
    */
-  static async get<T = any>(key: string): Promise<T | null> {
+  static async get<T = Record<string, unknown>>(key: string): Promise<T | null> {
     if (!this.redis) await this.init();
     const value = await this.redis.get(key);
-    return value ? JSON.parse(value) : null;
+    if (!value || typeof value !== 'string') return null;
+    try {
+      return JSON.parse(value) as T;
+    } catch {
+      return null;
+    }
   }
   
   /**

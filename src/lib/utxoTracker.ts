@@ -2,7 +2,7 @@
  * UTxO Tracker for Transaction Builder Integration
  * Tracks selected UTxOs for monitoring purposes
  */
-import * as CSL from '@emurgo/cardano-serialization-lib-browser';
+
 
 export interface TrackedUTxO {
   txHash: string;
@@ -28,8 +28,15 @@ export interface UTxOSelectionResult {
  * Convert CSL UTxOs to trackable format
  */
 export function convertUTxOsForTracking(
-  utxos: any[], 
-  selectionStrategy: 'greedy' | 'random' | 'manual' = 'greedy'
+  utxos: Array<{
+    txHash?: string;
+    tx_hash?: string;
+    outputIndex?: number;
+    output_index?: number;
+    amount: unknown;
+    address: string;
+  }>, 
+  selectionStrategy: 'greedy' | 'random' | 'manual' = 'greedy' // eslint-disable-line @typescript-eslint/no-unused-vars
 ): TrackedUTxO[] {
   return utxos.map(utxo => ({
     txHash: utxo.txHash || utxo.tx_hash,
@@ -63,8 +70,13 @@ export function createUTxOSelectionMetadata(
  * Extract UTxO information from transaction builder results
  */
 export function extractUTxOsFromTransactionResult(
-  txBuilderResult: any,
-  selectedUtxos?: any[]
+  txBuilderResult: Record<string, unknown>,
+  selectedUtxos?: Array<{
+    txHash: string;
+    outputIndex: number;
+    address: string;
+    amount: unknown;
+  }>
 ): UTxOSelectionResult | null {
   try {
     if (!txBuilderResult.success || !selectedUtxos) {
@@ -91,7 +103,7 @@ export function extractUTxOsFromTransactionResult(
 /**
  * Validate UTxO tracking data
  */
-export function validateUTxOTrackingData(data: any): data is UTxOSelectionResult {
+export function validateUTxOTrackingData(data: unknown): data is UTxOSelectionResult {
   if (!data || typeof data !== 'object') {
     return false;
   }
@@ -142,7 +154,7 @@ export async function checkUTxOExists(utxo: TrackedUTxO): Promise<boolean> {
     const outputs = txData.outputs || [];
     
     // Check if our UTxO output exists
-    return outputs.some((output: any, index: number) => 
+    return outputs.some((output: { address: string }, index: number) => 
       index === utxo.outputIndex && output.address === utxo.address
     );
 

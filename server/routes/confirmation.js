@@ -2,8 +2,8 @@
  * Block Confirmation Monitoring API Routes
  * Manages block confirmation monitoring for submitted transactions
  */
-import { blockConfirmationMonitor } from '../../src/lib/blockConfirmationMonitor.js';
-import { TransactionDAO, AuditDAO } from '../../src/lib/database.js';
+import { blockConfirmationMonitor } from '../../src/lib/blockConfirmationMonitor.ts';
+import { TransactionDAO, AuditDAO } from '../../src/lib/database.ts';
 
 export async function confirmationRoutes(fastify, options) {
 

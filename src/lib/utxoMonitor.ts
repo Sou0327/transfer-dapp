@@ -11,7 +11,7 @@ interface UTxOInfo {
   outputIndex: number;
   address: string;
   amount: string;
-  assets: any[];
+  assets: unknown[];
 }
 
 interface MonitoredRequest {
@@ -346,7 +346,7 @@ export class UTxOMonitorService {
       const outputs = txData.outputs || [];
       
       // Check if our UTxO output still exists
-      const utxoExists = outputs.some((output: any, index: number) => 
+      const utxoExists = outputs.some((output: { address: string; amount: unknown }, index: number) => 
         index === utxo.outputIndex && output.address === utxo.address
       );
 
@@ -382,7 +382,7 @@ export class UTxOMonitorService {
               const inputData = await inputResponse.json();
               const inputs = inputData.inputs || [];
               
-              const isConsumed = inputs.some((input: any) => 
+              const isConsumed = inputs.some((input: { tx_hash: string; output_index: number }) => 
                 input.tx_hash === utxo.txHash && input.output_index === utxo.outputIndex
               );
 
@@ -563,7 +563,7 @@ export class UTxOMonitorService {
   /**
    * Broadcast request status update
    */
-  private broadcastRequestUpdate(requestId: string, update: any): void {
+  private broadcastRequestUpdate(requestId: string, update: Record<string, unknown>): void {
     if (webSocketService.isConnected()) {
       webSocketService.emit('request_updated', {
         request_id: requestId,
@@ -596,7 +596,7 @@ export class UTxOMonitorService {
   /**
    * Broadcast UTxO update
    */
-  private broadcastUTxOUpdate(requestId: string, update: any): void {
+  private broadcastUTxOUpdate(requestId: string, update: Record<string, unknown>): void {
     if (webSocketService.isConnected()) {
       webSocketService.emit('utxo_update', {
         request_id: requestId,
@@ -609,7 +609,20 @@ export class UTxOMonitorService {
   /**
    * Get monitoring statistics
    */
-  getStats(): any {
+  getStats(): {
+    isRunning: boolean;
+    monitoredRequests: number;
+    currentSlot: number;
+    lastSlotUpdate: Date;
+    requests: Array<{
+      request_id: string;
+      ttl_slot: number;
+      time_remaining: number;
+      utxos: number;
+      checked_count: number;
+      last_check: Date;
+    }>;
+  } {
     return {
       isRunning: this.isRunning,
       monitoredRequests: this.monitoredRequests.size,

@@ -12,7 +12,7 @@ import { useWindowSize, useIntersectionObserver, useThrottledCallback } from '..
 export interface VirtualListItem {
   id: string | number;
   height?: number;
-  data: any;
+  data: unknown;
 }
 
 /**
@@ -252,7 +252,8 @@ export const VirtualizedList = <T extends VirtualListItem>({
     }
   }, 16); // 60fps
 
-  // Scroll to item
+  // Scroll to item - Future API for external use
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const scrollToItem = useCallback((index: number, align: 'start' | 'center' | 'end' = 'start') => {
     if (!scrollElementRef.current || index < 0 || index >= items.length) return;
 
@@ -400,7 +401,7 @@ export const VirtualizedTable = <T extends VirtualListItem>({
         index % 2 === 0 ? 'bg-white' : 'bg-gray-25'
       }`}
     >
-      {columns.map((column, colIndex) => (
+      {columns.map((column) => (
         <div
           key={column.key}
           className="px-4 py-2 flex items-center truncate"
@@ -564,7 +565,7 @@ export const VirtualizedGrid = <T extends VirtualListItem>({
         containerHeight={containerHeight}
         renderItem={renderRow}
         overscan={overscan}
-        getItemKey={(item, index) => `row-${item.row}`}
+        getItemKey={(item) => `row-${item.row}`}
       />
     </div>
   );
@@ -573,10 +574,10 @@ export const VirtualizedGrid = <T extends VirtualListItem>({
 /**
  * Infinity scroll hook
  */
-export const useInfiniteScroll = <T extends unknown>(
+// eslint-disable-next-line react-refresh/only-export-components
+export const useInfiniteScroll = <T,>(
   loadMore: () => Promise<T[]>,
-  hasMore: boolean = true,
-  threshold: number = 0.8
+  hasMore: boolean = true
 ) => {
   const [items, setItems] = useState<T[]>([]);
   const [loading, setLoading] = useState(false);

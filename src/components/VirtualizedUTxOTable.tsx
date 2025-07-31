@@ -187,12 +187,7 @@ export const VirtualizedUTxOTable: React.FC<VirtualizedUTxOTableProps> = React.m
     return baseColumns;
   }, [selectionEnabled, showAssets, isSelected, handleToggleSelect, renderAssets]);
 
-  // Handle row click for selection
-  const handleRowClick = OptimizationUtils.useStableCallback((utxo: VirtualUTxO) => {
-    if (selectionEnabled) {
-      handleToggleSelect(utxo);
-    }
-  });
+
 
   // Memoize total selected amount
   const selectedTotal = React.useMemo(() => {
@@ -280,3 +275,5 @@ export const VirtualizedUTxOTable: React.FC<VirtualizedUTxOTableProps> = React.m
 });
 
 VirtualizedUTxOTable.displayName = 'VirtualizedUTxOTable';
+
+export default VirtualizedUTxOTable;

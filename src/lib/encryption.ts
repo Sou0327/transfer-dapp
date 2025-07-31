@@ -68,7 +68,7 @@ export function encryptSensitiveData(
       iterations: opts.iterations
     };
     
-  } catch (error) {
+  } catch {
     throw new Error(`Encryption failed: ${error}`);
   }
 }
@@ -100,7 +100,7 @@ export function decryptSensitiveData(
     
     return decrypted;
     
-  } catch (error) {
+  } catch {
     throw new Error(`Decryption failed: ${error}`);
   }
 }
@@ -128,7 +128,7 @@ export function encryptPreSignedData(data: {
   txBodyHex: string;
   witnessSetHex: string;
   requestId: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }): {
   encryptedTxBody: string;
   encryptedWitnessSet: string;
@@ -163,7 +163,7 @@ export function encryptPreSignedData(data: {
       encryptionMeta: JSON.stringify(encryptionMeta)
     };
     
-  } catch (error) {
+  } catch {
     throw new Error(`Pre-signed data encryption failed: ${error}`);
   }
 }
@@ -179,7 +179,7 @@ export function decryptPreSignedData(
 ): {
   txBodyHex: string;
   witnessSetHex: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 } {
   try {
     // Parse encryption metadata
@@ -217,7 +217,7 @@ export function decryptPreSignedData(
       metadata: meta.metadata
     };
     
-  } catch (error) {
+  } catch {
     throw new Error(`Pre-signed data decryption failed: ${error}`);
   }
 }
@@ -250,7 +250,7 @@ export function verifyIntegrityHash(
   try {
     const calculatedHash = generateIntegrityHash(data);
     return calculatedHash === expectedHash;
-  } catch (error) {
+  } catch {
     console.error('Integrity verification failed:', error);
     return false;
   }
@@ -270,7 +270,7 @@ export function secureClearString(str: string): void {
       // but it's a best-effort attempt
       str = randomData;
     }
-  } catch (error) {
+  } catch {
     // Ignore errors in secure clear
   }
 }
@@ -295,7 +295,7 @@ export function rotateEncryptionKey(
     
     return newEncryptedData;
     
-  } catch (error) {
+  } catch {
     throw new Error(`Key rotation failed: ${error}`);
   }
 }
@@ -329,7 +329,7 @@ export function validateEncryptionData(data: EncryptedData): boolean {
     
     return true;
     
-  } catch (error) {
+  } catch {
     return false;
   }
 }

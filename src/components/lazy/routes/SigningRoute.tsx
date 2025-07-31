@@ -8,12 +8,10 @@ import { usePerformanceMonitor } from '../../../lib/performance/reactOptimizatio
 
 interface SigningRouteProps {
   onPreloadRoute?: (route: string) => void;
-  transactionData?: any;
 }
 
 const SigningRoute: React.FC<SigningRouteProps> = ({ 
-  onPreloadRoute,
-  transactionData 
+  onPreloadRoute
 }) => {
   // Performance monitoring for lazy loaded component
   usePerformanceMonitor('SigningRoute');

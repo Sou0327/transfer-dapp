@@ -12,17 +12,12 @@ import {
   RateBasedRule,
   TransactionBuildResult
 } from '../types/otc/index';
-import { 
-  TrackedUTxO, 
-  UTxOSelectionResult, 
-  convertUTxOsForTracking, 
-  createUTxOSelectionMetadata 
-} from './utxoTracker';
+// Removed unused imports from utxoTracker
 
 // Constants
 const LOVELACE_PER_ADA = 1_000_000;
 const MIN_UTXO_VALUE = 1_000_000; // 1 ADA minimum
-const MAX_TX_SIZE = 16384;
+
 const DEFAULT_TTL_OFFSET = 7200; // 2 hours in seconds
 
 interface TxBuilderConfig {
@@ -72,15 +67,16 @@ abstract class BaseTxBuilder {
           txHash: Buffer.from(input.transaction_id().to_bytes()).toString('hex'),
           outputIndex: input.index(),
           address: output.address().to_bech32(),
-          amount: value.coin().to_str(),
-          assets: [],
-          datumHash: output.datum_hash()?.to_hex() || null,
-          plutusData: null
+          amount: {
+            coin: value.coin().to_str()
+          },
+          assets: []
         };
 
         // Handle multi-assets
-        if (value.multiasset()) {
-          const multiasset = value.multiasset();
+        const multiasset = value.multiasset();
+        if (multiasset) {
+          const multiassetData: { [policyId: string]: { [assetName: string]: string } } = {};
           const keys = multiasset.keys();
           
           for (let i = 0; i < keys.len(); i++) {
@@ -88,21 +84,32 @@ abstract class BaseTxBuilder {
             const assets = multiasset.get(policyId);
             
             if (assets) {
+              const policyIdHex = Buffer.from(policyId.to_bytes()).toString('hex');
+              multiassetData[policyIdHex] = {};
+              
               const assetNames = assets.keys();
               for (let j = 0; j < assetNames.len(); j++) {
                 const assetName = assetNames.get(j);
                 const amount = assets.get(assetName);
                 
                 if (amount) {
-                  formattedUtxo.assets.push({
-                    policyId: Buffer.from(policyId.to_bytes()).toString('hex'),
-                    assetName: Buffer.from(assetName.name()).toString('hex'),
-                    amount: amount.to_str()
+                  const assetNameHex = Buffer.from(assetName.name()).toString('hex');
+                  multiassetData[policyIdHex][assetNameHex] = amount.to_str();
+                  
+                  // Also add to assets array for compatibility
+                  formattedUtxo.assets?.push({
+                    unit: policyIdHex + assetNameHex,
+                    quantity: amount.to_str(),
+                    policy_id: policyIdHex,
+                    asset_name: assetNameHex,
+                    policyId: policyIdHex
                   });
                 }
               }
             }
           }
+          
+          formattedUtxo.amount.multiasset = multiassetData;
         }
 
         utxos.push(formattedUtxo);
@@ -128,56 +135,56 @@ abstract class BaseTxBuilder {
   protected buildTxBody(
     inputs: CSL.TransactionInputs,
     outputs: CSL.TransactionOutputs,
-    fee: CSL.BigNum,
     ttl?: CSL.BigNum
   ): CSL.TransactionBody {
-    const txBodyBuilder = CSL.TransactionBodyBuilder.new(
-      CSL.TransactionBuilderConfigBuilder.new()
-        .fee_algo(
-          CSL.LinearFee.new(
-            CSL.BigNum.from_str(this.config.protocolParams.minFeeA.toString()),
-            CSL.BigNum.from_str(this.config.protocolParams.minFeeB.toString())
-          )
+    const config = CSL.TransactionBuilderConfigBuilder.new()
+      .fee_algo(
+        CSL.LinearFee.new(
+          CSL.BigNum.from_str(this.config.protocolParams.minFeeA.toString()),
+          CSL.BigNum.from_str(this.config.protocolParams.minFeeB.toString())
         )
-        .pool_deposit(CSL.BigNum.from_str(this.config.protocolParams.poolDeposit))
-        .key_deposit(CSL.BigNum.from_str(this.config.protocolParams.keyDeposit))
-        .max_tx_size(this.config.protocolParams.maxTxSize)
-        .max_value_size(5000)
-        .coins_per_utxo_byte(CSL.BigNum.from_str(this.config.protocolParams.coinsPerUtxoByte))
-        .build()
-    );
+      )
+      .pool_deposit(CSL.BigNum.from_str(this.config.protocolParams.poolDeposit))
+      .key_deposit(CSL.BigNum.from_str(this.config.protocolParams.keyDeposit))
+      .max_tx_size(Number(this.config.protocolParams.maxTxSize))
+      .max_value_size(5000)
+      .coins_per_utxo_byte(CSL.BigNum.from_str(this.config.protocolParams.coinsPerUtxoByte))
+      .build();
+
+    const txBuilder = CSL.TransactionBuilder.new(config);
 
     // Add inputs
     for (let i = 0; i < inputs.len(); i++) {
-      txBodyBuilder.add_input(
-        inputs.get(i).address(),
+      txBuilder.add_key_input(
+        CSL.Ed25519KeyHash.from_hex(''), // placeholder
         inputs.get(i),
-        CSL.Value.new(CSL.BigNum.from_str("0")) // Placeholder, will be calculated
+        CSL.Value.new(CSL.BigNum.from_str("0"))
       );
     }
 
     // Add outputs
     for (let i = 0; i < outputs.len(); i++) {
-      txBodyBuilder.add_output(outputs.get(i));
+      txBuilder.add_output(outputs.get(i));
     }
-
-    // Set fee
-    txBodyBuilder.set_fee(fee);
 
     // Set TTL if provided
     if (ttl) {
-      txBodyBuilder.set_ttl(ttl.checked_add(CSL.BigNum.from_str((this.config.ttlOffset || DEFAULT_TTL_OFFSET).toString())));
+      const ttlOffset = CSL.BigNum.from_str((this.config.ttlOffset || DEFAULT_TTL_OFFSET).toString());
+      const finalTtl = ttl.checked_add(ttlOffset);
+      if (finalTtl) {
+        txBuilder.set_ttl(Number(finalTtl.to_str()));
+      }
     }
 
-    return txBodyBuilder.build();
+    return txBuilder.build();
   }
 
   /**
    * Create transaction output
    */
-  protected createOutput(address: string, amount: bigint, assets?: any[]): CSL.TransactionOutput {
+  protected createOutput(address: string, amount: bigint, assets?: unknown[]): CSL.TransactionOutput {
     const addr = CSL.Address.from_bech32(address);
-    let value = CSL.Value.new(CSL.BigNum.from_str(amount.toString()));
+    const value = CSL.Value.new(CSL.BigNum.from_str(amount.toString()));
 
     // Add multi-assets if provided
     if (assets && assets.length > 0) {
@@ -230,7 +237,7 @@ export class FixedAmountTxBuilder extends BaseTxBuilder {
       }
 
       // Select UTxOs for the fixed amount
-      const selection = await this.selectUtxosForAmount(utxos, BigInt(this.rule.amount_lovelace));
+      const selection = await this.selectUtxosForAmount(utxos, BigInt(this.rule.amount));
       
       if (!selection) {
         throw new Error(`insufficient funds for ${this.rule.amount_lovelace} lovelace`);
@@ -249,7 +256,7 @@ export class FixedAmountTxBuilder extends BaseTxBuilder {
         summary: {
           inputs: selection.selectedUtxos.length,
           outputs: selection.changeAmount > 0 ? 2 : 1,
-          amount_sent: this.rule.amount_lovelace,
+          amount_sent: this.rule.amount,
           change_amount: selection.changeAmount.toString(),
           total_fee: txResult.fee
         }
@@ -265,8 +272,8 @@ export class FixedAmountTxBuilder extends BaseTxBuilder {
 
   private async selectUtxosForAmount(utxos: UTxO[], targetAmount: bigint): Promise<UtxoSelection | null> {
     // Sort UTxOs by ADA amount (largest first for efficiency)
-    const adaOnlyUtxos = utxos.filter(utxo => utxo.assets.length === 0);
-    adaOnlyUtxos.sort((a, b) => Number(BigInt(b.amount) - BigInt(a.amount)));
+    const adaOnlyUtxos = utxos.filter(utxo => !utxo.assets || utxo.assets.length === 0);
+    adaOnlyUtxos.sort((a, b) => Number(BigInt(b.amount.coin) - BigInt(a.amount.coin)));
 
     let totalSelected = 0n;
     const selectedUtxos: UTxO[] = [];
@@ -279,7 +286,7 @@ export class FixedAmountTxBuilder extends BaseTxBuilder {
     // Simple greedy selection
     for (const utxo of adaOnlyUtxos) {
       selectedUtxos.push(utxo);
-      totalSelected += BigInt(utxo.amount);
+      totalSelected += BigInt(utxo.amount.coin);
 
       // Recalculate fee with current input count
       estimatedFee = this.calculateFee(180 + (selectedUtxos.length * 70) + (2 * 40));
@@ -334,7 +341,7 @@ export class FixedAmountTxBuilder extends BaseTxBuilder {
     // Destination output
     const destOutput = this.createOutput(
       this.config.destinationAddress,
-      BigInt(this.rule.amount_lovelace)
+      BigInt(this.rule.amount)
     );
     outputs.add(destOutput);
 
@@ -352,7 +359,6 @@ export class FixedAmountTxBuilder extends BaseTxBuilder {
     const txBody = this.buildTxBody(
       inputs,
       outputs,
-      CSL.BigNum.from_str(selection.estimatedFee.toString()),
       currentSlot
     );
 
@@ -439,7 +445,7 @@ export class SweepTxBuilder extends BaseTxBuilder {
     estimatedFee: bigint;
   }> {
     // Select ADA-only UTxOs for sweep
-    const adaOnlyUtxos = utxos.filter(utxo => utxo.assets.length === 0);
+    const adaOnlyUtxos = utxos.filter(utxo => !utxo.assets || utxo.assets.length === 0);
     
     if (adaOnlyUtxos.length === 0) {
       throw new Error('ADA専用UTxOが見つかりません');
@@ -447,7 +453,7 @@ export class SweepTxBuilder extends BaseTxBuilder {
 
     // Calculate total value
     const totalValue = adaOnlyUtxos.reduce(
-      (sum, utxo) => sum + BigInt(utxo.amount),
+      (sum, utxo) => sum + BigInt(utxo.amount.coin),
       0n
     );
 
@@ -505,7 +511,6 @@ export class SweepTxBuilder extends BaseTxBuilder {
     const txBody = this.buildTxBody(
       inputs,
       outputs,
-      CSL.BigNum.from_str(sweepData.estimatedFee.toString()),
       currentSlot
     );
 
@@ -603,8 +608,8 @@ export class RateBasedTxBuilder extends BaseTxBuilder {
 
   private async selectUtxosForAmount(utxos: UTxO[], targetAmount: bigint): Promise<UtxoSelection | null> {
     // Same logic as FixedAmountTxBuilder
-    const adaOnlyUtxos = utxos.filter(utxo => utxo.assets.length === 0);
-    adaOnlyUtxos.sort((a, b) => Number(BigInt(b.amount) - BigInt(a.amount)));
+    const adaOnlyUtxos = utxos.filter(utxo => !utxo.assets || utxo.assets.length === 0);
+    adaOnlyUtxos.sort((a, b) => Number(BigInt(b.amount.coin) - BigInt(a.amount.coin)));
 
     let totalSelected = 0n;
     const selectedUtxos: UTxO[] = [];
@@ -614,7 +619,7 @@ export class RateBasedTxBuilder extends BaseTxBuilder {
 
     for (const utxo of adaOnlyUtxos) {
       selectedUtxos.push(utxo);
-      totalSelected += BigInt(utxo.amount);
+      totalSelected += BigInt(utxo.amount.coin);
 
       estimatedFee = this.calculateFee(180 + (selectedUtxos.length * 70) + (2 * 40));
 
@@ -681,7 +686,6 @@ export class RateBasedTxBuilder extends BaseTxBuilder {
     const txBody = this.buildTxBody(
       inputs,
       outputs,
-      CSL.BigNum.from_str(selection.estimatedFee.toString()),
       currentSlot
     );
 

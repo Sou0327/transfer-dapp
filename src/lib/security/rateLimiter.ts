@@ -431,7 +431,7 @@ export const getRateLimiterStats = (): {
   
   // Get top requesters
   const topRequesters: Array<{ key: string; requests: number; blocked: boolean }> = [];
-  for (const [key, info] of (rateLimitStore as any).store.entries()) {
+  for (const [key, info] of (rateLimitStore as unknown as { store: Map<string, RateLimitInfo> }).store.entries()) {
     topRequesters.push({
       key,
       requests: info.requests.length,

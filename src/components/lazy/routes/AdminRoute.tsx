@@ -7,15 +7,16 @@ import { Card, CardHeader, CardBody, Alert } from '../../common';
 import { usePerformanceMonitor } from '../../../lib/performance/reactOptimization';
 
 interface AdminRouteProps {
-  onPreloadRoute?: (route: string) => void;
+  className?: string;
+  disabled?: boolean;
 }
 
-const AdminRoute: React.FC<AdminRouteProps> = ({ onPreloadRoute }) => {
+const AdminRoute: React.FC<AdminRouteProps> = ({ className, disabled }) => {
   // Performance monitoring for lazy loaded component
   usePerformanceMonitor('AdminRoute');
 
   return (
-    <div className="space-y-6">
+    <div className={`space-y-6 ${className || ''} ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold text-gray-900">管理者パネル</h2>
         <div className="text-sm text-gray-500">

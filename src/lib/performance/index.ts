@@ -222,7 +222,7 @@ const startPerformanceMonitoring = (): void => {
   // Monitor memory usage (if available)
   if (performanceSystemConfig.enableMemoryTracking && 'memory' in window.performance) {
     setInterval(() => {
-      const memory = (window.performance as any).memory;
+      const memory = (window.performance as unknown as { memory: { usedJSHeapSize: number; totalJSHeapSize: number; jsHeapSizeLimit: number } }).memory;
       const used = memory.usedJSHeapSize / 1024 / 1024;
       const total = memory.totalJSHeapSize / 1024 / 1024;
       const limit = memory.jsHeapSizeLimit / 1024 / 1024;
@@ -246,7 +246,7 @@ export const PerformanceUtils = {
   /**
    * Measure function execution time
    */
-  measureExecutionTime: <T extends (...args: any[]) => any>(
+  measureExecutionTime: <T extends (...args: unknown[]) => unknown>(
     fn: T,
     label?: string
   ): T => {
@@ -266,7 +266,7 @@ export const PerformanceUtils = {
   /**
    * Measure async function execution time
    */
-  measureAsyncExecutionTime: <T extends (...args: any[]) => Promise<any>>(
+  measureAsyncExecutionTime: <T extends (...args: unknown[]) => Promise<unknown>>(
     fn: T,
     label?: string
   ): T => {
@@ -286,7 +286,7 @@ export const PerformanceUtils = {
   /**
    * Create performance-optimized component
    */
-  createOptimizedComponent: <P extends Record<string, any>>(
+  createOptimizedComponent: <P extends Record<string, unknown>>(
     Component: React.ComponentType<P>,
     options: {
       memo?: boolean;
@@ -300,7 +300,9 @@ export const PerformanceUtils = {
       memo = true,
       compareProps,
       monitorPerformance = performanceSystemConfig.enablePerformanceMonitoring,
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       enableVirtualization = performanceSystemConfig.enableVirtualization,
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       virtualizationThreshold = performanceSystemConfig.virtualizationThreshold
     } = options;
 
@@ -345,7 +347,7 @@ export const PerformanceUtils = {
         ? window.performance.getEntriesByType('navigation')[0]
         : null,
       memory: typeof window !== 'undefined' && 'memory' in window.performance
-        ? (window.performance as any).memory
+        ? (window.performance as Record<string, unknown>).memory
         : null
     };
   },
@@ -356,7 +358,7 @@ export const PerformanceUtils = {
   performHealthCheck: (): {
     healthy: boolean;
     issues: string[];
-    metrics: any;
+    metrics: Record<string, unknown>;
   } => {
     const issues: string[] = [];
     const metrics = PerformanceUtils.getCurrentMetrics();
@@ -453,13 +455,13 @@ export const usePerformanceOptimization = () => {
       // Trigger any pending optimizations
       if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
         await new Promise(resolve => {
-          (window as any).requestIdleCallback(resolve);
+          (window as Record<string, unknown>).requestIdleCallback(resolve);
         });
       }
       
       // Force garbage collection if available (dev tools)
       if (typeof window !== 'undefined' && 'gc' in window) {
-        (window as any).gc();
+        (window as Record<string, unknown>).gc();
       }
       
       refreshMetrics();

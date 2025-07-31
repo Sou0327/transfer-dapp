@@ -96,6 +96,7 @@ export const LazyWalletConnectModal = LazyUtils.createLazyComponent(
 );
 
 // Preload components on user interaction
+// eslint-disable-next-line react-refresh/only-export-components
 export const preloadComponents = () => {
   // Preload signing components when user starts interacting
   LazyUtils.preloadComponent(() => import('../sign/SigningPage'));
@@ -107,6 +108,7 @@ export const preloadComponents = () => {
 };
 
 // Preload admin components for admin users
+// eslint-disable-next-line react-refresh/only-export-components
 export const preloadAdminComponents = () => {
   LazyUtils.preloadComponent(() => import('../admin/AdminApp'));
   LazyUtils.preloadComponent(() => import('../admin/Dashboard'));
@@ -114,6 +116,7 @@ export const preloadAdminComponents = () => {
 };
 
 // Preload UTxO components when wallet connects
+// eslint-disable-next-line react-refresh/only-export-components
 export const preloadUtxoComponents = () => {
   LazyUtils.preloadComponent(() => import('../utxo/EnhancedUtxoTable'));
   LazyUtils.preloadComponent(() => import('../VirtualizedUTxOTable'));

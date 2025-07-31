@@ -3,11 +3,11 @@
  * User-facing transaction signing interface accessed via /sign?r=<requestId>
  */
 import React, { useState, useCallback, useEffect } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
-import { OTCRequest, RequestStatus, FixedAmount, SweepRule, RateBasedRule } from '../../types/otc/index';
-import { WalletSelectModal } from '../WalletSelectModal';
+import { useSearchParams } from 'react-router-dom';
+import { OTCRequest, RequestStatus, FixedAmount, RateBasedRule } from '../../types/otc/index';
+
 import { TxPreview } from '../TxPreview';
-import { SigningFlow } from '../SigningFlow';
+// SigningFlow import removed - not used in current implementation
 import { CountdownBadge } from '../CountdownBadge';
 import { SigningSteps } from './SigningSteps';
 import { SigningError } from './SigningError';
@@ -22,18 +22,17 @@ interface SigningPageState {
   request: OTCRequest | null;
   showWalletModal: boolean;
   showTxPreview: boolean;
-  txData: any | null;
-  utxos: any[] | null;
+  txData: unknown | null;
+  utxos: unknown[] | null;
   signedTx: string | null;
   submissionStatus: 'idle' | 'submitting' | 'submitted' | 'confirmed' | 'failed';
-  transactionDetails: any | null;
+  transactionDetails: unknown | null;
   currentStep: 'connect' | 'review' | 'sign' | 'submit' | 'confirm';
 }
 
 export const SigningPage: React.FC = () => {
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
-  const requestId = searchParams.get('r');
+  const requestId = searchParams.get('request');
   
   const [state, setState] = useState<SigningPageState>({
     loading: true,
@@ -50,8 +49,8 @@ export const SigningPage: React.FC = () => {
     currentStep: 'connect'
   });
 
-  const { selectedWallet, availableWallets, connectWallet, disconnectWallet } = useWallet();
-  const { socket, connectionStatus } = useWebSocket();
+  const { selectedWallet, connect, disconnect, getUtxos, getBalance, signTransaction: walletSignTx, availableWallets } = useWallet();
+  const { isConnected: wsConnected, lastMessage, sendMessage } = useWebSocket();
 
   // Helper function to set error with type
   const setError = useCallback((error: string, type?: 'network' | 'wallet' | 'validation' | 'timeout' | 'unknown') => {
@@ -115,50 +114,40 @@ export const SigningPage: React.FC = () => {
 
   // Subscribe to request updates via WebSocket
   useEffect(() => {
-    if (socket && requestId && connectionStatus === 'connected') {
+    if (wsConnected && requestId) {
       // Subscribe to request updates
-      socket.emit('subscribe_request', { request_id: requestId });
+      sendMessage({ type: 'subscribe_request', request_id: requestId });
       
-      // Listen for request updates
-      socket.on('request_updated', (data) => {
-        if (data.request_id === requestId) {
-          setState(prev => ({
-            ...prev,
-            request: prev.request ? { ...prev.request, status: data.status } : null
+      // Listen for request updates (via lastMessage)
+      if (lastMessage && lastMessage.type === 'request_updated' && lastMessage.request_id === requestId) {
+        setState(prev => ({
+          ...prev,
+          request: prev.request ? { ...prev.request, status: lastMessage.status } : null
+        }));
+        
+        // Update submission status based on request status
+        if (lastMessage.status === 'SUBMITTED') {
+          setState(prev => ({ ...prev, submissionStatus: 'submitted' }));
+        } else if (lastMessage.status === 'CONFIRMED') {
+          setState(prev => ({ 
+            ...prev, 
+            submissionStatus: 'confirmed',
+            transactionDetails: lastMessage.transactionDetails || prev.transactionDetails
           }));
-          
-          // Update submission status based on request status
-          if (data.status === 'SUBMITTED') {
-            setState(prev => ({ ...prev, submissionStatus: 'submitted' }));
-          } else if (data.status === 'CONFIRMED') {
-            setState(prev => ({ 
-              ...prev, 
-              submissionStatus: 'confirmed',
-              transactionDetails: data.transactionDetails || prev.transactionDetails
-            }));
-          } else if (data.status === 'FAILED') {
-            setState(prev => ({ ...prev, submissionStatus: 'failed' }));
-          }
+        } else if (lastMessage.status === 'FAILED') {
+          setState(prev => ({ ...prev, submissionStatus: 'failed' }));
         }
-      });
+      }
 
       // Listen for TTL updates
-      socket.on('ttl_update', (data) => {
-        if (data.request_id === requestId && data.expired) {
-          setState(prev => ({
-            ...prev,
-            request: prev.request ? { ...prev.request, status: RequestStatus.EXPIRED } : null
-          }));
-        }
-      });
-
-      return () => {
-        socket.off('request_updated');
-        socket.off('ttl_update');
-        socket.emit('unsubscribe_request', { request_id: requestId });
-      };
+      if (lastMessage && lastMessage.type === 'ttl_update' && lastMessage.request_id === requestId && lastMessage.expired) {
+        setState(prev => ({
+          ...prev,
+          request: prev.request ? { ...prev.request, status: RequestStatus.EXPIRED } : null
+        }));
+      }
     }
-  }, [socket, requestId, connectionStatus]);
+  }, [wsConnected, requestId, lastMessage, sendMessage]);
 
   // Initialize request data
   useEffect(() => {
@@ -178,7 +167,7 @@ export const SigningPage: React.FC = () => {
   const handleWalletConnect = useCallback(async (walletName: string) => {
     try {
       clearError();
-      await connectWallet(walletName);
+      await connect(walletName);
       setState(prev => ({ ...prev, showWalletModal: false }));
     } catch (error) {
       console.error('Wallet connection failed:', error);
@@ -196,7 +185,7 @@ export const SigningPage: React.FC = () => {
         setError('ウォレットの接続に失敗しました。再度お試しください。', 'wallet');
       }
     }
-  }, [connectWallet, clearError, setError]);
+  }, [connect, clearError, setError]);
 
   // Handle transaction building
   const handleBuildTransaction = useCallback(async () => {
@@ -207,7 +196,7 @@ export const SigningPage: React.FC = () => {
       clearError();
 
       // Get UTxOs from wallet
-      const utxos = await selectedWallet.api.getUtxos();
+      const utxos = await getUtxos();
       
       if (!utxos || utxos.length === 0) {
         setError('ウォレットにUTxOが見つかりません。ADAを受け取ってから再度お試しください。', 'validation');
@@ -230,15 +219,12 @@ export const SigningPage: React.FC = () => {
 
       switch (state.request.amount_mode) {
         case 'fixed':
-          const fixedAmount = state.request.amount_or_rule_json as FixedAmount;
           txBuilder = new FixedAmountTxBuilder(protocolParams.params);
           break;
         case 'sweep':
-          const sweepRule = state.request.amount_or_rule_json as SweepRule;
           txBuilder = new SweepTxBuilder(protocolParams.params);
           break;
         case 'rate_based':
-          const rateRule = state.request.amount_or_rule_json as RateBasedRule;
           txBuilder = new RateBasedTxBuilder(protocolParams.params);
           break;
         default:
@@ -249,8 +235,7 @@ export const SigningPage: React.FC = () => {
       const txData = await txBuilder.buildTransaction(
         utxos,
         state.request.recipient,
-        state.request.amount_or_rule_json,
-        await selectedWallet.api.getChangeAddress()
+        state.request.amount_or_rule_json
       );
 
       setState(prev => ({ 
@@ -278,7 +263,7 @@ export const SigningPage: React.FC = () => {
         setError('トランザクションの構築に失敗しました。UTxOの残高や接続を確認してください。', 'unknown');
       }
     }
-  }, [state.request, selectedWallet, clearError, setError]);
+  }, [state.request, selectedWallet, clearError, setError, getUtxos, getBalance]);
 
   // Handle transaction signing
   const handleSignTransaction = useCallback(async (txHex: string) => {
@@ -289,7 +274,7 @@ export const SigningPage: React.FC = () => {
       clearError();
 
       // Sign transaction
-      const witnessSet = await selectedWallet.api.signTx(txHex, true);
+      const witnessSet = await walletSignTx(txHex);
       
       // Store pre-signed data
       const response = await fetch('/api/ada/presigned', {
@@ -301,7 +286,7 @@ export const SigningPage: React.FC = () => {
           request_id: state.request.id,
           tx_body: txHex,
           witness_set: witnessSet,
-          wallet_used: selectedWallet.name
+          wallet_used: selectedWallet
         }),
       });
 
@@ -340,7 +325,7 @@ export const SigningPage: React.FC = () => {
       
       setState(prev => ({ ...prev, submissionStatus: 'failed' }));
     }
-  }, [selectedWallet, state.request, clearError, setError]);
+  }, [selectedWallet, state.request, clearError, setError, walletSignTx]);
 
   // Handle retry actions
   const handleRetry = useCallback(() => {
@@ -360,7 +345,7 @@ export const SigningPage: React.FC = () => {
   // Handle reset to start over
   const handleReset = useCallback(() => {
     clearError();
-    disconnectWallet();
+    disconnect();
     setState(prev => ({
       ...prev,
       showWalletModal: false,
@@ -372,7 +357,7 @@ export const SigningPage: React.FC = () => {
       transactionDetails: null,
       loading: false
     }));
-  }, [clearError, disconnectWallet]);
+  }, [clearError, disconnect]);
 
   // Handle support action
   const handleSupport = useCallback(() => {
@@ -390,14 +375,16 @@ export const SigningPage: React.FC = () => {
   // Format amount for display
   const formatAmount = useCallback((request: OTCRequest): string => {
     switch (request.amount_mode) {
-      case 'fixed':
+      case 'fixed': {
         const fixedAmount = request.amount_or_rule_json as FixedAmount;
         return `${(parseInt(fixedAmount.amount) / 1_000_000).toLocaleString()} ADA`;
+      }
       case 'sweep':
         return 'ウォレット内の全ADA';
-      case 'rate_based':
+      case 'rate_based': {
         const rateAmount = request.amount_or_rule_json as RateBasedRule;
         return `¥${rateAmount.fiat_amount.toLocaleString()} 相当のADA`;
+      }
       default:
         return '不明';
     }
@@ -406,7 +393,7 @@ export const SigningPage: React.FC = () => {
   // Check if request is expired or invalid
   const isRequestValid = state.request && 
     state.request.status === RequestStatus.REQUESTED && 
-    new Date(state.request.ttl_absolute) > new Date();
+    new Date(state.request.ttl_absolute || Date.now() + 900000) > new Date();
 
   // Show loading state
   if (state.loading && !state.request) {
@@ -417,6 +404,7 @@ export const SigningPage: React.FC = () => {
           <p className="text-gray-600">請求情報を読み込み中...</p>
         </div>
       </div>
+
     );
   }
 
@@ -578,6 +566,23 @@ export const SigningPage: React.FC = () => {
               </div>
             </div>
             
+            {/* Debug Information */}
+            <div className="px-6 py-2 bg-gray-50 border-b border-gray-200">
+              <details className="text-xs">
+                <summary className="cursor-pointer text-gray-600 hover:text-gray-800">
+                  デバッグ情報を表示
+                </summary>
+                <div className="mt-2 p-2 bg-white border rounded text-gray-700 font-mono">
+                  <div><strong>amount_mode:</strong> {state.request.amount_mode}</div>
+                  <div><strong>amount_or_rule_json:</strong> {JSON.stringify(state.request.amount_or_rule_json, null, 2)}</div>
+                  <div><strong>status:</strong> {state.request.status}</div>
+                  <div><strong>recipient:</strong> {state.request.recipient}</div>
+                  <div><strong>created_at:</strong> {state.request.created_at}</div>
+                  <div><strong>ttl_absolute:</strong> {state.request.ttl_absolute}</div>
+                </div>
+              </details>
+            </div>
+            
             <div className="px-6 py-4 space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -640,18 +645,46 @@ export const SigningPage: React.FC = () => {
                   送金に使用するCardanoウォレットを選択して接続してください。
                 </p>
                 
+                {/* Debug information */}
+                <div className="mb-4 p-3 bg-gray-100 rounded-md text-xs text-gray-600">
+                  <div>検出されたウォレット数: {availableWallets.length}</div>
+                  <div>利用可能なウォレット: {availableWallets.map(w => w.displayName).join(', ')}</div>
+                  <div>window.cardano: {typeof window !== 'undefined' && window.cardano ? 'あり' : 'なし'}</div>
+                </div>
+                
                 <button
                   onClick={() => setState(prev => ({ ...prev, showWalletModal: true }))}
-                  className="bg-orange-600 text-white px-6 py-3 rounded-md font-medium hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
+                  className="bg-orange-600 text-white px-6 py-3 rounded-md font-medium hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 mb-4"
                 >
                   ウォレットを選択
                 </button>
+
+                {/* Show available wallets directly if modal doesn't work */}
+                {availableWallets.length > 0 && (
+                  <div className="mt-6">
+                    <p className="text-sm text-gray-700 mb-3">または直接選択:</p>
+                    <div className="grid grid-cols-2 gap-2 max-w-md mx-auto">
+                      {availableWallets.map((wallet) => (
+                        <button
+                          key={wallet.name}
+                          onClick={() => handleWalletConnect(wallet.name)}
+                          className="flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
+                        >
+                          {wallet.displayName}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {availableWallets.length === 0 && (
                   <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
                     <p className="text-sm text-yellow-800">
                       対応ウォレットが見つかりません。Nami、Eternl、Flint、Yoroi、GeroWallet、NuFi、Typhon、Lode等のCardanoウォレットをインストールしてください。
                     </p>
+                    <div className="mt-2 text-xs text-yellow-700">
+                      ブラウザを再読み込みしてから再度お試しください。
+                    </div>
                   </div>
                 )}
               </div>
@@ -700,7 +733,7 @@ export const SigningPage: React.FC = () => {
 
                 <div className="flex justify-center space-x-4">
                   <button
-                    onClick={() => disconnectWallet()}
+                    onClick={() => disconnect()}
                     className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
                   >
                     ウォレット変更
@@ -726,13 +759,92 @@ export const SigningPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Modals */}
+        {/* Simple Wallet Selection Modal */}
         {state.showWalletModal && (
-          <WalletSelectModal
-            availableWallets={availableWallets}
-            onSelectWallet={handleWalletConnect}
-            onClose={() => setState(prev => ({ ...prev, showWalletModal: false }))}
-          />
+          <div className="fixed inset-0 z-50 overflow-y-auto">
+            {/* Backdrop */}
+            <div 
+              className="fixed inset-0 bg-black bg-opacity-50 transition-opacity" 
+              onClick={() => setState(prev => ({ ...prev, showWalletModal: false }))}
+            />
+
+            {/* Modal */}
+            <div className="flex min-h-full items-center justify-center p-4">
+              <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full">
+                {/* Header */}
+                <div className="flex items-center justify-between p-6 border-b border-gray-200">
+                  <h3 className="text-lg font-medium text-gray-900">
+                    ウォレットを選択
+                  </h3>
+                  <button
+                    onClick={() => setState(prev => ({ ...prev, showWalletModal: false }))}
+                    className="text-gray-400 hover:text-gray-500 focus:outline-none focus:text-gray-500 transition ease-in-out duration-150"
+                  >
+                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Content */}
+                <div className="p-6">
+                  <p className="text-sm text-gray-600 mb-4">
+                    送金に使用するCardanoウォレットを選択してください。
+                  </p>
+
+                  {/* Wallet List */}
+                  <div className="space-y-2">
+                    {availableWallets.length === 0 ? (
+                      <div className="text-center py-8">
+                        <div className="text-gray-400 mb-4">
+                          <svg className="mx-auto h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                        </div>
+                        <h4 className="text-lg font-medium text-gray-900 mb-2">
+                          ウォレットが見つかりません
+                        </h4>
+                        <p className="text-sm text-gray-500 mb-4">
+                          対応ウォレットをインストールしてページを再読み込みしてください
+                        </p>
+                      </div>
+                    ) : (
+                      availableWallets.map((wallet) => (
+                        <button
+                          key={wallet.name}
+                          onClick={() => handleWalletConnect(wallet.name)}
+                          className="w-full flex items-center p-4 border border-gray-200 rounded-lg hover:border-orange-300 hover:bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors duration-200"
+                        >
+                          <div className="flex-1 text-left">
+                            <h4 className="text-sm font-medium text-gray-900">
+                              {wallet.displayName}
+                            </h4>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {wallet.name}ウォレットに接続
+                            </p>
+                          </div>
+                          <div className="flex-shrink-0">
+                            <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Install Info */}
+                  {availableWallets.length === 0 && (
+                    <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                      <p className="text-sm text-yellow-800">
+                        Nami、Eternl、Flint、Yoroi、GeroWallet、NuFi、Typhon、Lode等のCardanoウォレットをインストールしてください。
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
         )}
 
         {state.showTxPreview && state.txData && selectedWallet && (
@@ -748,3 +860,5 @@ export const SigningPage: React.FC = () => {
     </div>
   );
 };
+
+export default SigningPage;

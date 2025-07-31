@@ -19,7 +19,7 @@ interface SecurityLog {
   method: string
   violation: string
   severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
-  details: Record<string, any>
+  details: Record<string, unknown>
   blocked: boolean
 }
 
@@ -64,7 +64,7 @@ class SecurityMiddleware {
       {
         name: 'rapid_fire_requests',
         description: '短時間での大量リクエスト',
-        check: (req, ipStats) => {
+        check: (_req, ipStats) => {
           const recentWindow = 60000 // 1分
           const threshold = 50
           return ipStats.requestCount > threshold &&
@@ -87,7 +87,7 @@ class SecurityMiddleware {
       {
         name: 'invalid_address_pattern',
         description: '無効なアドレス形式の連続送信',
-        check: (req, ipStats) => {
+        check: (_req, ipStats) => {
           return ipStats.suspiciousActivity.filter(
             activity => activity.includes('invalid_address')
           ).length > 5
@@ -109,7 +109,7 @@ class SecurityMiddleware {
       {
         name: 'suspicious_user_agent',
         description: '疑わしいUser-Agent',
-        check: (req, ipStats) => {
+        check: (req, _ipStats) => { // eslint-disable-line @typescript-eslint/no-unused-vars
           const suspiciousAgents = ['bot', 'crawler', 'scanner', 'test']
           const userAgent = req.get('User-Agent')?.toLowerCase() || ''
           return suspiciousAgents.some(agent => userAgent.includes(agent))
@@ -127,7 +127,7 @@ class SecurityMiddleware {
     req: Request,
     violation: string,
     severity: SecurityLog['severity'],
-    details: Record<string, any> = {},
+    details: Record<string, unknown> = {},
     blocked: boolean = false
   ) {
     const log: SecurityLog = {
@@ -340,7 +340,7 @@ class SecurityMiddleware {
    * Ethereumアドレス検証
    */
   private validateEthereumAddresses(req: Request) {
-    const checkAddress = (value: any, field: string) => {
+    const checkAddress = (value: unknown, field: string) => {
       if (typeof value === 'string' && value.startsWith('0x')) {
         if (!ethers.isAddress(value)) {
           const ip = this.getClientIP(req)
@@ -354,7 +354,7 @@ class SecurityMiddleware {
     }
 
     // 再帰的にアドレスフィールドをチェック
-    const checkObject = (obj: any, path: string = '') => {
+    const checkObject = (obj: unknown, path: string = '') => {
       if (typeof obj === 'object' && obj !== null) {
         for (const [key, value] of Object.entries(obj)) {
           const fieldPath = path ? `${path}.${key}` : key
@@ -380,7 +380,7 @@ class SecurityMiddleware {
    * 金額検証
    */
   private validateAmounts(req: Request) {
-    const checkAmount = (value: any, field: string) => {
+    const checkAmount = (value: unknown, field: string) => {
       if (typeof value === 'string' || typeof value === 'number') {
         try {
           const amount = BigInt(value.toString())
@@ -400,7 +400,7 @@ class SecurityMiddleware {
       }
     }
 
-    const checkObject = (obj: any, path: string = '') => {
+    const checkObject = (obj: unknown, path: string = '') => {
       if (typeof obj === 'object' && obj !== null) {
         for (const [key, value] of Object.entries(obj)) {
           const fieldPath = path ? `${path}.${key}` : key

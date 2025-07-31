@@ -3,7 +3,7 @@
  * Tests for CIP-30 wallet error handling and recovery
  */
 
-import { describe, it, expect, beforeEach, jest, afterEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import {
   CIP30ErrorCode,
   WalletErrorPatterns,
@@ -222,7 +222,7 @@ describe('WalletErrorClassifier', () => {
 
 describe('ErrorRecoveryExecutor', () => {
   let executor: ErrorRecoveryExecutor;
-  let mockContext: any;
+  let mockContext: Record<string, unknown>;
 
   beforeEach(() => {
     executor = new ErrorRecoveryExecutor();
@@ -324,7 +324,7 @@ describe('ErrorRecoveryExecutor', () => {
             enable: jest.fn().mockResolvedValue({})
           }
         }
-      } as any;
+      } as unknown;
     });
 
     it('should reconnect to wallet successfully', async () => {

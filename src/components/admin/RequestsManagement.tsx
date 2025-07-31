@@ -13,7 +13,7 @@ import {
   RateBasedRule,
   AmountOrRule
 } from '../../types/otc/index';
-import { useAdminAuth } from '../../hooks/useAdminAuth';
+// import { useAdminAuth } from '../../hooks/useAdminAuth'; // Removed to fix build warning
 
 interface RequestsManagementProps {
   requests: OTCRequest[];

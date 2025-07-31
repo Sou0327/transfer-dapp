@@ -6,17 +6,7 @@
 import { Pool } from 'pg'
 import { EthereumAddress } from '../types/database'
 
-// nonce予約状態
-interface NonceReservation {
-  id: string
-  owner: EthereumAddress
-  nonce: bigint
-  word_pos: bigint
-  bit_pos: number
-  reserved_at: Date
-  expires_at: Date
-  used: boolean
-}
+
 
 // nonceBitmap統計
 interface NonceBitmapStats {
@@ -30,16 +20,7 @@ interface NonceBitmapStats {
   estimated_exhaustion?: Date
 }
 
-// nonce使用パターン
-interface NonceUsagePattern {
-  owner: EthereumAddress
-  hourly_usage: number[]
-  daily_usage: number[]
-  peak_usage_time: number
-  average_interval: number
-  suspicious_patterns: string[]
-  last_analysis: Date
-}
+
 
 // nonce枯渇警告レベル
 enum NonceExhaustionLevel {
@@ -164,7 +145,7 @@ export class EnhancedNonceService {
    * 使用可能なnonce検索
    */
   private async findAvailableNonce(
-    client: any,
+    client: import('pg').PoolClient,
     owner: EthereumAddress
   ): Promise<{
     nonce: bigint
@@ -361,8 +342,7 @@ export class EnhancedNonceService {
    */
   private async calculateEstimatedExhaustion(
     usedBits: number,
-    owner: EthereumAddress,
-    lastUpdated: Date
+    owner: EthereumAddress
   ): Promise<Date | undefined> {
     if (usedBits < 50) return undefined // 十分な余裕がある場合
 
@@ -511,7 +491,7 @@ export class EnhancedNonceService {
    * nonceBitmap統計更新
    */
   private async updateNonceBitmapStats(
-    client: any,
+    client: import('pg').PoolClient,
     owner: EthereumAddress,
     wordPos: bigint
   ): Promise<void> {

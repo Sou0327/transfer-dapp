@@ -44,7 +44,7 @@ export class BlockConfirmationMonitor {
   private isRunning = false;
   private intervalId: NodeJS.Timeout | null = null;
   private monitoredTransactions = new Map<string, TransactionStatus>();
-  private webSocketHandler: any = null;
+  private webSocketHandler: unknown = null;
 
   constructor(config?: Partial<ConfirmationConfig>) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -94,7 +94,7 @@ export class BlockConfirmationMonitor {
   /**
    * Set WebSocket handler for real-time notifications
    */
-  setWebSocketHandler(handler: any): void {
+  setWebSocketHandler(handler: unknown): void {
     this.webSocketHandler = handler;
   }
 

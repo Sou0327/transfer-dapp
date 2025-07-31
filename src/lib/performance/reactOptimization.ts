@@ -65,7 +65,7 @@ export const useDeepMemo = <T>(
 /**
  * Deep equality check
  */
-const deepEqual = (a: any, b: any): boolean => {
+const deepEqual = (a: unknown, b: unknown): boolean => {
   if (a === b) return true;
   
   if (a == null || b == null) return false;
@@ -112,7 +112,7 @@ export const useOptimizedState = <T>(
 /**
  * Debounced callback hook
  */
-export const useDebouncedCallback = <T extends (...args: any[]) => any>(
+export const useDebouncedCallback = <T extends (...args: unknown[]) => unknown>(
   callback: T,
   delay: number,
   deps: React.DependencyList = []
@@ -146,7 +146,7 @@ export const useDebouncedCallback = <T extends (...args: any[]) => any>(
 /**
  * Throttled callback hook
  */
-export const useThrottledCallback = <T extends (...args: any[]) => any>(
+export const useThrottledCallback = <T extends (...args: unknown[]) => unknown>(
   callback: T,
   delay: number,
   deps: React.DependencyList = []
@@ -259,7 +259,7 @@ export const useWindowSize = (throttleMs: number = 100) => {
 /**
  * Component factory for memoized components
  */
-export const createMemoComponent = <P extends Record<string, any>>(
+export const createMemoComponent = <P extends Record<string, unknown>>(
   Component: React.ComponentType<P>,
   propsAreEqual?: (prevProps: P, nextProps: P) => boolean
 ) => {
@@ -271,11 +271,11 @@ export const createMemoComponent = <P extends Record<string, any>>(
 /**
  * Higher-order component for performance monitoring
  */
-export const withPerformanceMonitoring = <P extends Record<string, any>>(
+export const withPerformanceMonitoring = <P extends Record<string, unknown>>(
   Component: React.ComponentType<P>,
   componentName?: string
 ) => {
-  const WrappedComponent: React.FC<P> = (props) => {
+  const WrappedComponent: React.FC<P> = (props) => { // eslint-disable-line @typescript-eslint/no-unused-vars
     const name = componentName || Component.displayName || Component.name || 'Unknown';
     usePerformanceMonitor(name);
     // Note: Component rendering should be implemented in .tsx files
@@ -291,7 +291,7 @@ export const withPerformanceMonitoring = <P extends Record<string, any>>(
  */
 export interface OptimizedListItemProps {
   index: number;
-  data: any;
+  data: unknown;
   isVisible?: boolean;
   style?: React.CSSProperties;
 }
@@ -311,9 +311,9 @@ export const createOptimizedListItem = <T>(
     index: number;
     data: T[];
     style?: React.CSSProperties;
-  }>(({ index, data, style }) => {
+  }>(({ index, data, style: _style }) => { // eslint-disable-line @typescript-eslint/no-unused-vars
     const item = data[index];
-    const key = getItemKey(item, index);
+    const _key = getItemKey(item, index); // eslint-disable-line @typescript-eslint/no-unused-vars
     
     // Note: Component rendering should be implemented in .tsx files
     throw new Error('Component rendering should be moved to .tsx files');
@@ -334,7 +334,7 @@ export const OptimizationUtils = {
   /**
    * Create stable callback that doesn't change between renders
    */
-  useStableCallback: <T extends (...args: any[]) => any>(callback: T): T => {
+  useStableCallback: <T extends (...args: unknown[]) => unknown>(callback: T): T => {
     const callbackRef = React.useRef(callback);
     callbackRef.current = callback;
     
@@ -368,7 +368,7 @@ export const OptimizationUtils = {
   /**
    * Create memoized component with custom comparison
    */
-  createMemoWithComparison: <P extends Record<string, any>>(
+  createMemoWithComparison: <P extends Record<string, unknown>>(
     Component: React.ComponentType<P>,
     compareKeys: (keyof P)[]
   ) => {
@@ -380,16 +380,16 @@ export const OptimizationUtils = {
   /**
    * Optimize component for frequent prop changes
    */
-  createStablePropsComponent: <P extends Record<string, any>>(
+  createStablePropsComponent: <P extends Record<string, unknown>>(
     Component: React.ComponentType<P>
   ) => {
     return React.memo(Component, (prevProps, nextProps) => {
       // Only re-render if primitive props changed
-      const prevPrimitives = Object.entries(prevProps).filter(([_, value]) => 
+      const prevPrimitives = Object.entries(prevProps).filter(([_key, value]) => // eslint-disable-line @typescript-eslint/no-unused-vars
         typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
       );
       
-      const nextPrimitives = Object.entries(nextProps).filter(([_, value]) => 
+      const nextPrimitives = Object.entries(nextProps).filter(([_key, value]) => // eslint-disable-line @typescript-eslint/no-unused-vars
         typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
       );
       
@@ -404,13 +404,13 @@ export const OptimizationUtils = {
  * Performance measurement decorator
  */
 export const measurePerformance = (
-  target: any,
+  target: Record<string, unknown>,
   propertyName: string,
   descriptor: PropertyDescriptor
 ) => {
   const originalMethod = descriptor.value;
   
-  descriptor.value = function (...args: any[]) {
+  descriptor.value = function (...args: unknown[]) {
     const start = performance.now();
     const result = originalMethod.apply(this, args);
     const duration = performance.now() - start;
@@ -448,7 +448,7 @@ export const useRenderTime = (componentName: string) => {
 export const useMemoryTracker = (componentName: string) => {
   React.useEffect(() => {
     if (process.env.NODE_ENV === 'development' && 'memory' in performance) {
-      const memory = (performance as any).memory;
+      const memory = (performance as Performance & { memory?: { usedJSHeapSize: number; totalJSHeapSize: number; jsHeapSizeLimit: number } }).memory;
       console.log(`💾 ${componentName} memory:`, {
         used: `${(memory.usedJSHeapSize / 1024 / 1024).toFixed(2)}MB`,
         total: `${(memory.totalJSHeapSize / 1024 / 1024).toFixed(2)}MB`,
@@ -483,13 +483,13 @@ export const LazyUtils = {
   /**
    * Create a lazy component with loading state
    */
-  createLazyComponent: <P extends Record<string, any>>(
+  createLazyComponent: <P extends Record<string, unknown>>(
     importFn: () => Promise<{ default: React.ComponentType<P> }>,
-    fallback?: React.ComponentType
+    _fallback?: React.ComponentType // eslint-disable-line @typescript-eslint/no-unused-vars
   ) => {
-    const LazyComponent = React.lazy(importFn);
+    const _LazyComponent = React.lazy(importFn); // eslint-disable-line @typescript-eslint/no-unused-vars
     
-    const WrappedComponent: React.FC<P> = (props) => {
+    const WrappedComponent: React.FC<P> = (props) => { // eslint-disable-line @typescript-eslint/no-unused-vars
       // Note: Component rendering should be implemented in .tsx files
       throw new Error('Component rendering should be moved to .tsx files');
     };
@@ -501,7 +501,7 @@ export const LazyUtils = {
    * Preload component for better UX
    */
   preloadComponent: (
-    importFn: () => Promise<{ default: React.ComponentType<any> }>
+    importFn: () => Promise<{ default: React.ComponentType<unknown> }>
   ) => {
     // Preload on user interaction or after delay
     const preload = () => importFn().catch(console.error);
@@ -528,7 +528,7 @@ export const LazyUtils = {
  */
 export const PerformanceChecklist = {
   // Use this in development to validate component optimization
-  validateComponent: (componentName: string, props: Record<string, any>) => {
+  validateComponent: (componentName: string, props: Record<string, unknown>) => {
     if (process.env.NODE_ENV !== 'development') return;
     
     const issues: string[] = [];

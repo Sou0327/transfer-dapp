@@ -74,6 +74,7 @@ export const WalletConnectModal: React.FC<WalletConnectModalProps> = ({
                     isInstalled={true}
                     isConnecting={connectingWallet === wallet.name}
                     onClick={() => handleConnect(wallet.name)}
+
                     disabled={isConnecting}
                   />
                 ))}
@@ -202,3 +203,5 @@ const WalletButton: React.FC<WalletButtonProps> = ({
     </button>
   );
 };
+
+export default WalletConnectModal;

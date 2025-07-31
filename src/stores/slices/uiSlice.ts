@@ -105,16 +105,20 @@ const initialUiState: UiState = {
 
 export const createUiSlice: StateCreator<
   UiSlice,
-  [['zustand/immer', never], ['zustand/devtools', never]],
+  [],
   [],
   UiSlice
 > = (set, get) => ({
   ui: initialUiState,
 
   setTheme: (theme: ThemeType) => {
-    set((state) => {
-      state.ui.theme = theme;
-    }, false, 'ui/setTheme');
+    set((state) => ({
+      ...state,
+      ui: {
+        ...state.ui,
+        theme: theme,
+      },
+    }));
 
     // Apply theme to document
     const root = document.documentElement;
@@ -134,31 +138,45 @@ export const createUiSlice: StateCreator<
   },
 
   setActiveView: (view: ViewType) => {
-    set((state) => {
-      state.ui.activeView = view;
-    }, false, 'ui/setActiveView');
+    set((state) => ({
+      ...state,
+      ui: {
+        ...state.ui,
+        activeView: view,
+      },
+    }));
   },
 
   toggleModal: (modal: keyof UiState['modals'], open?: boolean) => {
-    set((state) => {
-      if (typeof open === 'boolean') {
-        state.ui.modals[modal] = open;
-      } else {
-        state.ui.modals[modal] = !state.ui.modals[modal];
-      }
-    }, false, 'ui/toggleModal');
+    set((state) => ({
+      ...state,
+      ui: {
+        ...state.ui,
+        modals: {
+          ...state.ui.modals,
+          [modal]: typeof open === 'boolean' ? open : !state.ui.modals[modal],
+        },
+      },
+    }));
   },
 
   addNotification: (notification) => {
     const id = `notification-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
-    set((state) => {
-      state.ui.notifications.push({
-        ...notification,
-        id,
-        timestamp: new Date().toISOString(),
-      });
-    }, false, 'ui/addNotification');
+    set((state) => ({
+      ...state,
+      ui: {
+        ...state.ui,
+        notifications: [
+          ...state.ui.notifications,
+          {
+            ...notification,
+            id,
+            timestamp: new Date().toISOString(),
+          },
+        ],
+      },
+    }));
 
     // Auto-remove notification if specified
     if (notification.autoClose !== false) {
@@ -170,32 +188,61 @@ export const createUiSlice: StateCreator<
   },
 
   removeNotification: (id: string) => {
-    set((state) => {
-      state.ui.notifications = state.ui.notifications.filter(n => n.id !== id);
-    }, false, 'ui/removeNotification');
+    set((state) => ({
+      ...state,
+      ui: {
+        ...state.ui,
+        notifications: state.ui.notifications.filter(n => n.id !== id),
+      },
+    }));
   },
 
   clearAllNotifications: () => {
-    set((state) => {
-      state.ui.notifications = [];
-    }, false, 'ui/clearNotifications');
+    set((state) => ({
+      ...state,
+      ui: {
+        ...state.ui,
+        notifications: [],
+      },
+    }));
   },
 
   updatePreferences: (preferences: Partial<UiState['preferences']>) => {
-    set((state) => {
-      Object.assign(state.ui.preferences, preferences);
-    }, false, 'ui/updatePreferences');
+    set((state) => ({
+      ...state,
+      ui: {
+        ...state.ui,
+        preferences: {
+          ...state.ui.preferences,
+          ...preferences,
+        },
+      },
+    }));
   },
 
   updateLayout: (layout: Partial<UiState['layout']>) => {
-    set((state) => {
-      Object.assign(state.ui.layout, layout);
-    }, false, 'ui/updateLayout');
+    set((state) => ({
+      ...state,
+      ui: {
+        ...state.ui,
+        layout: {
+          ...state.ui.layout,
+          ...layout,
+        },
+      },
+    }));
   },
 
   updatePerformanceSettings: (settings: Partial<UiState['performance']>) => {
-    set((state) => {
-      Object.assign(state.ui.performance, settings);
-    }, false, 'ui/updatePerformanceSettings');
+    set((state) => ({
+      ...state,
+      ui: {
+        ...state.ui,
+        performance: {
+          ...state.ui.performance,
+          ...settings,
+        },
+      },
+    }));
   },
 });

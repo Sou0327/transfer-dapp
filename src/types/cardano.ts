@@ -74,11 +74,7 @@ export interface CardanoWallet {
   gero?: WalletInterface;
 }
 
-declare global {
-  interface Window {
-    cardano?: CardanoWallet;
-  }
-}
+
 
 /**
  * UTxO data structures
@@ -119,7 +115,7 @@ export interface PreSignedTransaction {
   selectedUtxos: UTxO[];
   ttlSlot: number;
   status: TransactionStatus;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
   submittedAt?: Date;
@@ -164,7 +160,7 @@ export interface CreatePreSignedRequest {
   witnessCbor: string;
   selectedUtxos: UTxO[];
   ttlSlot: number;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface PreSignedTransactionResponse {
@@ -240,7 +236,7 @@ export interface BuildTransactionParams {
   outputs: TransactionOutput[];
   changeAddress: string;
   ttl?: number;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 export interface TransactionOutput {

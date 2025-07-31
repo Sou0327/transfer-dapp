@@ -1,16 +1,17 @@
 // テストセットアップファイル
 
-import '@testing-library/jest-dom'
+import '@testing-library/jest-dom/vitest'
 import { TextEncoder, TextDecoder } from 'util'
-import { vi } from 'vitest'
+import { vi, afterEach } from 'vitest'
 
 // グローバルオブジェクトの設定
 global.TextEncoder = TextEncoder
-global.TextDecoder = TextDecoder as any
+// Node.js TextDecoder を Web API TextDecoder として型アサーション
+global.TextDecoder = TextDecoder as unknown as typeof global.TextDecoder
 
 // Web Crypto API のモック
 const mockCrypto = {
-  getRandomValues: vi.fn((arr: any) => {
+  getRandomValues: vi.fn((arr: Uint8Array) => {
     for (let i = 0; i < arr.length; i++) {
       arr[i] = Math.floor(Math.random() * 256)
     }
@@ -97,14 +98,14 @@ Object.defineProperty(window, 'tronWeb', {
 })
 
 // IntersectionObserver のモック
-global.IntersectionObserver = vi.fn().mockImplementation((callback) => ({
+global.IntersectionObserver = vi.fn().mockImplementation((_callback) => ({ // eslint-disable-line @typescript-eslint/no-unused-vars
   observe: vi.fn(),
   unobserve: vi.fn(),
   disconnect: vi.fn()
 }))
 
 // ResizeObserver のモック
-global.ResizeObserver = vi.fn().mockImplementation((callback) => ({
+global.ResizeObserver = vi.fn().mockImplementation((_callback) => ({ // eslint-disable-line @typescript-eslint/no-unused-vars
   observe: vi.fn(),
   unobserve: vi.fn(),
   disconnect: vi.fn()
@@ -145,7 +146,7 @@ global.FontFace = vi.fn().mockImplementation((name, source) => ({
 }))
 
 // Worker のモック
-global.Worker = vi.fn().mockImplementation((url) => ({
+global.Worker = vi.fn().mockImplementation((_url) => ({ // eslint-disable-line @typescript-eslint/no-unused-vars
   postMessage: vi.fn(),
   terminate: vi.fn(),
   onmessage: null,
@@ -156,32 +157,12 @@ global.Worker = vi.fn().mockImplementation((url) => ({
 
 // URL のモック（Node.js環境での互換性）
 if (typeof global.URL === 'undefined') {
-  global.URL = class URL {
-    constructor(public href: string, base?: string) {
-      if (base) {
-        this.href = new URL(href, base).href
-      }
-      const url = new globalThis.URL(href)
-      this.protocol = url.protocol
-      this.hostname = url.hostname
-      this.origin = url.origin
-      this.pathname = url.pathname
-      this.search = url.search
-      this.hash = url.hash
-    }
-    
-    protocol!: string
-    hostname!: string
-    origin!: string
-    pathname!: string
-    search!: string
-    hash!: string
-  }
+  global.URL = URL
 }
 
 // コンソール警告の抑制（テスト環境用）
 const originalConsoleWarn = console.warn
-console.warn = (message: any, ...args: any[]) => {
+console.warn = (message: unknown, ...args: unknown[]) => {
   // React Testing Library の警告を抑制
   if (
     typeof message === 'string' &&
@@ -193,25 +174,18 @@ console.warn = (message: any, ...args: any[]) => {
   originalConsoleWarn(message, ...args)
 }
 
-// エラーハンドリングのモック初期化
-vi.mock('@/utils/errorHandler', () => ({
-  errorHandler: {
-    createAppError: vi.fn((code, message, details, userMessage) => ({
-      code,
-      message,
-      details,
-      userMessage,
-      timestamp: Date.now(),
-      stack: new Error().stack
-    })),
-    handleError: vi.fn(),
-    handleWalletError: vi.fn(),
-    handleTransactionError: vi.fn(),
-    handleNetworkError: vi.fn(),
-    handleValidationError: vi.fn(),
-    handleStorageError: vi.fn()
-  }
-}))
+// エラーハンドリングのモック（必要に応じて有効化）
+// vi.mock('@/utils/errorHandler', () => ({
+//   errorHandler: {
+//     createAppError: vi.fn(),
+//     handleError: vi.fn(),
+//     handleWalletError: vi.fn(),
+//     handleTransactionError: vi.fn(),
+//     handleNetworkError: vi.fn(),
+//     handleValidationError: vi.fn(),
+//     handleStorageError: vi.fn()
+//   }
+// }))
 
 // テスト後のクリーンアップ
 afterEach(() => {

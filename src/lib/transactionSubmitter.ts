@@ -59,7 +59,7 @@ export class TransactionSubmitter {
   async submitTransaction(requestId: string, options?: {
     mode?: 'server' | 'wallet';
     priority?: 'normal' | 'high';
-    walletApi?: any; // CIP-30 API for wallet mode
+    walletApi?: unknown; // CIP-30 API for wallet mode
   }): Promise<SubmissionResult> {
     // Check if submission is already in progress
     if (this.activeSubmissions.has(requestId)) {
@@ -117,7 +117,7 @@ export class TransactionSubmitter {
     options?: {
       mode?: 'server' | 'wallet';
       priority?: 'normal' | 'high';
-      walletApi?: any;
+      walletApi?: Record<string, unknown>;
     }
   ): Promise<SubmissionResult> {
     const mode = options?.mode || this.config.mode;
@@ -326,7 +326,7 @@ export class TransactionSubmitter {
       signed_tx_hex: string;
       tx_hash: string;
     },
-    walletApi: any
+    walletApi: Record<string, unknown>
   ): Promise<string> {
     try {
       // Submit transaction through wallet
@@ -367,7 +367,7 @@ export class TransactionSubmitter {
   /**
    * Get retry context for a request
    */
-  async getRetryContext(requestId: string): Promise<RetryContext | null> {
+  async getRetryContext(_requestId: string): Promise<RetryContext | null> { // eslint-disable-line @typescript-eslint/no-unused-vars
     try {
       // This would query the database for retry information
       // For now, return a placeholder
@@ -386,7 +386,7 @@ export class TransactionSubmitter {
     this.activeSubmissions.clear();
 
     // Clear all retry timers
-    for (const [requestId, timer] of this.retryTimers.entries()) {
+    for (const [_requestId, timer] of this.retryTimers.entries()) { // eslint-disable-line @typescript-eslint/no-unused-vars
       clearTimeout(timer);
     }
     this.retryTimers.clear();
@@ -439,7 +439,7 @@ export class BatchSubmissionManager {
     requestIds: string[], 
     options?: {
       mode?: 'server' | 'wallet';
-      walletApi?: any;
+      walletApi?: Record<string, unknown>;
     }
   ): Promise<Map<string, SubmissionResult>> {
     const results = new Map<string, SubmissionResult>();
@@ -496,7 +496,7 @@ export class BatchSubmissionManager {
 export class SubmissionQueue {
   private queue: Array<{
     requestId: string;
-    options?: any;
+    options?: Record<string, unknown>;
     priority: 'normal' | 'high';
     createdAt: Date;
   }> = [];
@@ -513,7 +513,7 @@ export class SubmissionQueue {
    */
   enqueue(
     requestId: string, 
-    options?: any, 
+    options?: Record<string, unknown>, 
     priority: 'normal' | 'high' = 'normal'
   ): void {
     const item = {

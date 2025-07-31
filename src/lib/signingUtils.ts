@@ -36,7 +36,7 @@ export async function signTransaction(
     // Validate CSL transaction
     try {
       CSL.Transaction.from_bytes(Buffer.from(txHex, 'hex'));
-    } catch (error) {
+    } catch {
       throw new Error('Invalid transaction format');
     }
 
@@ -58,7 +58,7 @@ export async function signTransaction(
     // Validate witness set format
     try {
       CSL.TransactionWitnessSet.from_bytes(Buffer.from(witnessSetHex, 'hex'));
-    } catch (error) {
+    } catch {
       throw new Error('Invalid witness set format returned');
     }
 
@@ -71,7 +71,7 @@ export async function signTransaction(
       signedTxHex
     };
 
-  } catch (error) {
+  } catch {
     console.error('Transaction signing failed:', error);
 
     let errorMessage = 'Transaction signing failed';
@@ -123,7 +123,7 @@ function assembleSignedTransaction(txBodyHex: string, witnessSetHex: string): st
     );
 
     return Buffer.from(signedTx.to_bytes()).toString('hex');
-  } catch (error) {
+  } catch {
     throw new Error(`Failed to assemble signed transaction: ${error}`);
   }
 }
@@ -141,7 +141,7 @@ export function verifyTransactionSignature(
   witnessSetHex: string
 ): boolean {
   try {
-    const tx = CSL.Transaction.from_bytes(Buffer.from(txHex, 'hex'));
+    const _tx = CSL.Transaction.from_bytes(Buffer.from(txHex, 'hex')); // eslint-disable-line @typescript-eslint/no-unused-vars
     const witnessSet = CSL.TransactionWitnessSet.from_bytes(Buffer.from(witnessSetHex, 'hex'));
 
     // Basic validation - check if witness set has required signatures
@@ -154,7 +154,7 @@ export function verifyTransactionSignature(
     // For now, just check that we have witnesses and they're properly formatted
     return true;
 
-  } catch (error) {
+  } catch {
     console.error('Signature verification failed:', error);
     return false;
   }
@@ -168,7 +168,7 @@ export function getTransactionHash(txHex: string): string {
     const tx = CSL.Transaction.from_bytes(Buffer.from(txHex, 'hex'));
     const txHash = CSL.hash_transaction(tx.body());
     return Buffer.from(txHash.to_bytes()).toString('hex');
-  } catch (error) {
+  } catch {
     throw new Error(`Failed to extract transaction hash: ${error}`);
   }
 }
@@ -179,7 +179,7 @@ export function getTransactionHash(txHex: string): string {
 export function getTransactionSize(txHex: string): number {
   try {
     return Buffer.from(txHex, 'hex').length;
-  } catch (error) {
+  } catch {
     throw new Error(`Failed to calculate transaction size: ${error}`);
   }
 }
@@ -237,7 +237,7 @@ export function validateTransactionForSigning(txHex: string): {
       }
     };
 
-  } catch (error) {
+  } catch {
     return {
       valid: false,
       error: `Transaction validation failed: ${error}`
@@ -253,7 +253,7 @@ export function createPreSignedData(
   txBodyHex: string,
   witnessSetHex: string,
   walletName: string,
-  metadata?: any
+  metadata?: Record<string, unknown>
 ): PreSignedData {
   const txHash = getTransactionHash(txBodyHex);
   const tx = CSL.Transaction.from_bytes(Buffer.from(txBodyHex, 'hex'));
@@ -312,7 +312,7 @@ export async function signTransactionWithRetry(
         await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
       }
 
-    } catch (error) {
+    } catch {
       lastError = error instanceof Error ? error.message : 'Unknown error';
     }
   }

@@ -45,7 +45,7 @@ const initialWalletState: WalletState = {
 
 export const createWalletSlice: StateCreator<
   WalletSlice,
-  [['zustand/immer', never], ['zustand/devtools', never]],
+  [],
   [],
   WalletSlice
 > = (set, get) => ({
@@ -58,10 +58,14 @@ export const createWalletSlice: StateCreator<
       return;
     }
 
-    set((state) => {
-      state.wallet.isConnecting = true;
-      state.wallet.error = null;
-    }, false, 'wallet/connectStart');
+    set((state) => ({
+      ...state,
+      wallet: {
+        ...state.wallet,
+        isConnecting: true,
+        error: null,
+      },
+    }));
 
     try {
       // Check if Yoroi is installed
@@ -87,24 +91,27 @@ export const createWalletSlice: StateCreator<
       // Get change address for display
       const changeAddress = await api.getChangeAddress();
 
-      set((state) => {
-        state.wallet.isConnected = true;
-        state.wallet.isConnecting = false;
-        state.wallet.api = api;
-        state.wallet.networkId = networkId;
-        state.wallet.address = changeAddress;
-        state.wallet.error = null;
-        state.wallet.lastConnected = new Date().toISOString();
-      }, false, 'wallet/connectSuccess');
+      set((state) => ({
+        ...state,
+        wallet: {
+          ...state.wallet,
+          isConnected: true,
+          isConnecting: false,
+          api: api,
+          networkId: networkId,
+          address: changeAddress,
+          error: null,
+          lastConnected: new Date().toISOString(),
+        },
+      }));
 
       // Store connection in localStorage for persistence
       localStorage.setItem('yoroi_connected', 'true');
       
-      // Trigger UTxO refresh after successful connection
-      const { refreshUtxos } = get();
-      refreshUtxos?.();
+      // UTxO refresh will be handled by the UTxO slice
+      // No direct refresh needed here
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Wallet connection failed:', error);
       
       let errorMessage = 'Unknown error occurred';
@@ -120,33 +127,35 @@ export const createWalletSlice: StateCreator<
         errorMessage = error.message || errorMessage;
       }
 
-      set((state) => {
-        state.wallet.isConnecting = false;
-        state.wallet.error = errorMessage;
-      }, false, 'wallet/connectError');
+      set((state) => ({
+        ...state,
+        wallet: {
+          ...state.wallet,
+          isConnecting: false,
+          error: errorMessage,
+        },
+      }));
     }
   },
 
   disconnectWallet: () => {
-    set((state) => {
-      state.wallet = { ...initialWalletState };
-      // Clear UTxO state when disconnecting
-      if (state.utxo) {
-        state.utxo.utxos = [];
-        state.utxo.selectedUtxos = [];
-        state.utxo.totalAda = BigInt(0);
-        state.utxo.error = null;
-      }
-    }, false, 'wallet/disconnect');
+    set((state) => ({
+      ...state,
+      wallet: { ...initialWalletState },
+    }));
 
     // Remove from localStorage
     localStorage.removeItem('yoroi_connected');
   },
 
   setWalletError: (error: string | null) => {
-    set((state) => {
-      state.wallet.error = error;
-    }, false, 'wallet/setError');
+    set((state) => ({
+      ...state,
+      wallet: {
+        ...state.wallet,
+        error: error,
+      },
+    }));
   },
 
   checkConnection: async () => {
@@ -164,8 +173,12 @@ export const createWalletSlice: StateCreator<
   },
 
   _setConnectionState: (updates: Partial<WalletState>) => {
-    set((state) => {
-      Object.assign(state.wallet, updates);
-    }, false, 'wallet/setState');
+    set((state) => ({
+      ...state,
+      wallet: {
+        ...state.wallet,
+        ...updates,
+      },
+    }));
   },
 });

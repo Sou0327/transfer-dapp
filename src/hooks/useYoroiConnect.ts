@@ -1,7 +1,7 @@
 // This file has been migrated to use Zustand for better performance
 // The interface remains the same for backward compatibility
 
-import { CIP30Api, WalletError } from '../types/cardano';
+import { CIP30Api } from '../types/cardano';
 
 interface YoroiConnectionState {
   isConnected: boolean;

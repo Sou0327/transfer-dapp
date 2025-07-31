@@ -373,3 +373,5 @@ export const WalletSelectModal: React.FC<WalletSelectModalProps> = ({
     </div>
   );
 };
+
+export default WalletSelectModal;

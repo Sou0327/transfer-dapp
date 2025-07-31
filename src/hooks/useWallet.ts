@@ -2,13 +2,14 @@
  * Wallet management hook
  */
 import { useState, useCallback, useEffect } from 'react';
+import type { UTxO } from '../types/cardano';
 
 interface WalletState {
   isConnected: boolean;
   selectedWallet: string | null;
   address: string | null;
   balance: string | null;
-  utxos: any[] | null;
+  utxos: UTxO[] | null;
   loading: boolean;
   error: string | null;
 }
@@ -17,8 +18,9 @@ interface UseWalletReturn extends WalletState {
   connect: (walletName: string) => Promise<void>;
   disconnect: () => void;
   signTransaction: (tx: string) => Promise<string>;
-  getUtxos: () => Promise<any[]>;
+  getUtxos: () => Promise<UTxO[]>;
   getBalance: () => Promise<string>;
+  availableWallets: Array<{ name: string; displayName: string }>;
 }
 
 export const useWallet = (): UseWalletReturn => {
@@ -110,7 +112,7 @@ export const useWallet = (): UseWalletReturn => {
     }
   }, [state.isConnected, state.selectedWallet]);
 
-  const getUtxos = useCallback(async (): Promise<any[]> => {
+  const getUtxos = useCallback(async (): Promise<UTxO[]> => {
     if (!state.isConnected || !state.selectedWallet) {
       throw new Error('Wallet not connected');
     }
@@ -167,6 +169,22 @@ export const useWallet = (): UseWalletReturn => {
     }
   }, [state.selectedWallet]);
 
+  // Detect available wallets
+  const availableWallets = [
+    { name: 'nami', displayName: 'Nami' },
+    { name: 'eternl', displayName: 'Eternl' },
+    { name: 'flint', displayName: 'Flint' },
+    { name: 'yoroi', displayName: 'Yoroi' },
+    { name: 'gerowallet', displayName: 'GeroWallet' },
+    { name: 'nufi', displayName: 'NuFi' },
+    { name: 'typhon', displayName: 'Typhon' },
+    { name: 'lode', displayName: 'Lode' },
+  ].filter(wallet => {
+    return typeof window !== 'undefined' && 
+           window.cardano && 
+           window.cardano[wallet.name];
+  });
+
   return {
     ...state,
     connect,
@@ -174,5 +192,6 @@ export const useWallet = (): UseWalletReturn => {
     signTransaction,
     getUtxos,
     getBalance,
+    availableWallets,
   };
 };

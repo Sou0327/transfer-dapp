@@ -299,9 +299,9 @@ export const ValidationMessages = {
  */
 export interface ValidationErrorContext {
   field?: string;
-  value?: any;
+  value?: unknown;
   rule?: string;
-  context?: Record<string, any>;
+  context?: Record<string, unknown>;
   timestamp: number;
 }
 
@@ -371,10 +371,10 @@ export class ValidationErrorReporter {
 /**
  * Main validation function for OTC requests
  */
-export const validateOTCRequest = (data: any): { 
+export const validateOTCRequest = (data: Record<string, unknown>): { 
   isValid: boolean; 
   errors: Record<string, string[]>; 
-  sanitizedData: any;
+  sanitizedData: Record<string, unknown>;
 } => {
   try {
     // Sanitize data first

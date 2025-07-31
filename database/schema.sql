@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS admins (
 
 -- ADA requests table (main OTC requests)
 CREATE TABLE IF NOT EXISTS ada_requests (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id VARCHAR(100) PRIMARY KEY,
     currency VARCHAR(10) NOT NULL DEFAULT 'ADA',
     amount_mode VARCHAR(20) NOT NULL CHECK (amount_mode IN ('fixed', 'sweep', 'rate_based')),
     amount_or_rule_json JSONB NOT NULL,
@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS ada_requests (
 -- Pre-signed data table (witness and transaction body storage)
 CREATE TABLE IF NOT EXISTS ada_presigned (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    request_id UUID NOT NULL REFERENCES ada_requests(id) ON DELETE CASCADE,
+    request_id VARCHAR(100) NOT NULL REFERENCES ada_requests(id) ON DELETE CASCADE,
     provider_id VARCHAR(50) NOT NULL, -- wallet provider (nami, eternl, etc.)
     tx_body_cbor TEXT NOT NULL, -- encrypted transaction body
     witness_cbor TEXT NOT NULL, -- encrypted witness
@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS ada_presigned (
 -- Transaction submissions table
 CREATE TABLE IF NOT EXISTS ada_txs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    request_id UUID NOT NULL REFERENCES ada_requests(id) ON DELETE CASCADE,
+    request_id VARCHAR(100) NOT NULL REFERENCES ada_requests(id) ON DELETE CASCADE,
     tx_hash VARCHAR(64) NOT NULL,
     submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     confirmed_at TIMESTAMP NULL,
@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     admin_id UUID REFERENCES admins(id),
     action VARCHAR(100) NOT NULL, -- LOGIN, CREATE_REQUEST, SUBMIT_TX, etc.
     resource_type VARCHAR(50), -- request, transaction, etc.
-    resource_id UUID,
+    resource_id VARCHAR(100),
     details JSONB,
     ip_address INET,
     user_agent TEXT,

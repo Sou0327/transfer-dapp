@@ -41,9 +41,10 @@ const getSecureRandomBytes = (length: number): Uint8Array => {
   } else {
     // Fallback for Node.js environments without Web Crypto API
     try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const crypto = require('crypto');
       return new Uint8Array(crypto.randomBytes(length));
-    } catch (error) {
+    } catch {
       throw new Error('No secure random number generator available');
     }
   }
@@ -232,7 +233,7 @@ export const validateSecureId = (id: string, expectedPrefix?: string): SecureIdV
       } else {
         return { isValid: false, reason: 'Invalid encoding format' };
       }
-    } catch (error) {
+    } catch {
       return { isValid: false, reason: 'Failed to decode ID' };
     }
 
@@ -250,7 +251,7 @@ export const validateSecureId = (id: string, expectedPrefix?: string): SecureIdV
         if (timestamp < tenYearsAgo || timestamp > now + (24 * 60 * 60 * 1000)) {
           return { isValid: false, reason: 'Invalid timestamp' };
         }
-      } catch (error) {
+      } catch {
         // Timestamp extraction failed, but ID might still be valid
       }
     }
@@ -263,7 +264,7 @@ export const validateSecureId = (id: string, expectedPrefix?: string): SecureIdV
       }
     };
 
-  } catch (error) {
+  } catch {
     return { isValid: false, reason: 'Validation error' };
   }
 };
@@ -287,7 +288,7 @@ export const isIdExpired = (id: string, ttlMinutes: number): boolean => {
 /**
  * Generate time-limited secure token
  */
-export const generateTimeLimitedToken = (prefix: string, ttlMinutes: number = 60): string => {
+export const generateTimeLimitedToken = (prefix: string, ttlMinutes: number = 60): string => { // eslint-disable-line @typescript-eslint/no-unused-vars
   const token = generateSecureRequestId({
     length: 32,
     prefix,

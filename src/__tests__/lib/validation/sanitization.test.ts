@@ -3,7 +3,7 @@
  * Tests for input sanitization and validation utilities
  */
 
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach } from '@jest/globals';
 import { renderHook, act } from '@testing-library/react';
 import {
   InputSanitizer,
@@ -385,9 +385,9 @@ describe('InputSanitizer', () => {
     });
 
     it('should handle non-string input', () => {
-      expect(InputSanitizer.sanitize(null as any)).toBe('');
-      expect(InputSanitizer.sanitize(undefined as any)).toBe('');
-      expect(InputSanitizer.sanitize(123 as any)).toBe('');
+      expect(InputSanitizer.sanitize(null as unknown as string)).toBe('');
+      expect(InputSanitizer.sanitize(undefined as unknown as string)).toBe('');
+      expect(InputSanitizer.sanitize(123 as unknown as string)).toBe('');
     });
   });
 });

@@ -5,12 +5,12 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 
 interface WebSocketState {
   isConnected: boolean;
-  lastMessage: any;
+  lastMessage: unknown;
   error: string | null;
 }
 
 interface UseWebSocketReturn extends WebSocketState {
-  sendMessage: (message: any) => void;
+  sendMessage: (message: unknown) => void;
   connect: () => void;
   disconnect: () => void;
 }
@@ -40,14 +40,14 @@ export const useWebSocket = (url?: string): UseWebSocketReturn => {
         setState(prev => ({ ...prev, lastMessage: message }));
       };
 
-      ws.onerror = (error) => {
+      ws.onerror = () => {
         setState(prev => ({ ...prev, error: 'WebSocket error occurred' }));
       };
 
       ws.onclose = () => {
         setState(prev => ({ ...prev, isConnected: false }));
       };
-    } catch (error) {
+    } catch {
       setState(prev => ({ ...prev, error: 'Failed to connect to WebSocket' }));
     }
   }, [url]);
@@ -59,7 +59,7 @@ export const useWebSocket = (url?: string): UseWebSocketReturn => {
     }
   }, []);
 
-  const sendMessage = useCallback((message: any) => {
+  const sendMessage = useCallback((message: Record<string, unknown>) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(message));
     }

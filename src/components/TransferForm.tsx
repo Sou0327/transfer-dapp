@@ -12,7 +12,7 @@ window.Buffer = Buffer;
 window.Buffer = Buffer;
 
 // Memoized CSL loader to avoid repeated imports
-let cachedCSL: any = null;
+let cachedCSL: unknown = null;
 const loadCSL = async () => {
   if (cachedCSL) return cachedCSL;
   
@@ -204,7 +204,7 @@ export const TransferForm: React.FC<TransferFormProps> = React.memo(({
       setFormData({ to: '', amount: '', sweepMode: false });
       clearSelection();
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Transfer failed:', error);
       stableOnTransferError(error.message || 'トランザクション送信に失敗しました');
     } finally {

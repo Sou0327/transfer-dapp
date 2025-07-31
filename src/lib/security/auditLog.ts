@@ -69,7 +69,7 @@ export interface AuditLogEntry {
   resource?: string;
   resourceId?: string;
   action: string;
-  details: Record<string, any>;
+  details: Record<string, unknown>;
   outcome: 'success' | 'failure' | 'pending';
   metadata?: {
     requestId?: string;
@@ -254,7 +254,7 @@ const calculateHash = (entry: Omit<AuditLogEntry, 'hash'>): string => {
 export const logAuditEvent = (
   eventType: AuditEventType,
   action: string,
-  details: Record<string, any> = {},
+  details: Record<string, unknown> = {},
   options: {
     severity?: AuditSeverity;
     userId?: string;
@@ -408,7 +408,7 @@ export const logSecurityEvent = {
       { severity: AuditSeverity.MEDIUM, ipAddress, outcome: 'failure' }
     ),
 
-  suspiciousActivity: (description: string, ipAddress?: string, details: Record<string, any> = {}) =>
+  suspiciousActivity: (description: string, ipAddress?: string, details: Record<string, unknown> = {}) =>
     logAuditEvent(
       AuditEventType.SECURITY_BREACH_ATTEMPT,
       'suspicious_activity_detected',

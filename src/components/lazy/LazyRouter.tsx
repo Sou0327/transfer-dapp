@@ -11,7 +11,7 @@ export type RouteType = 'dashboard' | 'transfer' | 'admin' | 'utxo' | 'signing';
 
 interface LazyRouterProps {
   currentRoute: RouteType;
-  routeProps?: Record<string, any>;
+  routeProps?: Record<string, unknown>;
   className?: string;
 }
 
@@ -78,7 +78,7 @@ const LazySigning = LazyUtils.createLazyComponent(
 
 // Route configuration
 interface RouteConfig {
-  component: React.ComponentType<any>;
+  component: React.ComponentType<Record<string, unknown>>;
   preload?: () => void;
   requiresAuth?: boolean;
   requiresWallet?: boolean;
@@ -183,6 +183,7 @@ export const LazyRouter: React.FC<LazyRouterProps> = React.memo(({
 LazyRouter.displayName = 'LazyRouter';
 
 // Route preloader hook
+// eslint-disable-next-line react-refresh/only-export-components
 export const useRoutePreloader = () => {
   const preloadRoute = useCallback((route: RouteType) => {
     const config = routeConfig[route];

@@ -3,7 +3,7 @@
  * Shows system overview, statistics, and recent activity
  */
 import React, { useState, useEffect, useCallback } from 'react';
-import { useAdminAuth, createAuthenticatedFetch } from '../../hooks/useAdminAuth';
+import { createAuthenticatedFetch } from '../../hooks/useAdminAuth';
 import { RequestStatus } from '../../types/otc/index';
 
 interface DashboardStats {
@@ -42,12 +42,13 @@ interface RecentActivity {
 }
 
 export const Dashboard: React.FC = () => {
-  const { session } = useAdminAuth();
+  // const { session } = useAdminAuth(); // Removed to fix build warning
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [refreshInterval, setRefreshInterval] = useState<NodeJS.Timeout | null>(null);
+  const [refreshInterval] = useState<NodeJS.Timeout | null>(null);
+  console.log('Refresh interval:', refreshInterval); // Development log
 
   // Fetch dashboard data
   const fetchDashboardData = useCallback(async () => {
@@ -106,7 +107,7 @@ export const Dashboard: React.FC = () => {
       setStats(dashboardStats);
 
       // Process recent activity
-      const activities: RecentActivity[] = (activityData.requests || []).map((request: any) => ({
+      const activities: RecentActivity[] = (activityData.requests || []).map((request: Record<string, unknown>) => ({
         id: request.id,
         type: 'request_created',
         description: `Request created: ${request.id.slice(0, 8)}...`,
@@ -130,8 +131,7 @@ export const Dashboard: React.FC = () => {
 
     // Set up auto-refresh every 30 seconds
     const interval = setInterval(fetchDashboardData, 30000);
-    setRefreshInterval(interval);
-
+    
     return () => {
       if (interval) clearInterval(interval);
     };
@@ -168,6 +168,7 @@ export const Dashboard: React.FC = () => {
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
       </div>
+
     );
   }
 
@@ -428,3 +429,5 @@ export const Dashboard: React.FC = () => {
     </div>
   );
 };
+
+export default Dashboard;

@@ -3,13 +3,13 @@
  * Provides the same interface as the original hook but uses Zustand for state management
  */
 
-import { useEffect } from 'react';
+// React imports removed - not needed for this Zustand implementation
 import { useWalletConnection, useWalletActions } from '../stores';
 
 interface UseYoroiConnectReturn {
   isConnected: boolean;
   isConnecting: boolean;
-  api: any | null;
+  api: Record<string, unknown> | null;
   networkId: number | null;
   address: string | null;
   error: string | null;
@@ -30,7 +30,7 @@ export const useYoroiConnect = (): UseYoroiConnectReturn => {
   const enhancedConnect = async () => {
     try {
       await walletConnection.connect();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Enhanced connect failed:', error);
       setError(error.message || 'Connection failed');
     }

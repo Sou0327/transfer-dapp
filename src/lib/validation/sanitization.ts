@@ -58,7 +58,9 @@ const HTML_ENCODE_MAP: Record<string, string> = {
 /**
  * Invisible/control character patterns
  */
+// eslint-disable-next-line no-control-regex
 const INVISIBLE_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\uFEFF]/g;
+// eslint-disable-next-line no-control-regex
 const CONTROL_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
 const ZERO_WIDTH_CHARS = /[\u200B-\u200D\uFEFF]/g;
 
@@ -84,7 +86,7 @@ export class InputSanitizer {
    * Encode HTML entities to prevent XSS
    */
   static encodeHtml(input: string): string {
-    return input.replace(/[&<>"'`=\/]/g, (char) => HTML_ENCODE_MAP[char] || char);
+    return input.replace(/[&<>"'`=/]/g, (char) => HTML_ENCODE_MAP[char] || char);
   }
 
   /**
@@ -97,6 +99,7 @@ export class InputSanitizer {
 
     // Allow only specified tags
     const allowedPattern = allowedTags.map(tag => tag.toLowerCase()).join('|');
+    // eslint-disable-next-line no-useless-escape
     const tagRegex = new RegExp(`<(?!\/?(?:${allowedPattern})(?:\s|>))[^>]*>`, 'gi');
     return input.replace(tagRegex, '');
   }
@@ -421,10 +424,10 @@ export class FormSanitizer {
    * Sanitize form data object
    */
   static sanitizeFormData(
-    formData: Record<string, any>,
+    formData: Record<string, unknown>,
     fieldConfigs: Record<string, SanitizationOptions> = {}
-  ): Record<string, any> {
-    const sanitized: Record<string, any> = {};
+  ): Record<string, unknown> {
+    const sanitized: Record<string, unknown> = {};
 
     for (const [key, value] of Object.entries(formData)) {
       if (typeof value === 'string') {
@@ -447,7 +450,7 @@ export class FormSanitizer {
   /**
    * Validate and sanitize OTC request data
    */
-  static sanitizeOTCRequest(requestData: any): any {
+  static sanitizeOTCRequest(requestData: Record<string, unknown>): Record<string, unknown> {
     const fieldConfigs = {
       destination: SanitizationPresets.cardanoAddress,
       amount: SanitizationPresets.adaAmount,
@@ -473,7 +476,7 @@ export class FormSanitizer {
   /**
    * Sanitize admin form data
    */
-  static sanitizeAdminData(adminData: any): any {
+  static sanitizeAdminData(adminData: Record<string, unknown>): Record<string, unknown> {
     const fieldConfigs = {
       username: {
         trim: true,
@@ -497,7 +500,7 @@ export class FormSanitizer {
   /**
    * Sanitize search parameters
    */
-  static sanitizeSearchParams(searchParams: any): any {
+  static sanitizeSearchParams(searchParams: Record<string, unknown>): Record<string, unknown> {
     const fieldConfigs = {
       query: SanitizationPresets.searchQuery,
       status: {
@@ -579,7 +582,7 @@ export class ValidationSanitizer {
     const errors: string[] = [];
     
     // Sanitize first
-    let sanitizedValue = InputSanitizer.sanitize(input, options);
+    const sanitizedValue = InputSanitizer.sanitize(input, options);
     
     // Required field validation
     if (options.required && !sanitizedValue) {

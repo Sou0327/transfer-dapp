@@ -4,7 +4,8 @@
  */
 
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { logSecurityEvent, logAuditEvent, AuditEventType, AuditSeverity } from '../../lib/security';
+import { logSecurityEvent, logAuditEvent } from '../../lib/security';
+import { AuditEventType, AuditSeverity } from '../../lib/security/auditLog';
 
 /**
  * Error boundary state interface
@@ -243,7 +244,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   };
 
   render() {
-    const { hasError, error, errorInfo, errorId, retryCount } = this.state;
+    const { hasError, error, errorId, retryCount } = this.state;
     const { children, fallback, maxRetries = 3, showDetails = false, context } = this.props;
 
     if (hasError && error) {

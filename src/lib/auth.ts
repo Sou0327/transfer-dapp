@@ -102,7 +102,7 @@ export class AuthenticationService {
         token: jwtToken,
         expiresAt,
       };
-    } catch (error) {
+    } catch {
       // Log failed authentication attempt
       if (credentials.email) {
         await AuditDAO.logAction(
@@ -128,7 +128,7 @@ export class AuthenticationService {
   static async validateSession(token: string): Promise<AdminSession> {
     try {
       // Decode JWT token
-      const decoded = jwt.verify(token, JWT_SECRET) as any;
+      const decoded = jwt.verify(token, JWT_SECRET) as Record<string, unknown>;
       
       if (!decoded.sessionToken || !decoded.adminId) {
         throw new UnauthorizedError('Invalid token format');
@@ -141,7 +141,7 @@ export class AuthenticationService {
       }
 
       return session;
-    } catch (error) {
+    } catch {
       if (error instanceof jwt.JsonWebTokenError) {
         throw new UnauthorizedError('Invalid token');
       }
@@ -157,7 +157,7 @@ export class AuthenticationService {
    */
   static async logout(token: string): Promise<boolean> {
     try {
-      const decoded = jwt.verify(token, JWT_SECRET) as any;
+      const decoded = jwt.verify(token, JWT_SECRET) as Record<string, unknown>;
       
       if (decoded.sessionToken) {
         // Delete session from database
@@ -178,7 +178,7 @@ export class AuthenticationService {
       }
       
       return false;
-    } catch (error) {
+    } catch {
       // Even if token is invalid, we consider logout successful
       return true;
     }
@@ -318,7 +318,7 @@ export class AuthMiddleware {
   /**
    * Express/Fastify middleware to validate JWT token
    */
-  static async validateToken(req: any, res: any, next: any): Promise<void> {
+  static async validateToken(req: Record<string, unknown>, res: Record<string, unknown>, next: (error?: Error) => void): Promise<void> {
     try {
       const authHeader = req.headers.authorization;
       
@@ -332,7 +332,7 @@ export class AuthMiddleware {
       // Attach session to request
       req.adminSession = session;
       next();
-    } catch (error) {
+    } catch {
       const status = error instanceof UnauthorizedError ? 401 : 500;
       res.status(status).json({
         error: error instanceof Error ? error.message : 'Authentication failed'
@@ -343,7 +343,7 @@ export class AuthMiddleware {
   /**
    * Socket.IO middleware to validate JWT token
    */
-  static async validateSocketToken(socket: any, next: any): Promise<void> {
+  static async validateSocketToken(socket: Record<string, unknown>, next: (error?: Error) => void): Promise<void> {
     try {
       const token = socket.handshake.auth.token;
       
@@ -354,7 +354,7 @@ export class AuthMiddleware {
       const session = await AuthenticationService.validateSession(token);
       socket.adminSession = session;
       next();
-    } catch (error) {
+    } catch {
       next(new Error('Authentication failed'));
     }
   }
@@ -416,7 +416,7 @@ if (typeof window === 'undefined') { // Only run on server
   setInterval(async () => {
     try {
       await AuthenticationService.cleanExpiredSessions();
-    } catch (error) {
+    } catch {
       console.error('Failed to clean expired sessions:', error);
     }
   }, 60 * 60 * 1000); // 1 hour

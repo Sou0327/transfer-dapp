@@ -7,7 +7,7 @@ import { useRequestStatus } from '../lib/websocket';
 
 interface CountdownBadgeProps {
   requestId?: string;
-  ttlSlot: number;
+  ttlSlot?: number;
   currentSlot?: number;
   className?: string;
   size?: 'sm' | 'md' | 'lg';
@@ -25,7 +25,7 @@ interface TimeRemaining {
 }
 
 // Cardano slot duration (1 second per slot)
-const SLOT_DURATION_MS = 1000;
+// const SLOT_DURATION_MS = 1000; // Currently unused, but may be needed for future slot calculations
 const WARNING_THRESHOLD_MINUTES = 10;
 const CRITICAL_THRESHOLD_MINUTES = 2;
 
@@ -71,6 +71,12 @@ export const CountdownBadge: React.FC<CountdownBadgeProps> = ({
 
   // Update time remaining from WebSocket or props
   useEffect(() => {
+    // Check if ttlSlot is defined
+    if (ttlSlot === undefined || ttlSlot === null) {
+      console.warn('CountdownBadge: ttlSlot is undefined');
+      return;
+    }
+
     let effectiveCurrentSlot = currentSlot;
     
     // Use WebSocket data if available
@@ -103,7 +109,7 @@ export const CountdownBadge: React.FC<CountdownBadgeProps> = ({
 
   // Local countdown timer (for smooth updates between WebSocket messages)
   useEffect(() => {
-    if (status === 'expired' || timeRemaining.totalSeconds <= 0) {
+    if (status === 'expired' || timeRemaining.totalSeconds <= 0 || ttlSlot === undefined || ttlSlot === null) {
       return;
     }
 
@@ -128,6 +134,7 @@ export const CountdownBadge: React.FC<CountdownBadgeProps> = ({
 
   // Format time display
   const formatTime = (time: TimeRemaining): string => {
+    if (ttlSlot === undefined || ttlSlot === null) return 'データ取得中...';
     if (time.totalSeconds <= 0) return '期限切れ';
     
     if (time.hours > 0) {
@@ -238,11 +245,11 @@ export const CountdownBadge: React.FC<CountdownBadgeProps> = ({
           
           <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
             <div className="text-center">
-              <div>TTLスロット: {ttlSlot.toLocaleString()}</div>
+              <div>TTLスロット: {ttlSlot ? ttlSlot.toLocaleString() : 'N/A'}</div>
               {currentSlot && (
                 <div>現在スロット: {currentSlot.toLocaleString()}</div>
               )}
-              <div>残りスロット: {Math.max(0, ttlSlot - (currentSlot || 0)).toLocaleString()}</div>
+              <div>残りスロット: {ttlSlot ? Math.max(0, ttlSlot - (currentSlot || 0)).toLocaleString() : 'N/A'}</div>
               {requestId && (
                 <div className="mt-1 pt-1 border-t border-gray-700">
                   リアルタイム更新: {isConnected ? '有効' : '無効'}

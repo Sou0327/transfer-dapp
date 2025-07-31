@@ -4,13 +4,14 @@
  */
 
 import React from 'react';
-import { logAuditEvent, AuditEventType, AuditSeverity } from '../security';
+import { logAuditEvent } from '../security';
+import { AuditEventType, AuditSeverity } from '../security/auditLog';
 
 /**
  * Dynamic import with error handling and retry logic
  */
 export class DynamicImporter {
-  private static loadCache = new Map<string, Promise<any>>();
+  private static loadCache = new Map<string, Promise<unknown>>();
   private static retryCount = new Map<string, number>();
   private static readonly MAX_RETRIES = 3;
   private static readonly RETRY_DELAY = 1000;
@@ -18,7 +19,7 @@ export class DynamicImporter {
   /**
    * Load module with caching and retry logic
    */
-  static async load<T = any>(
+  static async load<T = unknown>(
     importFn: () => Promise<T>,
     moduleId: string,
     retryable: boolean = true
@@ -209,12 +210,12 @@ export class BundleAnalyzer {
     
     const largestChunk = chunks.reduce((largest, [name, chunk]) => 
       chunk.size > (largest?.chunk.size || 0) ? { name, chunk } : largest, 
-      null as { name: string; chunk: any } | null
+      null as { name: string; chunk: unknown } | null
     );
     
     const slowestChunk = chunks.reduce((slowest, [name, chunk]) => 
       chunk.loadTime > (slowest?.chunk.loadTime || 0) ? { name, chunk } : slowest,
-      null as { name: string; chunk: any } | null
+      null as { name: string; chunk: unknown } | null
     );
 
     return {
@@ -234,7 +235,7 @@ export const LazyLoadingUtils = {
   /**
    * Create lazy component with loading state and error boundary
    */
-  createLazyComponent: <P extends Record<string, any>>(
+  createLazyComponent: <P extends Record<string, unknown>>(
     importFn: () => Promise<{ default: React.ComponentType<P> }>,
     options: {
       moduleId?: string;
@@ -246,8 +247,8 @@ export const LazyLoadingUtils = {
   ): React.ComponentType<P> => {
     const {
       moduleId = `lazy-${Math.random().toString(36).substr(2, 9)}`,
-      fallback: Fallback,
-      errorFallback: ErrorFallback,
+      fallback: Fallback, // eslint-disable-line @typescript-eslint/no-unused-vars
+      errorFallback: ErrorFallback, // eslint-disable-line @typescript-eslint/no-unused-vars
       preload = false,
       delay = 0
     } = options;
@@ -257,6 +258,7 @@ export const LazyLoadingUtils = {
       DynamicImporter.preload(importFn, moduleId);
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const LazyComponent = React.lazy(async () => {
       if (delay > 0) {
         await new Promise(resolve => setTimeout(resolve, delay));
@@ -265,9 +267,12 @@ export const LazyLoadingUtils = {
       return DynamicImporter.load(importFn, moduleId);
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const WrappedComponent: React.ComponentType<P> = (props) => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const [error, setError] = React.useState<Error | null>(null);
 
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const retry = React.useCallback(() => {
         setError(null);
         DynamicImporter.clearCache(moduleId);

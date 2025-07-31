@@ -5,20 +5,21 @@
 
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { z } from 'zod';
-import { ValidationSchemas, formatValidationErrors, safeValidate } from '../../lib/validation/schemas';
+import { ValidationSchemas, safeValidate } from '../../lib/validation/schemas';
 import { ValidationSanitizer, SanitizationPresets, SanitizationOptions } from '../../lib/validation/sanitization';
 import { WalletErrorClassifier, WalletError } from '../../lib/validation/walletErrors';
 
 /**
  * Field validation configuration
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export interface FieldConfig {
-  schema?: z.ZodSchema<any>;
+  schema?: z.ZodSchema<unknown>;
   sanitization?: SanitizationOptions;
   required?: boolean;
   label?: string;
   helpText?: string;
-  customValidators?: Array<(value: any) => string | null>;
+  customValidators?: Array<(value: unknown) => string | null>;
   validateOnChange?: boolean;
   validateOnBlur?: boolean;
   debounceMs?: number;
@@ -27,8 +28,9 @@ export interface FieldConfig {
 /**
  * Form validation state
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export interface FormValidationState {
-  values: Record<string, any>;
+  values: Record<string, unknown>;
   errors: Record<string, string[]>;
   touched: Record<string, boolean>;
   isValid: boolean;
@@ -39,7 +41,8 @@ export interface FormValidationState {
 /**
  * Form validation hook
  */
-export const useFormValidation = <T extends Record<string, any>>(
+// eslint-disable-next-line react-refresh/only-export-components
+export const useFormValidation = <T extends Record<string, unknown>>(
   initialValues: T,
   fieldConfigs: Record<keyof T, FieldConfig> = {}
 ) => {
@@ -60,7 +63,7 @@ export const useFormValidation = <T extends Record<string, any>>(
    */
   const validateField = useCallback(async (
     fieldName: keyof T,
-    value: any,
+    value: unknown,
     shouldUpdateState = true
   ): Promise<string[]> => {
     const config = fieldConfigs[fieldName];
@@ -181,7 +184,7 @@ export const useFormValidation = <T extends Record<string, any>>(
    */
   const setFieldValue = useCallback((
     fieldName: keyof T,
-    value: any,
+    value: unknown,
     shouldValidate = true
   ) => {
     const config = fieldConfigs[fieldName];
@@ -487,7 +490,8 @@ export const ValidationLoading: React.FC<ValidationLoadingProps> = ({
 /**
  * OTC Request form validation
  */
-export const useOTCRequestValidation = (initialValues: any = {}) => {
+// eslint-disable-next-line react-refresh/only-export-components
+export const useOTCRequestValidation = (initialValues: Record<string, unknown> = {}) => {
   const fieldConfigs: Record<string, FieldConfig> = {
     mode: {
       schema: ValidationSchemas.OTCRequest.transferMode,
@@ -532,7 +536,8 @@ export const useOTCRequestValidation = (initialValues: any = {}) => {
 /**
  * Admin login form validation
  */
-export const useAdminLoginValidation = (initialValues: any = {}) => {
+// eslint-disable-next-line react-refresh/only-export-components
+export const useAdminLoginValidation = (initialValues: Record<string, unknown> = {}) => {
   const fieldConfigs: Record<string, FieldConfig> = {
     username: {
       schema: z.string().min(3).max(50),
@@ -560,7 +565,8 @@ export const useAdminLoginValidation = (initialValues: any = {}) => {
 /**
  * System settings form validation
  */
-export const useSystemSettingsValidation = (initialValues: any = {}) => {
+// eslint-disable-next-line react-refresh/only-export-components
+export const useSystemSettingsValidation = (initialValues: Record<string, unknown> = {}) => {
   const fieldConfigs: Record<string, FieldConfig> = {
     max_requests_per_hour: {
       schema: z.number().int().min(1).max(10000),
@@ -596,11 +602,12 @@ export const useSystemSettingsValidation = (initialValues: any = {}) => {
 /**
  * Wallet error handling for forms
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export const useWalletErrorHandling = () => {
   const [walletError, setWalletError] = useState<WalletError | null>(null);
   const [isRecovering, setIsRecovering] = useState(false);
 
-  const handleWalletError = useCallback((error: any, walletName?: string) => {
+  const handleWalletError = useCallback((error: unknown, walletName?: string) => {
     const classifiedError = WalletErrorClassifier.classifyError(error, walletName);
     setWalletError(classifiedError);
   }, []);
@@ -628,7 +635,7 @@ export const useWalletErrorHandling = () => {
  */
 interface ValidatedFormProps {
   children: React.ReactNode;
-  onSubmit: (values: any) => Promise<void> | void;
+  onSubmit: (values: Record<string, unknown>) => Promise<void> | void;
   validation: ReturnType<typeof useFormValidation>;
   className?: string;
 }

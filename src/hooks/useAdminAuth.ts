@@ -1,7 +1,7 @@
 /**
  * Admin Authentication Hook for OTC System
  */
-import { useState, useEffect, useCallback, useContext, createContext } from 'react';
+import { useState, useCallback, createContext } from 'react';
 import { LoginCredentials, AdminSession, UnauthorizedError } from '../types/otc/index';
 
 interface AuthState {
@@ -19,7 +19,8 @@ interface AuthContextType extends AuthState {
   refreshSession: () => Promise<void>;
 }
 
-// Create Auth Context
+// Create Auth Context - Future implementation for AuthProvider
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Token storage keys
@@ -197,7 +198,7 @@ export const authUtils = {
   /**
    * Create authorization header
    */
-  getAuthHeader: (): { Authorization: string } | {} => {
+  getAuthHeader: (): { Authorization: string } | Record<string, never> => {
     const token = authUtils.getToken();
     return token ? { Authorization: `Bearer ${token}` } : {};
   },
