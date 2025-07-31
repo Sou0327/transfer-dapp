@@ -306,7 +306,7 @@ export const loadCSL = async (): Promise<CSLModule> => {
       );
 
       // Dynamic import of CSL
-      const CSL = await import('@emurgo/cardano-serialization-lib-nodejs');
+      const CSL = await import('@emurgo/cardano-serialization-lib-browser');
       
       cslState.loadEndTime = Date.now();
       cslState.loaded = true;
