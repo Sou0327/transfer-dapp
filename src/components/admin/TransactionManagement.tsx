@@ -32,413 +32,144 @@ interface SubmissionStats {
 }
 
 export const TransactionManagement: React.FC = () => {
-  // const { session } = useAdminAuth(); // Removed to fix build warning
-  const [transactions, setTransactions] = useState<TransactionData[]>([]);
-  const [stats, setStats] = useState<SubmissionStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [selectedStatus, setSelectedStatus] = useState<string>('all');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [retryInProgress, setRetryInProgress] = useState<Set<string>>(new Set());
+  const [serverStatus, setServerStatus] = useState<'online' | 'offline'>('offline');
 
-  // Fetch transactions and statistics
-  const fetchData = useCallback(async () => {
+  // Check server status
+  const checkServerStatus = useCallback(async () => {
     try {
-      const authFetch = createAuthenticatedFetch();
-      
-      const [transactionsResponse, statsResponse] = await Promise.all([
-        authFetch('/api/ada/confirmation/transactions'),
-        authFetch('/api/ada/submit/stats')
-      ]);
-
-      const transactionsData = await transactionsResponse.json();
-      const statsData = await statsResponse.json();
-
-      setTransactions(transactionsData.transactions || []);
-      setStats(statsData.stats || null);
-
-    } catch (error) {
-      console.error('Failed to fetch transaction data:', error);
-      setError('トランザクションデータの取得に失敗しました');
+      const healthResponse = await fetch('/health');
+      setServerStatus(healthResponse.ok ? 'online' : 'offline');
+    } catch {
+      setServerStatus('offline');
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Force check transaction
-  const forceCheckTransaction = useCallback(async (txHash: string) => {
-    try {
-      const authFetch = createAuthenticatedFetch();
-      await authFetch(`/api/ada/confirmation/transactions/${txHash}/check`, {
-        method: 'POST'
-      });
-      
-      // Refresh data
-      await fetchData();
-    } catch (error) {
-      console.error('Failed to force check transaction:', error);
-    }
-  }, [fetchData]);
-
-  // Retry transaction submission
-  const retryTransaction = useCallback(async (requestId: string) => {
-    try {
-      setRetryInProgress(prev => new Set(prev).add(requestId));
-      
-      const authFetch = createAuthenticatedFetch();
-      await authFetch(`/api/ada/submit/${requestId}/retry`, {
-        method: 'POST'
-      });
-      
-      // Refresh data
-      await fetchData();
-    } catch (error) {
-      console.error('Failed to retry transaction:', error);
-    } finally {
-      setRetryInProgress(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(requestId);
-        return newSet;
-      });
-    }
-  }, [fetchData]);
-
-  // Initialize data
   useEffect(() => {
-    fetchData();
-    
-    // Set up auto-refresh every 30 seconds
-    const interval = setInterval(fetchData, 30000);
+    checkServerStatus();
+    const interval = setInterval(checkServerStatus, 30000);
     return () => clearInterval(interval);
-  }, [fetchData]);
-
-  // Filter transactions
-  const filteredTransactions = transactions.filter(tx => {
-    const matchesStatus = selectedStatus === 'all' || tx.status === selectedStatus;
-    const matchesSearch = 
-      tx.tx_hash.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      tx.request_id.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    return matchesStatus && matchesSearch;
-  });
-
-  // Get status color
-  const getStatusColor = (status: string): string => {
-    switch (status) {
-      case 'SUBMITTED':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'CONFIRMED':
-        return 'bg-green-100 text-green-800';
-      case 'FAILED':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  // Get submission mode color
-  const getModeColor = (mode: string): string => {
-    switch (mode) {
-      case 'server':
-        return 'bg-blue-100 text-blue-800';
-      case 'wallet':
-        return 'bg-purple-100 text-purple-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
+  }, [checkServerStatus]);
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="text-center py-12">
-        <p className="text-red-600 mb-4">{error}</p>
-        <button
-          onClick={() => {
-            setError(null);
-            setLoading(true);
-            fetchData();
-          }}
-          className="bg-orange-500 text-white px-4 py-2 rounded hover:bg-orange-600"
-        >
-          再読み込み
-        </button>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-6 h-6 border-2 border-gray-300 border-t-gray-900 rounded-full animate-spin"></div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">トランザクション管理</h1>
-          <p className="text-gray-600">送信されたトランザクションの監視と管理</p>
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-6xl mx-auto px-8 py-12">
+        
+        {/* Header */}
+        <div className="mb-16">
+          <h1 className="text-4xl font-light text-gray-900 tracking-tight">
+            トランザクション
+          </h1>
+          <div className="flex items-center mt-3">
+            <div className={`w-2 h-2 rounded-full mr-3 ${
+              serverStatus === 'online' ? 'bg-green-500' : 'bg-red-500'
+            }`}></div>
+            <span className="text-gray-600 text-sm">
+              {serverStatus === 'online' ? 'サーバー接続中' : 'サーバー停止中'}
+            </span>
+          </div>
         </div>
-        <button
-          onClick={fetchData}
-          disabled={loading}
-          className="flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 disabled:opacity-50"
-        >
-          <svg className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          更新
-        </button>
-      </div>
 
-      {/* Statistics Cards */}
-      {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <svg className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                  </svg>
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">
-                      総送信済み
-                    </dt>
-                    <dd className="text-lg font-medium text-gray-900">
-                      {stats.total_submissions}
-                    </dd>
-                  </dl>
-                </div>
-              </div>
+        {/* Transaction Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
+          
+          {/* Total Transactions */}
+          <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
+            <div className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-2">
+              送信済み
+            </div>
+            <div className="text-5xl font-extralight text-gray-900 mb-2">
+              {serverStatus === 'online' ? '—' : '0'}
+            </div>
+            <div className="text-sm text-gray-500">
+              トランザクション
             </div>
           </div>
 
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <svg className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">
-                      成功率
-                    </dt>
-                    <dd className="text-lg font-medium text-gray-900">
-                      {stats.success_rate.toFixed(1)}%
-                    </dd>
-                  </dl>
-                </div>
-              </div>
+          {/* Confirmed */}
+          <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
+            <div className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-2">
+              確認済み
+            </div>
+            <div className="text-5xl font-extralight text-gray-900 mb-2">
+              {serverStatus === 'online' ? '—' : '0'}
+            </div>
+            <div className="text-sm text-gray-500">
+              件
             </div>
           </div>
 
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <svg className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">
-                      平均確認時間
-                    </dt>
-                    <dd className="text-lg font-medium text-gray-900">
-                      {Math.round(stats.average_confirmation_time / 1000 / 60)}分
-                    </dd>
-                  </dl>
-                </div>
-              </div>
+          {/* Success Rate */}
+          <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
+            <div className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-2">
+              成功率
+            </div>
+            <div className="text-5xl font-extralight text-gray-900 mb-2">
+              {serverStatus === 'online' ? '—' : '0'}
+            </div>
+            <div className="text-sm text-gray-500">
+              %
             </div>
           </div>
 
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <svg className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
+        </div>
+
+        {/* Transaction List */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
+          <div className="p-8 border-b border-gray-100">
+            <h2 className="text-xl font-medium text-gray-900">
+              トランザクション履歴
+            </h2>
+          </div>
+          <div className="p-8">
+            {serverStatus === 'offline' ? (
+              <div className="text-center py-12">
+                <div className="text-gray-400 text-sm">
+                  サーバーが停止中のためトランザクション履歴を表示できません
                 </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">
-                      保留中
-                    </dt>
-                    <dd className="text-lg font-medium text-gray-900">
-                      {stats.pending_submissions}
-                    </dd>
-                  </dl>
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <div className="text-gray-400 text-sm">
+                  トランザクション履歴はありません
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* API Status */}
+        {serverStatus === 'offline' && (
+          <div className="mt-8 bg-red-50 rounded-2xl p-6 border border-red-100">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <div className="w-5 h-5 rounded-full bg-red-500 mt-0.5"></div>
+              </div>
+              <div className="ml-4">
+                <h3 className="text-sm font-medium text-red-800">
+                  接続エラー
+                </h3>
+                <div className="mt-1 text-sm text-red-700">
+                  トランザクション管理APIサーバーに接続できません。
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Filters */}
-      <div className="bg-white shadow rounded-lg p-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="status-filter" className="block text-sm font-medium text-gray-700 mb-2">
-              ステータスフィルター
-            </label>
-            <select
-              id="status-filter"
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-              className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
-            >
-              <option value="all">すべて</option>
-              <option value="SUBMITTED">送信済み</option>
-              <option value="CONFIRMED">確認済み</option>
-              <option value="FAILED">失敗</option>
-            </select>
-          </div>
-
-          <div>
-            <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-2">
-              検索（TX Hash / Request ID）
-            </label>
-            <input
-              type="text"
-              id="search"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="検索..."
-              className="block w-full border-gray-300 rounded-md shadow-sm focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Transactions Table */}
-      <div className="bg-white shadow overflow-hidden sm:rounded-md">
-        <div className="px-4 py-5 sm:px-6">
-          <h3 className="text-lg leading-6 font-medium text-gray-900">
-            トランザクション履歴 ({filteredTransactions.length})
-          </h3>
-        </div>
-
-        {filteredTransactions.length === 0 ? (
-          <div className="px-4 py-12 text-center">
-            <p className="text-gray-500">トランザクションが見つかりません</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    TX Hash
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Request ID
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    ステータス
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    送信モード
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    確認数
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    送信日時
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    操作
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredTransactions.map((tx) => (
-                  <tr key={tx.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
-                      <div className="flex items-center">
-                        <span className="truncate max-w-32" title={tx.tx_hash}>
-                          {tx.tx_hash.slice(0, 16)}...
-                        </span>
-                        <button
-                          onClick={() => navigator.clipboard.writeText(tx.tx_hash)}
-                          className="ml-2 text-gray-400 hover:text-gray-600"
-                          title="コピー"
-                        >
-                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                          </svg>
-                        </button>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      <span className="truncate max-w-24" title={tx.request_id}>
-                        {tx.request_id.slice(0, 8)}...
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(tx.status)}`}>
-                        {tx.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getModeColor(tx.submission_mode)}`}>
-                        {tx.submission_mode}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {tx.confirmations}/3
-                      {tx.block_height && (
-                        <div className="text-xs text-gray-500">
-                          #{tx.block_height}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {new Date(tx.submitted_at).toLocaleString('ja-JP')}
-                      {tx.confirmed_at && (
-                        <div className="text-xs text-gray-500">
-                          確認: {new Date(tx.confirmed_at).toLocaleString('ja-JP')}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                      {tx.status === 'SUBMITTED' && (
-                        <button
-                          onClick={() => forceCheckTransaction(tx.tx_hash)}
-                          className="text-blue-600 hover:text-blue-900"
-                        >
-                          確認
-                        </button>
-                      )}
-                      {tx.status === 'FAILED' && (
-                        <button
-                          onClick={() => retryTransaction(tx.request_id)}
-                          disabled={retryInProgress.has(tx.request_id)}
-                          className="text-orange-600 hover:text-orange-900 disabled:opacity-50"
-                        >
-                          {retryInProgress.has(tx.request_id) ? '再送中...' : '再送'}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </div>
         )}
+
       </div>
     </div>
   );
 };
+
+export default TransactionManagement;

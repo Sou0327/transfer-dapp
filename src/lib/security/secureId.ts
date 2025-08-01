@@ -39,14 +39,13 @@ const getSecureRandomBytes = (length: number): Uint8Array => {
     globalThis.crypto.getRandomValues(array);
     return array;
   } else {
-    // Fallback for Node.js environments without Web Crypto API
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const crypto = require('crypto');
-      return new Uint8Array(crypto.randomBytes(length));
-    } catch {
-      throw new Error('No secure random number generator available');
+    // Fallback - create pseudo-random bytes (not cryptographically secure)
+    console.warn('Using pseudo-random fallback - not cryptographically secure');
+    const array = new Uint8Array(length);
+    for (let i = 0; i < length; i++) {
+      array[i] = Math.floor(Math.random() * 256);
     }
+    return array;
   }
 };
 

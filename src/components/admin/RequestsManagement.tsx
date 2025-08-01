@@ -309,181 +309,237 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
   }, []);
 
   return (
-    <div className={`space-y-6 ${className}`}>
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-gray-900 tracking-tight">リクエスト管理</h1>
-        <div className="flex space-x-1 bg-gray-200 p-1 rounded-lg">
-          <button
-            onClick={() => setActiveTab('list')}
-            className={`px-4 py-2 rounded-md text-sm font-semibold transition-colors ${
-              activeTab === 'list'
-                ? 'bg-white text-gray-800 shadow-sm'
-                : 'bg-transparent text-gray-600 hover:bg-gray-100'
-            }`}
-          >
-            リクエスト一覧
-          </button>
-          <button
-            onClick={() => setActiveTab('create')}
-            className={`px-4 py-2 rounded-md text-sm font-semibold transition-colors ${
-              activeTab === 'create'
-                ? 'bg-white text-gray-800 shadow-sm'
-                : 'bg-transparent text-gray-600 hover:bg-gray-100'
-            }`}
-          >
-            新規作成
-          </button>
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-6xl mx-auto px-8 py-12">
+        
+        {/* Header */}
+        <div className="mb-16">
+          <h1 className="text-4xl font-light text-gray-900 tracking-tight">
+            リクエスト管理
+          </h1>
+          <div className="flex items-center justify-between mt-8">
+            <div className="text-sm text-gray-600">
+              OTC取引リクエストの作成と管理
+            </div>
+            <div className="flex space-x-1 bg-gray-100 p-1 rounded-2xl">
+              <button
+                onClick={() => setActiveTab('list')}
+                className={`px-6 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
+                  activeTab === 'list'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'bg-transparent text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                リクエスト一覧
+              </button>
+              <button
+                onClick={() => setActiveTab('create')}
+                className={`px-6 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
+                  activeTab === 'create'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'bg-transparent text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                新規作成
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
+
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
+          
+          {/* Total Requests */}
+          <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
+            <div className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-2">
+              総リクエスト
+            </div>
+            <div className="text-5xl font-extralight text-gray-900 mb-2">
+              {requests.length}
+            </div>
+            <div className="text-sm text-gray-500">
+              件
+            </div>
+          </div>
+
+          {/* Active Requests */}
+          <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
+            <div className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-2">
+              アクティブ
+            </div>
+            <div className="text-5xl font-extralight text-gray-900 mb-2">
+              {requests.filter(r => r.status === 'REQUESTED' || r.status === 'SIGNED').length}
+            </div>
+            <div className="text-sm text-gray-500">
+              件
+            </div>
+          </div>
+
+          {/* Confirmed Requests */}
+          <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
+            <div className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-2">
+              完了済み
+            </div>
+            <div className="text-5xl font-extralight text-gray-900 mb-2">
+              {requests.filter(r => r.status === 'CONFIRMED').length}
+            </div>
+            <div className="text-sm text-gray-500">
+              件
+            </div>
+          </div>
+
+        </div>
 
       {/* Tab Content */}
       {activeTab === 'list' ? (
         /* Requests List */
-        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm">
-          <div className="px-6 py-5">
-            <h3 className="text-xl font-semibold text-gray-900">
-              リクエスト一覧 ({requests.length})
-            </h3>
-            <p className="mt-1 text-sm text-gray-600">
-              作成されたすべてのOTCリクエストを管理します。
-            </p>
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
+          <div className="p-8 border-b border-gray-100">
+            <h2 className="text-xl font-medium text-gray-900">
+              リクエスト一覧
+            </h2>
           </div>
           
           {requests.length === 0 ? (
-            <div className="px-6 py-16 text-center border-t border-gray-200">
-              <p className="text-gray-500">まだリクエストは作成されていません。</p>
+            <div className="p-8">
+              <div className="text-center py-12">
+                <div className="text-gray-400 text-sm">
+                  リクエストはありません
+                </div>
+              </div>
             </div>
           ) : (
-            <ul className="divide-y divide-gray-200">
-              {requests.map((request) => (
-                <li key={request.id} className="px-6 py-5 hover:bg-gray-50 transition-colors">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center space-x-4">
-                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(request.status)}`}>
-                          {request.status}
-                        </span>
-                        <p className="text-md font-semibold text-gray-800 truncate">
-                          {formatAmount(request)}
-                        </p>
-                      </div>
-                      <div className="mt-2 flex items-center space-x-3 text-sm text-gray-500 font-mono">
-                        <span>ID: {request.id.slice(0, 8)}...</span>
-                        <span className="text-gray-300">•</span>
-                        <span>{new Date(request.created_at).toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-                        <span className="text-gray-300">•</span>
-                        <span>TTL: スロット {request.ttl_slot}</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      {/* Status Update Buttons */}
-                      {request.status === RequestStatus.REQUESTED && (
-                        <button
-                          onClick={() => handleStatusUpdate(request.id, RequestStatus.EXPIRED)}
-                          className="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold px-4 py-2 rounded-lg transition-colors shadow-sm border border-gray-200"
-                        >
-                          期限切れにする
-                        </button>
-                      )}
-                      
-                      {/* Generate Link Button */}
-                      <button
-                        onClick={() => handleGenerateLink(request.id)}
-                        className="text-sm bg-gray-800 hover:bg-gray-900 text-white font-semibold px-4 py-2 rounded-lg transition-colors shadow-sm"
-                      >
-                        リンクを生成
-                      </button>
-                    </div>
+            <div className="p-8">
+              {requests.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="text-gray-400 text-sm">
+                    リクエストはありません
                   </div>
-                </li>
-              ))}
-            </ul>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {requests.map((request) => (
+                    <div key={request.id} className="bg-gray-50 rounded-xl p-6 hover:bg-gray-100 transition-colors">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center space-x-4 mb-3">
+                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(request.status)}`}>
+                              {request.status}
+                            </span>
+                            <div className="text-lg font-medium text-gray-900">
+                              {formatAmount(request)}
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-4 text-sm text-gray-500">
+                            <span className="font-mono">ID: {request.id.slice(0, 8)}...</span>
+                            <span className="text-gray-300">•</span>
+                            <span>{new Date(request.created_at).toLocaleDateString('ja-JP')}</span>
+                            <span className="text-gray-300">•</span>
+                            <span>TTL: {request.ttl_slot}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-3">
+                          {request.status === RequestStatus.REQUESTED && (
+                            <button
+                              onClick={() => handleStatusUpdate(request.id, RequestStatus.EXPIRED)}
+                              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                            >
+                              期限切れ
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleGenerateLink(request.id)}
+                            className="px-4 py-2 text-sm font-medium text-white bg-gray-900 rounded-lg hover:bg-gray-800 transition-colors"
+                          >
+                            リンク生成
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </div>
       ) : (
         /* Create Request Form */
-        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm">
-          <div className="px-6 py-5">
-            <h3 className="text-xl font-semibold text-gray-900">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
+          <div className="p-8 border-b border-gray-100">
+            <h2 className="text-xl font-medium text-gray-900">
               新規リクエスト作成
-            </h3>
-            <p className="mt-1 text-sm text-gray-600">
-              OTC取引のための新しいリクエストを作成します。
-            </p>
+            </h2>
           </div>
-          <div className="px-6 py-6 border-t border-gray-200">
+          <div className="p-8">
 
             <form onSubmit={handleCreateRequest} className="space-y-8">
               {/* Error Display */}
               {createError && (
-                <div className="bg-red-50 border border-red-300 rounded-xl p-4">
-                  <div className="flex">
+                <div className="bg-red-50 rounded-2xl p-6 border border-red-100">
+                  <div className="flex items-start">
                     <div className="flex-shrink-0">
-                      <svg className="h-5 w-5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                      </svg>
+                      <div className="w-5 h-5 rounded-full bg-red-500 mt-0.5"></div>
                     </div>
-                    <div className="ml-3">
-                      <p className="text-sm font-medium text-red-800">{createError}</p>
+                    <div className="ml-4">
+                      <h3 className="text-sm font-medium text-red-800">
+                        入力エラー
+                      </h3>
+                      <div className="mt-1 text-sm text-red-700">
+                        {createError}
+                      </div>
                     </div>
                   </div>
                 </div>
               )}
 
               {/* Amount Mode Selection */}
-              <div>
-                <label className="text-base font-semibold text-gray-900">金額モード</label>
-                <p className="text-sm text-gray-600">リクエスト金額の決定方法を選択します。</p>
-                <fieldset className="mt-4">
-                  <legend className="sr-only">金額モード</legend>
-                  <div className="space-y-5">
-                    {[
-                      { value: 'fixed', label: '固定額', description: '指定した額のADAを送信します。' },
-                      { value: 'sweep', label: 'スイープ', description: '手数料を差し引いた、利用可能なすべてのADAを送信します。' },
-                      { value: 'rate_based', label: 'レート基準', description: '法定通貨の価値からADAの量を計算します。' },
-                    ].map((option) => (
-                      <div key={option.value} className="relative flex items-start">
-                        <div className="flex items-center h-5">
-                          <input
-                            id={option.value}
-                            name="amount_mode"
-                            type="radio"
-                            checked={formData.amount_mode === option.value}
-                            onChange={() => handleInputChange('amount_mode', option.value)}
-                            className="focus:ring-gray-500 h-4 w-4 text-gray-800 border-gray-300"
-                          />
-                        </div>
-                        <div className="ml-3 text-sm">
-                          <label htmlFor={option.value} className="font-medium text-gray-800">
-                            {option.label}
-                          </label>
-                          <p className="text-gray-500">{option.description}</p>
-                        </div>
+              <div className="bg-gray-50 rounded-2xl p-6">
+                <label className="text-base font-medium text-gray-900 block mb-2">金額モード</label>
+                <p className="text-sm text-gray-600 mb-6">リクエスト金額の決定方法を選択します。</p>
+                <div className="space-y-4">
+                  {[
+                    { value: 'fixed', label: '固定額', description: '指定した額のADAを送信します。' },
+                    { value: 'sweep', label: 'スイープ', description: '手数料を差し引いた、利用可能なすべてのADAを送信します。' },
+                    { value: 'rate_based', label: 'レート基準', description: '法定通貨の価値からADAの量を計算します。' },
+                  ].map((option) => (
+                    <div key={option.value} className="flex items-start">
+                      <div className="flex items-center h-5">
+                        <input
+                          id={option.value}
+                          name="amount_mode"
+                          type="radio"
+                          checked={formData.amount_mode === option.value}
+                          onChange={() => handleInputChange('amount_mode', option.value)}
+                          className="focus:ring-gray-500 h-4 w-4 text-gray-800 border-gray-300"
+                        />
                       </div>
-                    ))}
-                  </div>
-                </fieldset>
+                      <div className="ml-3">
+                        <label htmlFor={option.value} className="text-sm font-medium text-gray-900 block">
+                          {option.label}
+                        </label>
+                        <p className="text-xs text-gray-500 mt-1">{option.description}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               {/* Amount Mode Specific Fields */}
               {formData.amount_mode === 'fixed' && (
-                <div>
-                  <label htmlFor="fixed_amount" className="block text-sm font-semibold text-gray-800">
+                <div className="bg-white rounded-2xl p-6 border border-gray-100">
+                  <label htmlFor="fixed_amount" className="block text-sm font-medium text-gray-900 mb-3">
                     固定額 (ADA) *
                   </label>
-                  <div className="mt-2">
-                    <input
-                      type="number"
-                      id="fixed_amount"
-                      step="0.000001"
-                      min="0"
-                      value={formData.fixed_amount}
-                      onChange={(e) => handleInputChange('fixed_amount', e.target.value)}
-                      className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-gray-500 focus:border-gray-500 sm:text-sm"
-                      placeholder="100.000000"
-                    />
-                  </div>
+                  <input
+                    type="number"
+                    id="fixed_amount"
+                    step="0.000001"
+                    min="0"
+                    value={formData.fixed_amount}
+                    onChange={(e) => handleInputChange('fixed_amount', e.target.value)}
+                    className="block w-full border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-gray-400 focus:border-transparent"
+                    placeholder="100.000000"
+                  />
                 </div>
               )}
 
@@ -635,11 +691,11 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
               </div>
 
               {/* Submit Button */}
-              <div className="border-t border-gray-200 pt-8">
+              <div className="pt-8">
                 <button
                   type="submit"
                   disabled={isCreating}
-                  className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-base font-semibold text-white bg-gray-800 hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all duration-200"
+                  className="w-full py-4 px-6 rounded-2xl text-base font-medium text-white bg-gray-900 hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-400 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all duration-200"
                 >
                   {isCreating ? '作成中...' : 'リクエストを作成'}
                 </button>
@@ -648,7 +704,7 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
 
             {/* Generated Request Display */}
             {generatedRequest && (
-              <div className="mt-8 p-6 bg-green-50 border border-green-200 rounded-md">
+              <div className="mt-8 p-6 bg-green-50 border border-green-100 rounded-2xl">
                 <h4 className="text-lg font-medium text-green-900 mb-4">
                   リクエストが作成されました！
                 </h4>
@@ -682,6 +738,8 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
           </div>
         </div>
       )}
+      
+      </div>
     </div>
   );
 };

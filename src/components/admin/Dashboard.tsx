@@ -42,410 +42,143 @@ interface RecentActivity {
 }
 
 export const Dashboard: React.FC = () => {
-  // const { session } = useAdminAuth(); // Removed to fix build warning
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [refreshInterval] = useState<NodeJS.Timeout | null>(null);
-  console.log('Refresh interval:', refreshInterval); // Development log
+  const [serverStatus, setServerStatus] = useState<'online' | 'offline'>('offline');
 
-  // Fetch dashboard data
-  const fetchDashboardData = useCallback(async () => {
+  // Check server status
+  const checkServerStatus = useCallback(async () => {
     try {
-      // 開発環境ではモックデータを使用
-      if (import.meta.env.DEV || !import.meta.env.PROD) {
-        console.log('Using mock data for dashboard in development mode');
-        
-        // モックデータを作成
-        const mockStats: DashboardStats = {
-          requests: {
-            total: 12,
-            by_status: {
-              [RequestStatus.REQUESTED]: 3,
-              [RequestStatus.SIGNED]: 2,
-              [RequestStatus.SUBMITTED]: 1,
-              [RequestStatus.CONFIRMED]: 5,
-              [RequestStatus.FAILED]: 1,
-              [RequestStatus.EXPIRED]: 0
-            },
-            recent_count: 3,
-            active_count: 6
-          },
-          transactions: {
-            total: 8,
-            submitted: 7,
-            confirmed: 5,
-            failed: 1,
-            success_rate: 62.5
-          },
-          // monitoring: {
-          //   utxo_service_running: true,
-          //   monitored_requests: 6,
-          //   confirmation_service_running: true,
-          //   monitored_transactions: 3
-          // },
-          submission: {
-            active_submissions: 1,
-            pending_retries: 0,
-            queue_length: 2
-          }
-        };
-
-        setStats(mockStats);
-
-        // モック最近のアクティビティ
-        const mockActivities: RecentActivity[] = [
-          {
-            id: 'mock-1',
-            type: 'request_created',
-            description: 'リクエスト作成: abcd1234...',
-            timestamp: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
-            status: RequestStatus.REQUESTED
-          },
-          {
-            id: 'mock-2',
-            type: 'transaction_confirmed',
-            description: 'トランザクション承認: ef567890...',
-            timestamp: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
-            status: RequestStatus.CONFIRMED
-          },
-          {
-            id: 'mock-3',
-            type: 'request_created',
-            description: 'リクエスト作成: gh123456...',
-            timestamp: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
-            status: RequestStatus.SIGNED
-          }
-        ];
-
-        setRecentActivity(mockActivities);
-        setError(null);
-        return;
-      }
-
-      // 本番環境でのAPI呼び出し
-      const authFetch = createAuthenticatedFetch();
-      
-      // Fetch statistics from multiple endpoints
-      const [
-        requestsResponse,
-        transactionsResponse,
-        monitoringResponse,
-        submissionResponse,
-        activityResponse
-      ] = await Promise.all([
-        authFetch('/api/ada/requests?stats=true'),
-        authFetch('/api/ada/confirmation/stats'),
-        authFetch('/api/ada/monitoring/status'),
-        authFetch('/api/ada/submit/stats'),
-        authFetch('/api/ada/requests?limit=10&recent=true')
-      ]);
-
-      const requestsData = await requestsResponse.json();
-      const transactionsData = await transactionsResponse.json();
-      const monitoringData = await monitoringResponse.json();
-      const submissionData = await submissionResponse.json();
-      const activityData = await activityResponse.json();
-
-      // Combine data into dashboard stats
-      const dashboardStats: DashboardStats = {
-        requests: {
-          total: requestsData.total || 0,
-          by_status: requestsData.by_status || {},
-          recent_count: requestsData.recent_count || 0,
-          active_count: requestsData.active_count || 0
-        },
-        transactions: transactionsData.transaction_stats || {
-          total: 0,
-          submitted: 0,
-          confirmed: 0,
-          failed: 0,
-          success_rate: 0
-        },
-        // monitoring: {
-        //   utxo_service_running: monitoringData.stats?.isRunning || false,
-        //   monitored_requests: monitoringData.stats?.monitoredRequests || 0,
-        //   confirmation_service_running: transactionsData.service_stats?.isRunning || false,
-        //   monitored_transactions: transactionsData.service_stats?.monitoredTransactions || 0
-        // },
-        submission: {
-          active_submissions: submissionData.submitter_stats?.activeSubmissions || 0,
-          pending_retries: submissionData.submitter_stats?.pendingRetries || 0,
-          queue_length: submissionData.queue_status?.queueLength || 0
-        }
-      };
-
-      setStats(dashboardStats);
-
-      // Process recent activity
-      const activities: RecentActivity[] = (activityData.requests || []).map((request: Record<string, unknown>) => ({
-        id: request.id as string,
-        type: 'request_created',
-        description: `リクエスト作成: ${(request.id as string).slice(0, 8)}...`,
-        timestamp: request.created_at as string,
-        status: request.status as string
-      }));
-
-      setRecentActivity(activities);
-
-    } catch (error) {
-      console.error('Failed to fetch dashboard data:', error);
-      setError('ダッシュボードデータの取得に失敗しました');
+      const healthResponse = await fetch('/health');
+      setServerStatus(healthResponse.ok ? 'online' : 'offline');
+    } catch {
+      setServerStatus('offline');
     } finally {
       setLoading(false);
     }
-  }, []);;
+  }, []);
 
-  // Initialize data and refresh interval
   useEffect(() => {
-    fetchDashboardData();
+    checkServerStatus();
+    const interval = setInterval(checkServerStatus, 30000);
+    return () => clearInterval(interval);
+  }, [checkServerStatus]);
 
-    // Set up auto-refresh every 30 seconds
-    const interval = setInterval(fetchDashboardData, 30000);
-    
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [fetchDashboardData]);
-
-  // Manual refresh
-  const handleRefresh = useCallback(async () => {
-    setLoading(true);
-    await fetchDashboardData();
-  }, [fetchDashboardData]);
-
-  // Get status color for badges
-  const getStatusColor = (status: RequestStatus): string => {
-    switch (status) {
-      case RequestStatus.REQUESTED:
-        return 'bg-blue-100 text-blue-800';
-      case RequestStatus.SIGNED:
-        return 'bg-yellow-100 text-yellow-800';
-      case RequestStatus.SUBMITTED:
-        return 'bg-purple-100 text-purple-800';
-      case RequestStatus.CONFIRMED:
-        return 'bg-green-100 text-green-800';
-      case RequestStatus.FAILED:
-        return 'bg-red-100 text-red-800';
-      case RequestStatus.EXPIRED:
-        return 'bg-gray-100 text-gray-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  if (loading && !stats) {
-    return (
-      <div className="flex items-center justify-center p-10">
-        <div className="w-16 h-16 border-4 border-gray-300 border-t-gray-800 rounded-full animate-spin"></div>
-      </div>
-
-    );
-  }
-
-  if (error) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-red-500 mb-4 font-medium">{error}</p>
-          <button
-            onClick={handleRefresh}
-            className="bg-gray-800 text-white px-6 py-2 rounded-lg hover:bg-gray-700 transition-colors"
-          >
-            再読み込み
-          </button>
-        </div>
+        <div className="w-6 h-6 border-2 border-gray-300 border-t-gray-900 rounded-full animate-spin"></div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-800">ダッシュボード</h1>
-          <p className="text-gray-500">OTCシステム概要</p>
-        </div>
-        <button
-          onClick={handleRefresh}
-          disabled={loading}
-          className="flex items-center px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg shadow-sm hover:bg-gray-100 transition-colors disabled:opacity-50"
-        >
-          <svg className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          {loading ? '更新中...' : '更新'}
-        </button>
-      </div>
-
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {/* Requests Stats */}
-        <div className="bg-white overflow-hidden rounded-2xl shadow-sm hover:shadow-md transition-shadow duration-300 border border-gray-100">
-          <div className="p-6">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <svg className="h-8 w-8 text-gray-900" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              </div>
-              <div className="ml-6 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-400 tracking-wide">
-                    リクエスト総数
-                  </dt>
-                  <dd className="text-2xl font-semibold text-gray-900 mt-1">
-                    {stats?.requests.total || 0}
-                  </dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-          <div className="bg-gray-50 px-6 py-4 border-t border-gray-100">
-            <div className="text-sm">
-              <span className="text-gray-900 font-medium">
-                {stats?.requests.active_count || 0} アクティブ
-              </span>
-            </div>
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-6xl mx-auto px-8 py-12">
+        
+        {/* Header */}
+        <div className="mb-16">
+          <h1 className="text-4xl font-light text-gray-900 tracking-tight">
+            ダッシュボード
+          </h1>
+          <div className="flex items-center mt-3">
+            <div className={`w-2 h-2 rounded-full mr-3 ${
+              serverStatus === 'online' ? 'bg-green-500' : 'bg-red-500'
+            }`}></div>
+            <span className="text-gray-600 text-sm">
+              {serverStatus === 'online' ? 'システム稼働中' : 'システム停止中'}
+            </span>
           </div>
         </div>
 
-        {/* Transactions Stats */}
-        <div className="bg-white overflow-hidden rounded-2xl shadow-sm hover:shadow-md transition-shadow duration-300 border border-gray-100">
-          <div className="p-6">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <svg className="h-8 w-8 text-gray-900" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                </svg>
-              </div>
-              <div className="ml-6 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-400 tracking-wide">
-                    成功率
-                  </dt>
-                  <dd className="text-2xl font-semibold text-gray-900 mt-1">
-                    {stats?.transactions.success_rate?.toFixed(1) || 0}%
-                  </dd>
-                </dl>
-              </div>
+        {/* Main Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
+          
+          {/* Today's Requests */}
+          <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
+            <div className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-2">
+              本日の処理
+            </div>
+            <div className="text-5xl font-extralight text-gray-900 mb-2">
+              {serverStatus === 'online' ? '—' : '0'}
+            </div>
+            <div className="text-sm text-gray-500">
+              リクエスト
             </div>
           </div>
-          <div className="bg-gray-50 px-6 py-4 border-t border-gray-100">
-            <div className="text-sm">
-              <span className="text-gray-900 font-medium">
-                {stats?.transactions.confirmed || 0}/{stats?.transactions.total || 0} 承認済み
-              </span>
-            </div>
-          </div>
-        </div>
 
-        {/* Monitoring Stats - Temporarily disabled for phased release */}
+          {/* Pending */}
+          <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
+            <div className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-2">
+              処理待ち
+            </div>
+            <div className="text-5xl font-extralight text-gray-900 mb-2">
+              {serverStatus === 'online' ? '—' : '0'}
+            </div>
+            <div className="text-sm text-gray-500">
+              件
+            </div>
+          </div>
 
-        {/* Submission Queue */}
-        <div className="bg-white overflow-hidden rounded-2xl shadow-sm hover:shadow-md transition-shadow duration-300 border border-gray-100">
-          <div className="p-6">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <svg className="h-8 w-8 text-gray-900" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                </svg>
-              </div>
-              <div className="ml-6 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-400 tracking-wide">
-                    送信キュー
-                  </dt>
-                  <dd className="text-2xl font-semibold text-gray-900 mt-1">
-                    {stats?.submission.queue_length || 0}
-                  </dd>
-                </dl>
-              </div>
+          {/* System Status */}
+          <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
+            <div className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-2">
+              システム状態
+            </div>
+            <div className={`text-2xl font-medium mb-2 ${
+              serverStatus === 'online' ? 'text-green-600' : 'text-red-600'
+            }`}>
+              {serverStatus === 'online' ? '正常' : '停止中'}
+            </div>
+            <div className="text-sm text-gray-500">
+              {new Date().toLocaleDateString('ja-JP')}
             </div>
           </div>
-          <div className="bg-gray-50 px-6 py-4 border-t border-gray-100">
-            <div className="text-sm">
-              <span className="text-gray-900 font-medium">
-                {stats?.submission.active_submissions || 0} 送信中
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
 
-      {/* Status Breakdown */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Request Status Breakdown */}
-        <div className="bg-white shadow-sm rounded-2xl border border-gray-100">
-          <div className="px-6 py-5">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              リクエストステータス
-            </h3>
-            <div className="space-y-3">
-              {Object.entries(stats?.requests.by_status || {}).map(([status, count]) => (
-                <div key={status} className="flex items-center justify-between">
-                  <div className="flex items-center">
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(status as RequestStatus)}`}>
-                      {status}
-                    </span>
-                  </div>
-                  <span className="text-sm font-semibold text-gray-900">{count}</span>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
 
         {/* Recent Activity */}
-        <div className="bg-white shadow-sm rounded-2xl border border-gray-100">
-          <div className="px-6 py-5">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
+          <div className="p-8 border-b border-gray-100">
+            <h2 className="text-xl font-medium text-gray-900">
               最近のアクティビティ
-            </h3>
-            <div className="space-y-4">
-              {recentActivity.length === 0 ? (
-                <p className="text-gray-500 text-sm">最近のアクティビティはありません。</p>
-              ) : (
-                recentActivity.map((activity) => (
-                  <div key={activity.id} className="flex items-start space-x-4">
-                    <div className="flex-shrink-0">
-                      <div className="h-3 w-3 bg-gray-300 rounded-full mt-1.5"></div>
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm text-gray-800 font-medium">{activity.description}</p>
-                      <p className="text-xs text-gray-400">
-                        {new Date(activity.timestamp).toLocaleString('ja-JP', { dateStyle: 'medium', timeStyle: 'short' })}
-                      </p>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
+            </h2>
+          </div>
+          <div className="p-8">
+            {serverStatus === 'offline' ? (
+              <div className="text-center py-12">
+                <div className="text-gray-400 text-sm">
+                  サーバーが停止中のためアクティビティを表示できません
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <div className="text-gray-400 text-sm">
+                  アクティビティはありません
+                </div>
+              </div>
+            )}
           </div>
         </div>
-      </div>
 
-      {/* System Health */}
-      <div className="bg-white shadow-sm rounded-2xl border border-gray-100">
-        <div className="px-6 py-5">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            システムヘルス
-          </h3>
-          <div className="grid grid-cols-1 gap-4">
-            {/* Monitoring services temporarily disabled for phased release */}
-            
-            {/* UTXOサービス - 段階的リリースのため一時的に非表示 */}
-            {/* 承認サービス - 段階的リリースのため一時的に非表示 */}
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-              <span className="text-sm font-medium text-gray-800">送信サービス</span>
-              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800">
-                利用可能
-              </span>
+        {/* System Info */}
+        {serverStatus === 'offline' && (
+          <div className="mt-8 bg-red-50 rounded-2xl p-6 border border-red-100">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <div className="w-5 h-5 rounded-full bg-red-500 mt-0.5"></div>
+              </div>
+              <div className="ml-4">
+                <h3 className="text-sm font-medium text-red-800">
+                  システムエラー
+                </h3>
+                <div className="mt-1 text-sm text-red-700">
+                  バックエンドサーバーに接続できません。システム管理者に連絡してください。
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+        )}
+
       </div>
     </div>
   );

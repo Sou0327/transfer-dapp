@@ -3,7 +3,6 @@
  */
 import { useState, useCallback } from 'react';
 import { LoginCredentials, AdminSession, UnauthorizedError } from '../types/otc/index';
-import crypto from 'crypto';
 
 // セキュアなトークンストレージキー
 const TOKEN_STORAGE_KEY = 'otc_admin_token';
@@ -55,8 +54,8 @@ export const useAdminAuth = () => {
       }
 
       // セッション作成
-      const sessionId = generateSecureSessionId();
-      const token = generateSecureToken();
+      const sessionId = await generateSecureSessionId();
+      const token = await generateSecureToken();
       
       const mockSession: AdminSession = {
         id: sessionId,
@@ -161,7 +160,7 @@ export const createAuthenticatedFetch = () => {
     }
 
     // CSRFトークン追加
-    const csrfToken = generateCSRFToken();
+    const csrfToken = await generateCSRFToken();
     
     const response = await fetch(url, {
       ...options,
@@ -207,8 +206,12 @@ const isValidPassword = (password: string): boolean => {
 };
 
 const hashPassword = async (password: string): Promise<string> => {
-  // 実際の実装ではbcryptなどを使用
-  return crypto.createHash('sha256').update(password + 'salt').digest('hex');
+  // Web Crypto APIを使用してブラウザ互換のハッシュ化
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password + 'salt');
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 };
 
 const validateCredentials = async (email: string, hashedPassword: string): Promise<boolean> => {
@@ -216,16 +219,25 @@ const validateCredentials = async (email: string, hashedPassword: string): Promi
   return email === 'admin@otc.local' && hashedPassword === await hashPassword('admin123');
 };
 
-const generateSecureSessionId = (): string => {
-  return crypto.randomBytes(32).toString('hex');
+const generateSecureSessionId = async (): Promise<string> => {
+  // Web Crypto APIを使用してブラウザ互換のランダム生成
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
 };
 
-const generateSecureToken = (): string => {
-  return crypto.randomBytes(48).toString('base64url');
+const generateSecureToken = async (): Promise<string> => {
+  // Web Crypto APIを使用してブラウザ互換のランダム生成
+  const array = new Uint8Array(48);
+  crypto.getRandomValues(array);
+  return btoa(String.fromCharCode(...array)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 };
 
-const generateCSRFToken = (): string => {
-  return crypto.randomBytes(24).toString('base64url');
+const generateCSRFToken = async (): Promise<string> => {
+  // Web Crypto APIを使用してブラウザ互換のランダム生成
+  const array = new Uint8Array(24);
+  crypto.getRandomValues(array);
+  return btoa(String.fromCharCode(...array)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 };
 
 const encryptSessionData = (session: AdminSession): string => {
