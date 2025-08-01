@@ -22,11 +22,13 @@ export const useAdminAuth = () => {
     const savedSession = localStorage.getItem(SESSION_STORAGE_KEY);
     if (savedSession) {
       try {
-        // 開発環境では暗号化をスキップ
+        // 全環境で同じシンプルな処理
         let parsedSession;
-        if (import.meta.env.NODE_ENV === 'development' || import.meta.env.DEV) {
+        try {
+          // まずは平文JSONとして解析を試行
           parsedSession = JSON.parse(savedSession);
-        } else {
+        } catch {
+          // JSONパースに失敗した場合は暗号化データとして扱う（後方互換性のため）
           parsedSession = decryptSessionData(savedSession);
         }
         
@@ -50,20 +52,37 @@ export const useAdminAuth = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // セッション有効性チェック（開発環境では簡略化）
+  // セッション有効性チェック（全環境で同じシンプルな処理）
   useEffect(() => {
-    if (import.meta.env.NODE_ENV === 'development' || import.meta.env.DEV) {
-      // 開発環境では簡単なチェックのみ
-      const savedSession = localStorage.getItem(SESSION_STORAGE_KEY);
-      if (savedSession && !session) {
+    const savedSession = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (savedSession && !session) {
+      try {
+        // 全環境で同じ処理
+        let parsedSession;
         try {
-          const parsedSession = JSON.parse(savedSession);
-          setSession(parsedSession);
-        } catch (error) {
-          console.error('開発環境セッション復元エラー:', error);
+          parsedSession = JSON.parse(savedSession);
+        } catch {
+          console.log('JSON解析失敗、セッションをクリアします');
           localStorage.removeItem(SESSION_STORAGE_KEY);
           localStorage.removeItem(TOKEN_STORAGE_KEY);
+          return;
         }
+        
+        if (parsedSession) {
+          // セッション有効期限チェック
+          if (parsedSession.expiresAt && new Date(parsedSession.expiresAt) > new Date()) {
+            console.log('セッション復元成功:', parsedSession.email);
+            setSession(parsedSession);
+          } else {
+            console.log('セッション期限切れ、削除します');
+            localStorage.removeItem(SESSION_STORAGE_KEY);
+            localStorage.removeItem(TOKEN_STORAGE_KEY);
+          }
+        }
+      } catch (error) {
+        console.error('セッション復元エラー:', error);
+        localStorage.removeItem(SESSION_STORAGE_KEY);
+        localStorage.removeItem(TOKEN_STORAGE_KEY);
       }
     }
   }, [session]);
@@ -112,8 +131,41 @@ export const useAdminAuth = () => {
         return;
       }
       
-      // 本番環境用の処理（現在は使用しない）
-      throw new Error('本番環境の認証は未実装です');
+      // 本番環境でも開発環境と同じシンプルな処理
+      console.log('本番環境でのログイン処理（開発環境と同様）');
+      
+      // 固定認証情報チェック（開発環境と同じ）
+      if ((credentials.email !== 'admin@otc.local' && credentials.email !== 'admin') || 
+          credentials.password !== 'admin123') {
+        console.log('本番環境: 認証情報が一致しません');
+        throw new Error('認証情報が無効です');
+      }
+      
+      console.log('本番環境: 認証成功、セッション作成中');
+      
+      // 本番環境でも開発環境と同じシンプルなセッション作成
+      const mockSession = {
+        id: `prod-session-${Date.now()}`,
+        adminId: 'prod-admin',
+        email: credentials.email,
+        name: 'Admin User',
+        role: 'admin',
+        permissions: ['read', 'write', 'admin'],
+        loginTime: new Date(),
+        ipAddress: 'production',
+        userAgent: navigator.userAgent,
+        createdAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24時間
+        isActive: true,
+      };
+      
+      // セッションを暗号化なしで直接localStorageに保存（開発環境と同じ）
+      localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(mockSession));
+      localStorage.setItem(TOKEN_STORAGE_KEY, 'prod-token');
+      
+      console.log('本番環境: セッション保存完了');
+      setSession(mockSession);
+      return;
       
     } catch (err) {
       console.error('ログインエラー:', err);
