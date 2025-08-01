@@ -16,7 +16,7 @@
   "author": "Cardano OTC dApp Team",
   "scripts": {
     "dev": "vite --port 4000",
-    "build": "npx tsc -b && vite build",
+    "build": "yarn typecheck && vite build",
     "build:analyze": "VITE_BUILD_ANALYZE=true npm run build",
     "build:sourcemap": "VITE_BUILD_SOURCEMAP=true npm run build",
     "lint": "eslint .",
