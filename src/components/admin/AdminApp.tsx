@@ -79,8 +79,30 @@ export const AdminApp: React.FC = () => {
       
       // 実際のAPIからデータを取得
 
-      const authFetch = createAuthenticatedFetch();
-      const response = await authFetch('/api/ada/requests');
+      // 環境に応じてAPIベースURLを設定
+      const apiBaseUrl = import.meta.env.PROD ? 
+        `${window.location.protocol}//${window.location.host}` : 
+        '';
+      const apiUrl = `${apiBaseUrl}/api/ada/requests`;
+
+      // 本番環境対応: 直接fetchを使用
+      const token = localStorage.getItem('otc_admin_token');
+      const headers: Record<string, string> = {};
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      console.log('🔍 リクエスト一覧取得:', {
+        url: apiUrl,
+        environment: import.meta.env.PROD ? 'production' : 'development',
+        hasToken: !!token
+      });
+      
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+        headers
+      });
       const data = await response.json();
       
       setRequests(data.requests || []);
@@ -93,21 +115,69 @@ export const AdminApp: React.FC = () => {
 
   // Create new request
   const handleCreateRequest = useCallback(async (requestData: CreateRequestRequest): Promise<CreateRequestResponse> => {
-    // 実際のAPIで請求を作成
+    // 環境に応じてAPIベースURLを設定
+    const apiBaseUrl = import.meta.env.PROD ? 
+      `${window.location.protocol}//${window.location.host}` : 
+      '';
+    const apiUrl = `${apiBaseUrl}/api/ada/requests`;
 
-    const authFetch = createAuthenticatedFetch();
-    
-    const response = await authFetch('/api/ada/requests', {
+    console.log('🔍 リクエスト作成開始:', {
+      requestData,
+      url: apiUrl,
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      environment: import.meta.env.PROD ? 'production' : 'development',
+      baseUrl: apiBaseUrl
+    });
+
+    // 本番環境対応: 直接fetchを使用して認証問題を回避
+    const token = localStorage.getItem('otc_admin_token');
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    
+    // トークンがある場合のみAuthorizationヘッダーを追加
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers,
       body: JSON.stringify(requestData),
     });
 
+    console.log('🔍 リクエスト作成レスポンス:', {
+      ok: response.ok,
+      status: response.status,
+      statusText: response.statusText,
+      headers: Object.fromEntries(response.headers.entries()),
+      url: response.url
+    });
+
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || '請求作成に失敗しました');
+      // レスポンスの内容をテキストとして取得してデバッグ
+      const responseText = await response.text();
+      console.error('🔍 リクエスト作成エラーレスポンス:', {
+        status: response.status,
+        statusText: response.statusText,
+        responseText: responseText.substring(0, 500) // 最初の500文字のみ表示
+      });
+      
+      // JSONとして解析を試行
+      let errorMessage = '請求作成に失敗しました';
+      try {
+        const errorData = JSON.parse(responseText);
+        errorMessage = errorData.error || errorMessage;
+      } catch {
+        // JSONでない場合（HTMLページなど）
+        if (responseText.includes('<!DOCTYPE html>') || responseText.includes('<html>')) {
+          errorMessage = 'APIエンドポイントが見つかりません（HTMLページが返されました）';
+        } else {
+          errorMessage = `サーバーエラー: ${response.status} ${response.statusText}`;
+        }
+      }
+      
+      throw new Error(errorMessage);
     }
 
     const result = await response.json();
