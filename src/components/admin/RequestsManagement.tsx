@@ -1,8 +1,9 @@
 /**
  * Requests Management Component for OTC Admin System
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import QRCode from 'qrcode';
+import { useWebSocket } from '../../lib/websocket';
 import { 
   OTCRequest, 
   CreateRequestRequest, 
@@ -53,6 +54,39 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
   const [createError, setCreateError] = useState<string | null>(null);
   const [generatedRequest, setGeneratedRequest] = useState<CreateRequestResponse | null>(null);
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | null>(null);
+  const [signedTxData, setSignedTxData] = useState<{ [requestId: string]: any }>({});
+  const [loadingSignedData, setLoadingSignedData] = useState<{ [requestId: string]: boolean }>({});
+
+  // Fetch signed transaction data
+  const fetchSignedTxData = useCallback(async (requestId: string) => {
+    setLoadingSignedData(prev => ({ ...prev, [requestId]: true }));
+    try {
+      const response = await fetch(`/api/ada/presigned/${requestId}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.found) {
+          setSignedTxData(prev => ({ ...prev, [requestId]: data.data }));
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch signed transaction data:', error);
+    } finally {
+      setLoadingSignedData(prev => ({ ...prev, [requestId]: false }));
+    }
+  }, []);
+
+  // WebSocket for real-time updates
+  const { isConnected: wsConnected, subscribe, unsubscribe } = useWebSocket({
+    onStatusUpdate: (update) => {
+      console.log('管理画面でステータス更新受信:', update);
+      
+      // リクエスト一覧の更新は親コンポーネント（AdminApp）で処理される
+      // ここでは署名データの取得をトリガー
+      if (update.status === 'SIGNED' && update.request_id) {
+        fetchSignedTxData(update.request_id);
+      }
+    }
+  });
 
   const [formData, setFormData] = useState<CreateRequestFormData>({
     currency: 'ADA',
@@ -270,6 +304,28 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
     }
   }, [onGenerateLink]);
 
+  // Submit signed transaction
+  const handleSubmitTransaction = useCallback(async (requestId: string, signedTxData: any) => {
+    try {
+      // Here you would implement the actual transaction submission logic
+      // For now, just show a placeholder
+      console.log('Submitting transaction for request:', requestId, signedTxData);
+      alert('トランザクション送信機能は実装中です');
+    } catch (error) {
+      console.error('Transaction submission failed:', error);
+    }
+  }, []);
+
+  // Auto-fetch signed transaction data for signed requests
+  useEffect(() => {
+    const signedRequests = requests.filter(r => r.status === RequestStatus.SIGNED);
+    signedRequests.forEach(request => {
+      if (!signedTxData[request.id] && !loadingSignedData[request.id]) {
+        fetchSignedTxData(request.id);
+      }
+    });
+  }, [requests, signedTxData, loadingSignedData, fetchSignedTxData]);
+
   // Format amount for display
   const formatAmount = useCallback((request: OTCRequest): string => {
     switch (request.amount_mode) {
@@ -347,7 +403,7 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-16">
           
           {/* Total Requests */}
           <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
@@ -368,10 +424,23 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
               アクティブ
             </div>
             <div className="text-5xl font-extralight text-gray-900 mb-2">
-              {requests.filter(r => r.status === 'REQUESTED' || r.status === 'SIGNED').length}
+              {requests.filter(r => r.status === 'REQUESTED').length}
             </div>
             <div className="text-sm text-gray-500">
               件
+            </div>
+          </div>
+
+          {/* Signed Requests */}
+          <div className="bg-blue-50 rounded-2xl p-8 shadow-sm border border-blue-200">
+            <div className="text-sm font-medium text-blue-600 uppercase tracking-wide mb-2">
+              署名済み
+            </div>
+            <div className="text-5xl font-extralight text-blue-900 mb-2">
+              {requests.filter(r => r.status === 'SIGNED').length}
+            </div>
+            <div className="text-sm text-blue-600">
+              件（送信待ち）
             </div>
           </div>
 
@@ -447,6 +516,25 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
                               期限切れ
                             </button>
                           )}
+                          {request.status === RequestStatus.SIGNED && (
+                            <>
+                              <button
+                                onClick={() => fetchSignedTxData(request.id)}
+                                disabled={loadingSignedData[request.id]}
+                                className="px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors disabled:opacity-50"
+                              >
+                                {loadingSignedData[request.id] ? '読込中...' : '署名詳細'}
+                              </button>
+                              {signedTxData[request.id] && (
+                                <button
+                                  onClick={() => handleSubmitTransaction(request.id, signedTxData[request.id])}
+                                  className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
+                                >
+                                  送信
+                                </button>
+                              )}
+                            </>
+                          )}
                           <button
                             onClick={() => handleGenerateLink(request.id)}
                             className="px-4 py-2 text-sm font-medium text-white bg-gray-900 rounded-lg hover:bg-gray-800 transition-colors"
@@ -454,6 +542,38 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
                             リンク生成
                           </button>
                         </div>
+                        
+                        {/* Show signed transaction details if available */}
+                        {signedTxData[request.id] && (
+                          <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                            <h4 className="text-sm font-medium text-blue-900 mb-3">署名済みトランザクション詳細</h4>
+                            <div className="space-y-2 text-sm">
+                              <div>
+                                <span className="font-medium text-blue-800">署名日時:</span>
+                                <span className="ml-2 text-blue-700">
+                                  {new Date(signedTxData[request.id].signedAt).toLocaleString('ja-JP')}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-blue-800">使用ウォレット:</span>
+                                <span className="ml-2 text-blue-700">{signedTxData[request.id].metadata?.walletUsed || 'Unknown'}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-blue-800">署名データ:</span>
+                                <div className="mt-1 p-2 bg-white rounded border font-mono text-xs break-all">
+                                  {typeof signedTxData[request.id].signedTx === 'string' 
+                                    ? signedTxData[request.id].signedTx.slice(0, 100) + '...'
+                                    : JSON.stringify(signedTxData[request.id].signedTx).slice(0, 100) + '...'
+                                  }
+                                </div>
+                              </div>
+                              <div>
+                                <span className="font-medium text-blue-800">ステータス:</span>
+                                <span className="ml-2 text-blue-700">{signedTxData[request.id].status}</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}

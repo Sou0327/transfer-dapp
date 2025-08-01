@@ -49,76 +49,67 @@ abstract class BaseTxBuilder {
    * Get all available UTxOs from wallet
    */
   protected async getWalletUtxos(): Promise<UTxO[]> {
-    try {
-      const utxosHex = await this.config.api.getUtxos();
-      const utxos: UTxO[] = [];
+    // Get UTxOs from wallet API
+    const utxosHex = await this.config.api.getUtxos();
+    
+    if (!utxosHex || utxosHex.length === 0) {
+      return [];
+    }
 
-      for (const utxoHex of utxosHex) {
-        const utxo = CSL.TransactionUnspentOutput.from_bytes(
-          Buffer.from(utxoHex, 'hex')
-        );
-        
+    const utxos: UTxO[] = [];
+    
+    for (let i = 0; i < utxosHex.length; i++) {
+      try {
+        const utxoHex = utxosHex[i];
+        const utxo = CSL.TransactionUnspentOutput.from_bytes(Buffer.from(utxoHex, 'hex'));
         const input = utxo.input();
         const output = utxo.output();
-        const value = output.amount();
-
-        // Convert to our UTxO format
-        const formattedUtxo: UTxO = {
-          txHash: Buffer.from(input.transaction_id().to_bytes()).toString('hex'),
-          outputIndex: input.index(),
-          address: output.address().to_bech32(),
-          amount: {
-            coin: value.coin().to_str()
-          },
-          assets: []
-        };
-
-        // Handle multi-assets
-        const multiasset = value.multiasset();
-        if (multiasset) {
-          const multiassetData: { [policyId: string]: { [assetName: string]: string } } = {};
-          const keys = multiasset.keys();
-          
-          for (let i = 0; i < keys.len(); i++) {
-            const policyId = keys.get(i);
-            const assets = multiasset.get(policyId);
+        
+        const txHash = Buffer.from(input.transaction_id().to_bytes()).toString('hex');
+        const outputIndex = input.index();
+        const coin = output.amount().coin().to_str();
+        
+        // Handle assets
+        const assets: { policy_id: string; asset_name: string; amount: string }[] = [];
+        const multiAsset = output.amount().multiasset();
+        
+        if (multiAsset) {
+          const policies = multiAsset.keys();
+          for (let j = 0; j < policies.len(); j++) {
+            const policyId = Buffer.from(policies.get(j).to_bytes()).toString('hex');
+            const assets_for_policy = multiAsset.get(policies.get(j));
             
-            if (assets) {
-              const policyIdHex = Buffer.from(policyId.to_bytes()).toString('hex');
-              multiassetData[policyIdHex] = {};
-              
-              const assetNames = assets.keys();
-              for (let j = 0; j < assetNames.len(); j++) {
-                const assetName = assetNames.get(j);
-                const amount = assets.get(assetName);
+            if (assets_for_policy) {
+              const assetNames = assets_for_policy.keys();
+              for (let k = 0; k < assetNames.len(); k++) {
+                const assetName = Buffer.from(assetNames.get(k).name()).toString('hex');
+                const amount = assets_for_policy.get(assetNames.get(k))?.to_str() || '0';
                 
-                if (amount) {
-                  const assetNameHex = Buffer.from(assetName.name()).toString('hex');
-                  multiassetData[policyIdHex][assetNameHex] = amount.to_str();
-                  
-                  // Also add to assets array for compatibility
-                  formattedUtxo.assets?.push({
-                    unit: policyIdHex + assetNameHex,
-                    quantity: amount.to_str(),
-                    policy_id: policyIdHex,
-                    asset_name: assetNameHex,
-                    policyId: policyIdHex
-                  });
-                }
+                assets.push({
+                  policy_id: policyId,
+                  asset_name: assetName,
+                  amount
+                });
               }
             }
           }
-          
-          formattedUtxo.amount.multiasset = multiassetData;
         }
 
-        utxos.push(formattedUtxo);
+        utxos.push({
+          txHash,
+          outputIndex,
+          amount: {
+            coin,
+            assets: assets.length > 0 ? assets : undefined
+          },
+          assets: assets.length > 0 ? assets : undefined
+        });
+      } catch (error) {
+        console.error(`Error processing UTxO ${i}:`, error);
       }
-
-      return utxos;
-    } catch (error) {
-      throw new Error(`UTxO取得に失敗しました: ${error}`);
     }
+
+    return utxos;
   }
 
   /**
@@ -132,76 +123,60 @@ abstract class BaseTxBuilder {
   /**
    * Build transaction body
    */
-  protected buildTxBody(
-    inputs: CSL.TransactionInputs,
-    outputs: CSL.TransactionOutputs,
-    ttl?: CSL.BigNum
-  ): CSL.TransactionBody {
-    const config = CSL.TransactionBuilderConfigBuilder.new()
-      .fee_algo(
-        CSL.LinearFee.new(
-          CSL.BigNum.from_str(this.config.protocolParams.minFeeA.toString()),
-          CSL.BigNum.from_str(this.config.protocolParams.minFeeB.toString())
-        )
-      )
-      .pool_deposit(CSL.BigNum.from_str(this.config.protocolParams.poolDeposit))
-      .key_deposit(CSL.BigNum.from_str(this.config.protocolParams.keyDeposit))
-      .max_tx_size(Number(this.config.protocolParams.maxTxSize))
-      .max_value_size(5000)
-      .coins_per_utxo_byte(CSL.BigNum.from_str(this.config.protocolParams.coinsPerUtxoByte))
-      .build();
+  protected buildTxBody(inputs: any, outputs: any, currentSlot: any, fee?: bigint): any {
+    // Set TTL
+    const ttl = currentSlot.checked_add(
+      CSL.BigNum.from_str((this.config.ttlOffset || DEFAULT_TTL_OFFSET).toString())
+    );
 
-    const txBuilder = CSL.TransactionBuilder.new(config);
-
-    // Add inputs
-    for (let i = 0; i < inputs.len(); i++) {
-      txBuilder.add_key_input(
-        CSL.Ed25519KeyHash.from_hex(''), // placeholder
-        inputs.get(i),
-        CSL.Value.new(CSL.BigNum.from_str("0"))
-      );
+    // Calculate fee if not provided
+    let txFee: any;
+    if (fee) {
+      txFee = CSL.BigNum.from_str(fee.toString());
+    } else {
+      // Estimate fee based on transaction size
+      const estimatedSize = 180 + (inputs.len() * 70) + (outputs.len() * 40);
+      const estimatedFee = this.calculateFee(estimatedSize);
+      txFee = CSL.BigNum.from_str(estimatedFee.toString());
     }
 
-    // Add outputs
-    for (let i = 0; i < outputs.len(); i++) {
-      txBuilder.add_output(outputs.get(i));
-    }
+    // Create transaction body
+    const txBody = CSL.TransactionBody.new(
+      inputs,
+      outputs,
+      txFee,
+      ttl
+    );
 
-    // Set TTL if provided
-    if (ttl) {
-      const ttlOffset = CSL.BigNum.from_str((this.config.ttlOffset || DEFAULT_TTL_OFFSET).toString());
-      const finalTtl = ttl.checked_add(ttlOffset);
-      if (finalTtl) {
-        txBuilder.set_ttl(Number(finalTtl.to_str()));
-      }
-    }
-
-    return txBuilder.build();
+    return txBody;
   }
 
   /**
    * Create transaction output
    */
-  protected createOutput(address: string, amount: bigint, assets?: unknown[]): CSL.TransactionOutput {
+  protected createOutput(address: string, adaAmount: bigint, assets?: { policy_id: string; asset_name: string; amount: string }[]): any {
+    // Parse address
     const addr = CSL.Address.from_bech32(address);
-    const value = CSL.Value.new(CSL.BigNum.from_str(amount.toString()));
 
-    // Add multi-assets if provided
+    // Create value
+    const coin = CSL.BigNum.from_str(adaAmount.toString());
+    const value = CSL.Value.new(coin);
+
+    // Add assets if present
     if (assets && assets.length > 0) {
       const multiAsset = CSL.MultiAsset.new();
       
       for (const asset of assets) {
-        const assetData = asset as { policyId: string; assetName: string; amount: string };
-        const policyId = CSL.ScriptHash.from_bytes(Buffer.from(assetData.policyId, 'hex'));
-        const assetName = CSL.AssetName.new(Buffer.from(assetData.assetName, 'hex'));
-        const assetAmount = CSL.BigNum.from_str(assetData.amount);
-
-        let assets = multiAsset.get(policyId);
-        if (!assets) {
-          assets = CSL.Assets.new();
-          multiAsset.insert(policyId, assets);
+        const policyId = CSL.ScriptHash.from_bytes(Buffer.from(asset.policy_id, 'hex'));
+        const assetName = CSL.AssetName.new(Buffer.from(asset.asset_name, 'hex'));
+        const assetAmount = CSL.BigNum.from_str(asset.amount);
+        
+        let assetMap = multiAsset.get(policyId);
+        if (!assetMap) {
+          assetMap = CSL.Assets.new();
+          multiAsset.insert(policyId, assetMap);
         }
-        assets.insert(assetName, assetAmount);
+        assetMap.insert(assetName, assetAmount);
       }
       
       value.set_multiasset(multiAsset);

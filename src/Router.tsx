@@ -19,7 +19,7 @@ export const Router: React.FC = () => {
         <Route path="/admin/*" element={<AdminApp />} />
         
         {/* OTC Signing Interface */}
-        <Route path="/sign" element={<SigningPage />} />
+        <Route path="/sign/:requestId" element={<SigningPage />} />
         
         {/* Default redirect to admin app */}
         <Route path="/" element={<Navigate to="/admin" replace />} />

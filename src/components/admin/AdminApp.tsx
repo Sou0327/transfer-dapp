@@ -4,10 +4,10 @@
  */
 import React, { useState, useCallback, useEffect } from 'react';
 import { useAdminAuth, createAuthenticatedFetch } from '../../hooks/useAdminAuth';
+import { useWebSocket } from '../../lib/websocket';
 import { AdminLogin } from './AdminLogin';
 import { Dashboard } from './Dashboard';
 import { RequestsManagement } from './RequestsManagement';
-import { TransactionManagement } from './TransactionManagement';
 // SecurityDashboard と SystemSettings は段階的リリースのため一時的に非表示
 // import { SecurityDashboard } from './SecurityDashboard';
 // import { SystemSettings } from './SystemSettings';
@@ -20,7 +20,7 @@ import {
 } from '../../types/otc/index';
 
 // 段階的リリース: 基本機能に集中するため security と settings は一時的に非表示
-type AdminTab = 'dashboard' | 'requests' | 'transactions'; // | 'security' | 'settings';
+type AdminTab = 'dashboard' | 'requests'; // | 'transactions' | 'security' | 'settings';
 
 export const AdminApp: React.FC = () => {
   const { session, loading: authLoading, login, logout } = useAdminAuth();
@@ -28,6 +28,31 @@ export const AdminApp: React.FC = () => {
   const [requests, setRequests] = useState<OTCRequest[]>([]);
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+
+  // WebSocket for real-time admin updates
+  const { isConnected: wsConnected, isAuthenticated: wsAuthenticated, subscribe, unsubscribe } = useWebSocket({
+    onStatusUpdate: (update) => {
+      console.log('🔥 管理者向けステータス更新受信:', update);
+      console.log('🔥 現在のリクエスト数:', requests.length);
+      
+      // リクエストリストを更新
+      setRequests(prev => {
+        const updatedList = prev.map(req => 
+          req.id === update.request_id 
+            ? { ...req, status: update.status, updated_at: update.timestamp }
+            : req
+        );
+        console.log('🔥 更新後のリクエスト:', updatedList);
+        return updatedList;
+      });
+    },
+    onConnect: () => {
+      console.log('🔥 管理者WebSocket接続成功');
+    },
+    onDisconnect: () => {
+      console.log('🔥 管理者WebSocket切断');
+    }
+  });
 
   // Handle login
   const handleLogin = useCallback(async (credentials: LoginCredentials) => {
@@ -164,6 +189,20 @@ export const AdminApp: React.FC = () => {
     }
   }, [session, activeTab, fetchRequests]);
 
+  // Initialize WebSocket connection for admin when authenticated  
+  useEffect(() => {
+    console.log('🔥 AdminApp WebSocket状態:');
+    console.log('  session:', !!session);
+    console.log('  wsConnected:', wsConnected);
+    console.log('  wsAuthenticated:', wsAuthenticated);
+    console.log('  email:', session?.email);
+    
+    if (session && wsConnected) {
+      // WebSocket接続成功時のログ
+      console.log('🔥 管理者WebSocket接続成功 - adminルームに参加');
+    }
+  }, [session, wsConnected, wsAuthenticated]);
+
   // Show loading state during authentication check
   if (authLoading) {
     return (
@@ -218,7 +257,6 @@ export const AdminApp: React.FC = () => {
             {[
               { id: 'dashboard' as const, label: 'ダッシュボード' },
               { id: 'requests' as const, label: '請求管理' },
-              { id: 'transactions' as const, label: 'トランザクション' },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -243,7 +281,7 @@ export const AdminApp: React.FC = () => {
               onGenerateLink={handleGenerateLink}
             />
           )}
-          {activeTab === 'transactions' && <TransactionManagement />}
+
           {/* 段階的リリース: セキュリティとシステム設定は一時的に非表示 */}
           {/* {activeTab === 'security' && <SecurityDashboard />} */}
           {/* {activeTab === 'settings' && <SystemSettings />} */}

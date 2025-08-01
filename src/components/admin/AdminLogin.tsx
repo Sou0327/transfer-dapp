@@ -49,8 +49,11 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
     // Email validation
     if (!formData.email.trim()) {
       errors.email = 'メールアドレスを入力してください';
-    } else if (!formData.email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
-      errors.email = '有効なメールアドレスを入力してください';
+    } else {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.email)) {
+        errors.email = '有効なメールアドレスを入力してください';
+      }
     }
 
     // Password validation
@@ -62,13 +65,15 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
 
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
-  }, [formData]);
+  }, [formData]);;;
 
   // Handle form submission
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('フォーム送信開始:', formData);
 
     if (!validateForm()) {
+      console.log('バリデーションエラー:', formErrors);
       return;
     }
 
@@ -76,10 +81,11 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
       const credentials: LoginCredentials = {
         email: formData.email.trim(),
         password: formData.password,
-        ipAddress: await getClientIP(),
+        ipAddress: 'localhost', // 開発環境では固定
         userAgent: navigator.userAgent,
       };
 
+      console.log('認証情報:', credentials);
       await onLogin(credentials);
     } catch (error) {
       console.error('Login submission error:', error);
@@ -243,6 +249,11 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
               type="submit"
               disabled={loading}
               className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                backgroundColor: '#ea580c',
+                color: 'white',
+                border: 'none'
+              }}
             >
               {loading ? (
                 <>
@@ -275,10 +286,10 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
           <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-md">
             <h4 className="text-sm font-medium text-blue-800">開発用情報</h4>
             <div className="mt-2 text-xs text-blue-600">
-              <p>デフォルト管理者:</p>
-              <p>Email: admin@otc.local</p>
-              <p>Password: admin123</p>
-              <p className="mt-1 text-blue-500">※本番環境では必ずパスワードを変更してください</p>
+              <p>開発環境用ログイン情報:</p>
+              <p>Email: <strong>admin@otc.local</strong></p>
+              <p>Password: <strong>admin123</strong></p>
+              <p className="mt-1 text-blue-500">※本番環境では認証情報を変更してください</p>
             </div>
           </div>
         )}
