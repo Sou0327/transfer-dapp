@@ -1,17 +1,15 @@
 {
-  "buildCommand": "npm ci && npm run build",
+  "buildCommand": "yarn install && yarn build",
   "outputDirectory": "dist",
-  "installCommand": "npm ci",
+  "installCommand": "yarn install",
   "framework": "vite",
   "env": {
     "NODE_ENV": "production",
-    "npm_config_optional": "true",
     "SKIP_ENV_VALIDATION": "true"
   },
   "build": {
     "env": {
       "NODE_ENV": "production",
-      "npm_config_optional": "true",
       "SKIP_ENV_VALIDATION": "true"
     }
   }
