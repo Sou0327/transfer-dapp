@@ -8,9 +8,9 @@ import { AdminLogin } from './AdminLogin';
 import { Dashboard } from './Dashboard';
 import { RequestsManagement } from './RequestsManagement';
 import { TransactionManagement } from './TransactionManagement';
-import { SecurityDashboard } from './SecurityDashboard';
-import { MonitoringSettings } from './MonitoringSettings';
-import { SystemSettings } from './SystemSettings';
+// SecurityDashboard と SystemSettings は段階的リリースのため一時的に非表示
+// import { SecurityDashboard } from './SecurityDashboard';
+// import { SystemSettings } from './SystemSettings';
 import { 
   OTCRequest, 
   CreateRequestRequest, 
@@ -19,7 +19,8 @@ import {
   LoginCredentials
 } from '../../types/otc/index';
 
-type AdminTab = 'dashboard' | 'requests' | 'transactions' | 'security' | 'monitoring' | 'settings';
+// 段階的リリース: 基本機能に集中するため security と settings は一時的に非表示
+type AdminTab = 'dashboard' | 'requests' | 'transactions'; // | 'security' | 'settings';
 
 export const AdminApp: React.FC = () => {
   const { session, loading: authLoading, login, logout } = useAdminAuth();
@@ -211,26 +212,18 @@ export const AdminApp: React.FC = () => {
       </header>
 
       {/* Navigation */}
-      <nav className="bg-white shadow-sm">
+      <nav className="bg-gray-50 border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex space-x-8">
+          <div className="flex justify-center space-x-32">
             {[
               { id: 'dashboard' as const, label: 'ダッシュボード' },
               { id: 'requests' as const, label: '請求管理' },
               { id: 'transactions' as const, label: 'トランザクション' },
-              { id: 'security' as const, label: 'セキュリティ' },
-              { id: 'monitoring' as const, label: '監視' },
-              { id: 'settings' as const, label: 'システム設定' },
             ].map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => handleTabChange(tab.id)}
-                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                  activeTab === tab.id
-                    ? 'border-orange-500 text-orange-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
+                className={`py-4 px-6 text-sm font-medium transition-colors duration-200 focus:outline-none ${activeTab === tab.id ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500 hover:text-gray-800 hover:border-b-2 hover:border-gray-300'}`}>
                 {tab.label}
               </button>
             ))}
@@ -251,9 +244,9 @@ export const AdminApp: React.FC = () => {
             />
           )}
           {activeTab === 'transactions' && <TransactionManagement />}
-          {activeTab === 'security' && <SecurityDashboard />}
-          {activeTab === 'monitoring' && <MonitoringSettings />}
-          {activeTab === 'settings' && <SystemSettings />}
+          {/* 段階的リリース: セキュリティとシステム設定は一時的に非表示 */}
+          {/* {activeTab === 'security' && <SecurityDashboard />} */}
+          {/* {activeTab === 'settings' && <SystemSettings />} */}
         </div>
       </main>
     </div>

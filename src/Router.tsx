@@ -21,8 +21,8 @@ export const Router: React.FC = () => {
         {/* OTC Signing Interface */}
         <Route path="/sign" element={<SigningPage />} />
         
-        {/* Default redirect to transfer app for backward compatibility */}
-        <Route path="/" element={<Navigate to="/transfer" replace />} />
+        {/* Default redirect to admin app */}
+        <Route path="/" element={<Navigate to="/admin" replace />} />
         
         {/* Catch-all for unknown routes */}
         <Route path="*" element={

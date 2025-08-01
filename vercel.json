@@ -12,5 +12,11 @@
       "NODE_ENV": "production",
       "SKIP_ENV_VALIDATION": "true"
     }
-  }
+  },
+  "rewrites": [
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
+  ]
 }

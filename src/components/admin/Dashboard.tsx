@@ -20,7 +20,7 @@ interface DashboardStats {
     failed: number;
     success_rate: number;
   };
-  monitoring: {
+  monitoring?: {
     utxo_service_running: boolean;
     monitored_requests: number;
     confirmation_service_running: boolean;
@@ -53,6 +53,78 @@ export const Dashboard: React.FC = () => {
   // Fetch dashboard data
   const fetchDashboardData = useCallback(async () => {
     try {
+      // 開発環境ではモックデータを使用
+      if (import.meta.env.DEV || !import.meta.env.PROD) {
+        console.log('Using mock data for dashboard in development mode');
+        
+        // モックデータを作成
+        const mockStats: DashboardStats = {
+          requests: {
+            total: 12,
+            by_status: {
+              [RequestStatus.REQUESTED]: 3,
+              [RequestStatus.SIGNED]: 2,
+              [RequestStatus.SUBMITTED]: 1,
+              [RequestStatus.CONFIRMED]: 5,
+              [RequestStatus.FAILED]: 1,
+              [RequestStatus.EXPIRED]: 0
+            },
+            recent_count: 3,
+            active_count: 6
+          },
+          transactions: {
+            total: 8,
+            submitted: 7,
+            confirmed: 5,
+            failed: 1,
+            success_rate: 62.5
+          },
+          // monitoring: {
+          //   utxo_service_running: true,
+          //   monitored_requests: 6,
+          //   confirmation_service_running: true,
+          //   monitored_transactions: 3
+          // },
+          submission: {
+            active_submissions: 1,
+            pending_retries: 0,
+            queue_length: 2
+          }
+        };
+
+        setStats(mockStats);
+
+        // モック最近のアクティビティ
+        const mockActivities: RecentActivity[] = [
+          {
+            id: 'mock-1',
+            type: 'request_created',
+            description: 'リクエスト作成: abcd1234...',
+            timestamp: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+            status: RequestStatus.REQUESTED
+          },
+          {
+            id: 'mock-2',
+            type: 'transaction_confirmed',
+            description: 'トランザクション承認: ef567890...',
+            timestamp: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
+            status: RequestStatus.CONFIRMED
+          },
+          {
+            id: 'mock-3',
+            type: 'request_created',
+            description: 'リクエスト作成: gh123456...',
+            timestamp: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
+            status: RequestStatus.SIGNED
+          }
+        ];
+
+        setRecentActivity(mockActivities);
+        setError(null);
+        return;
+      }
+
+      // 本番環境でのAPI呼び出し
       const authFetch = createAuthenticatedFetch();
       
       // Fetch statistics from multiple endpoints
@@ -91,12 +163,12 @@ export const Dashboard: React.FC = () => {
           failed: 0,
           success_rate: 0
         },
-        monitoring: {
-          utxo_service_running: monitoringData.stats?.isRunning || false,
-          monitored_requests: monitoringData.stats?.monitoredRequests || 0,
-          confirmation_service_running: transactionsData.service_stats?.isRunning || false,
-          monitored_transactions: transactionsData.service_stats?.monitoredTransactions || 0
-        },
+        // monitoring: {
+        //   utxo_service_running: monitoringData.stats?.isRunning || false,
+        //   monitored_requests: monitoringData.stats?.monitoredRequests || 0,
+        //   confirmation_service_running: transactionsData.service_stats?.isRunning || false,
+        //   monitored_transactions: transactionsData.service_stats?.monitoredTransactions || 0
+        // },
         submission: {
           active_submissions: submissionData.submitter_stats?.activeSubmissions || 0,
           pending_retries: submissionData.submitter_stats?.pendingRetries || 0,
@@ -123,7 +195,7 @@ export const Dashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, []);;
 
   // Initialize data and refresh interval
   useEffect(() => {
@@ -209,7 +281,7 @@ export const Dashboard: React.FC = () => {
       </div>
 
       {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Requests Stats */}
         <div className="bg-white overflow-hidden rounded-2xl shadow-sm hover:shadow-md transition-shadow duration-300 border border-gray-100">
           <div className="p-6">
@@ -270,42 +342,7 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Monitoring Stats */}
-        <div className="bg-white overflow-hidden rounded-2xl shadow-sm hover:shadow-md transition-shadow duration-300 border border-gray-100">
-          <div className="p-6">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <svg className="h-8 w-8 text-gray-900" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-              </div>
-              <div className="ml-6 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-400 tracking-wide">
-                    監視
-                  </dt>
-                  <dd className="text-2xl font-semibold text-gray-900 mt-1">
-                    {(stats?.monitoring.monitored_requests || 0) + (stats?.monitoring.monitored_transactions || 0)}
-                  </dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-          <div className="bg-gray-50 px-6 py-4 border-t border-gray-100">
-            <div className="text-sm flex space-x-2">
-              <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
-                stats?.monitoring.utxo_service_running ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-              }`}>
-                UTxO {stats?.monitoring.utxo_service_running ? 'ON' : 'OFF'}
-              </span>
-              <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
-                stats?.monitoring.confirmation_service_running ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-              }`}>
-                承認 {stats?.monitoring.confirmation_service_running ? 'ON' : 'OFF'}
-              </span>
-            </div>
-          </div>
-        </div>
+        {/* Monitoring Stats - Temporarily disabled for phased release */}
 
         {/* Submission Queue */}
         <div className="bg-white overflow-hidden rounded-2xl shadow-sm hover:shadow-md transition-shadow duration-300 border border-gray-100">
@@ -396,25 +433,11 @@ export const Dashboard: React.FC = () => {
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
             システムヘルス
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-              <span className="text-sm font-medium text-gray-800">UTXOサービス</span>
-              <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${                stats?.monitoring.utxo_service_running 
-                  ? 'bg-green-100 text-green-800' 
-                  : 'bg-red-100 text-red-800'
-              }`}>
-                {stats?.monitoring.utxo_service_running ? '実行中' : '停止'}
-              </span>
-            </div>
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-              <span className="text-sm font-medium text-gray-800">承認サービス</span>
-              <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${                stats?.monitoring.confirmation_service_running 
-                  ? 'bg-green-100 text-green-800' 
-                  : 'bg-red-100 text-red-800'
-              }`}>
-                {stats?.monitoring.confirmation_service_running ? '実行中' : '停止'}
-              </span>
-            </div>
+          <div className="grid grid-cols-1 gap-4">
+            {/* Monitoring services temporarily disabled for phased release */}
+            
+            {/* UTXOサービス - 段階的リリースのため一時的に非表示 */}
+            {/* 承認サービス - 段階的リリースのため一時的に非表示 */}
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
               <span className="text-sm font-medium text-gray-800">送信サービス</span>
               <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800">
