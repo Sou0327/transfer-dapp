@@ -68,13 +68,13 @@ export const SigningPage: React.FC = () => {
     currentStep: 'connect'
   });
 
-  const { selectedWallet, connect, disconnect, getUtxos, signTransaction: walletSignTx, availableWallets } = useWallet();
-  const { isConnected: wsConnected, subscribe, unsubscribe, emit } = useWebSocket({
+  const { selectedWallet, connect, disconnect, getUtxos, signTransaction: walletSignTx } = useWallet();
+  const { isConnected: wsConnected, subscribe, unsubscribe } = useWebSocket({
     onStatusUpdate: (update) => {
       if (update.request_id === requestId) {
         setState(prev => ({
           ...prev,
-          request: prev.request ? { ...prev.request, status: update.status } : null
+          request: prev.request ? { ...prev.request, status: update.status as RequestStatus } : null
         }));
         
         // Update submission status based on request status
@@ -101,7 +101,7 @@ export const SigningPage: React.FC = () => {
       if (update.request_id === requestId && update.status === 'expired') {
         setState(prev => ({
           ...prev,
-          request: prev.request ? { ...prev.request, status: 'EXPIRED' } : null
+          request: prev.request ? { ...prev.request, status: RequestStatus.EXPIRED } : null
         }));
       }
     }
@@ -138,73 +138,7 @@ export const SigningPage: React.FC = () => {
 
 
 
-  // Fetch request data
-  const fetchRequest = useCallback(async (id: string) => {
-    try {
-      setState(prev => ({ ...prev, loading: true }));
-      clearError();
-      
-      console.log('🔍 APIリクエスト開始:', {
-        requestId: id,
-        url: `/api/ada/requests/${id}`,
-        baseUrl: window.location.origin
-      });
-      
-      const response = await fetch(`/api/ada/requests/${id}`);
-      
-      console.log('🔍 APIレスポンス受信:', {
-        ok: response.ok,
-        status: response.status,
-        statusText: response.statusText,
-        headers: Object.fromEntries(response.headers.entries())
-      });
-      
-      if (!response.ok) {
-        if (response.status === 404) {
-          setError('指定された請求が見つかりません。URLを確認してください。', 'validation');
-          return;
-        }
-        if (response.status >= 500) {
-          setError('サーバーエラーが発生しました。しばらく時間をおいて再度お試しください。', 'network');
-          return;
-        }
-        setError('請求情報の取得に失敗しました。', 'network');
-        return;
-      }
 
-      const data = await response.json();
-      
-      // デバッグ: APIレスポンスデータを詳細確認
-      console.log('🔍 APIレスポンス詳細:', {
-        response_ok: response.ok,
-        response_status: response.status,
-        data_structure: data,
-        request_data: data.request,
-        has_request: 'request' in data,
-        request_keys: data.request ? Object.keys(data.request) : 'no request object',
-        amount_mode_in_response: data.request?.amount_mode,
-        amount_or_rule_in_response: data.request?.amount_or_rule_json
-      });
-      
-      setState(prev => ({ ...prev, request: data.request, loading: false }));
-
-    } catch (error) {
-      console.error('🔍 APIリクエストエラー詳細:', {
-        error,
-        errorType: typeof error,
-        errorMessage: error instanceof Error ? error.message : String(error),
-        errorStack: error instanceof Error ? error.stack : undefined,
-        requestId: id
-      });
-      
-      if (error instanceof TypeError && error.message.includes('fetch')) {
-        setError('ネットワーク接続を確認してください。', 'network');
-      } else {
-        const errorMessage = error instanceof Error ? error.message : '不明なエラーが発生しました';
-        setError(errorMessage, 'unknown');
-      }
-    }
-  }, [setError, clearError]);
 
   // Subscribe to request updates via WebSocket
   useEffect(() => {
@@ -306,7 +240,7 @@ export const SigningPage: React.FC = () => {
     };
     
     doFetch();
-  }, [requestId]);
+  }, [requestId, clearError, setError]);
 
   // Handle wallet connection
   const handleWalletConnect = useCallback(async (walletName: string) => {
@@ -644,17 +578,17 @@ export const SigningPage: React.FC = () => {
                      (state.request.ttl_absolute ? new Date(state.request.ttl_absolute) <= new Date() : false);
     
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="max-w-md w-full bg-white shadow-lg rounded-lg p-6 text-center">
-          <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-yellow-100 mb-4">
-            <svg className="h-6 w-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <div className="max-w-md w-full bg-white shadow-lg rounded-lg p-4 sm:p-6 text-center">
+          <div className="mx-auto flex items-center justify-center h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-yellow-100 mb-4">
+            <svg className="h-5 w-5 sm:h-6 sm:w-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">
+          <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">
             {isExpired ? '請求の期限が切れています' : '無効な請求です'}
           </h3>
-          <p className="text-sm text-gray-500 mb-4">
+          <p className="text-sm text-gray-500 mb-4 px-2">
             {isExpired 
               ? 'この請求は期限切れのため署名できません。新しい請求をリクエストしてください。'
               : `この請求は現在「${state.request.status}」状態のため署名できません。`
@@ -671,17 +605,17 @@ export const SigningPage: React.FC = () => {
   // Show success state
   if (state.submissionStatus === 'confirmed' && state.transactionDetails) {
     return (
-      <div className="min-h-screen bg-gray-50 py-8">
+      <div className="min-h-screen bg-gray-50 py-4 sm:py-8">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Header */}
-          <div className="text-center mb-8">
-            <div className="mx-auto h-12 w-12 flex items-center justify-center bg-green-500 rounded-full mb-4">
-              <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="text-center mb-6 sm:mb-8">
+            <div className="mx-auto h-10 w-10 sm:h-12 sm:w-12 flex items-center justify-center bg-green-500 rounded-full mb-4">
+              <svg className="h-5 w-5 sm:h-6 sm:w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">送金完了</h1>
-            <p className="text-gray-600">
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">送金完了</h1>
+            <p className="text-sm sm:text-base text-gray-600 px-4">
               トランザクションがブロックチェーンで正常に確認されました
             </p>
           </div>
@@ -689,7 +623,7 @@ export const SigningPage: React.FC = () => {
           {/* Progress Steps */}
           <SigningSteps 
             currentStep="confirm" 
-            className="mb-8"
+            className="mb-6 sm:mb-8"
           />
 
           {/* Success Details */}
@@ -723,18 +657,18 @@ export const SigningPage: React.FC = () => {
   // Main signing interface
   return (
     <>
-      <div className="min-h-screen bg-gray-50 py-8">
+      <div className="min-h-screen bg-gray-50 py-4 sm:py-8">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="text-center mb-8">
-          <div className="mx-auto h-12 w-12 flex items-center justify-center bg-orange-500 rounded-full mb-4">
-            <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div className="text-center mb-6 sm:mb-8">
+          <div className="mx-auto h-10 w-10 sm:h-12 sm:w-12 flex items-center justify-center bg-orange-500 rounded-full mb-4">
+            <svg className="h-5 w-5 sm:h-6 sm:w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">ADA送金の署名</h1>
-          <p className="text-gray-600">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">ADA送金の署名</h1>
+          <p className="text-sm sm:text-base text-gray-600 px-4">
             以下の内容でADAを送金いたします。内容をご確認の上、ウォレットで署名してください。
           </p>
         </div>
@@ -742,15 +676,15 @@ export const SigningPage: React.FC = () => {
         {/* Progress Steps */}
         <SigningSteps 
           currentStep={state.currentStep} 
-          className="mb-8"
+          className="mb-6 sm:mb-8"
         />
 
         {/* Request Information */}
         {state.request && (
-          <div className="bg-white shadow rounded-lg mb-6">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-medium text-gray-900">送金詳細</h3>
+          <div className="bg-white shadow rounded-lg mb-4 sm:mb-6">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <h3 className="text-base sm:text-lg font-medium text-gray-900">送金詳細</h3>
                 <CountdownBadge 
                   targetTime={state.request.ttl_absolute ? new Date(state.request.ttl_absolute) : new Date(Date.now() + 900000)}
                   onExpire={() => setState(prev => ({ 
@@ -760,8 +694,8 @@ export const SigningPage: React.FC = () => {
                 />
               </div>
             </div>
-            <div className="px-6 py-4 space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="px-4 sm:px-6 py-4 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <dt className="text-sm font-medium text-gray-500">送金金額</dt>
                   <dd className="mt-1 text-lg font-semibold text-gray-900">
@@ -781,12 +715,12 @@ export const SigningPage: React.FC = () => {
 
               <div>
                 <dt className="text-sm font-medium text-gray-500">送金先アドレス</dt>
-                <dd className="mt-1 text-sm font-mono text-gray-900 break-all bg-gray-50 p-2 rounded">
+                <dd className="mt-1 text-xs sm:text-sm font-mono text-gray-900 break-all bg-gray-50 p-2 rounded">
                   {state.request.recipient}
                 </dd>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <dt className="text-sm font-medium text-gray-500">作成日時</dt>
                   <dd className="mt-1 text-sm text-gray-900">
@@ -811,19 +745,19 @@ export const SigningPage: React.FC = () => {
 
         {/* Wallet Connection and Transaction Flow */}
         <div className="bg-white shadow rounded-lg">
-          <div className="px-6 py-4">
+          <div className="px-4 sm:px-6 py-4">
             {!selectedWallet ? (
               // Wallet Selection
-              <div className="text-center py-12">
-                  <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-orange-100 mb-4">
-                    <svg className="h-6 w-6 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="text-center py-8 sm:py-12">
+                  <div className="mx-auto flex items-center justify-center h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-orange-100 mb-4">
+                    <svg className="h-5 w-5 sm:h-6 sm:w-6 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v2a2 2 0 002 2z" />
                     </svg>
                   </div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">
                     ウォレット接続が必要です
                   </h3>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-gray-500 px-4">
                     画面下部のボタンからCardanoウォレットを接続してください
                   </p>
                   <button
@@ -950,34 +884,16 @@ export const SigningPage: React.FC = () => {
     </div>
 
     {/* Bottom Wallet Connection Button */}
-    <div style={{
-      position: 'fixed',
-      bottom: '24px',
-      left: '50%',
-      transform: 'translateX(-50%)',
-      zIndex: 50
-    }}>
+    <div className="fixed bottom-4 sm:bottom-6 left-1/2 transform -translate-x-1/2 z-50">
         <button
           onClick={() => setState(prev => ({ ...prev, showWalletModal: true }))}
-          style={{
-            backgroundColor: '#ea580c',
-            color: 'white',
-            padding: '12px 24px',
-            borderRadius: '9999px',
-            border: 'none',
-            fontSize: '16px',
-            fontWeight: '500',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-          }}
+          className="bg-orange-600 hover:bg-orange-700 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-full font-medium shadow-lg flex items-center gap-2 text-sm sm:text-base transition-colors"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v2a2 2 0 002 2z" />
           </svg>
-          <span>ウォレット接続</span>
+          <span className="hidden sm:inline">ウォレット接続</span>
+          <span className="sm:hidden">接続</span>
         </button>
     </div>
 

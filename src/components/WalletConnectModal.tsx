@@ -48,20 +48,20 @@ export const WalletConnectModal: React.FC<WalletConnectModalProps> = ({
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className={`bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto ${className}`}>
         {/* Header */}
-        <div className="flex justify-between items-center p-6 border-b border-gray-200">
-          <h2 className="text-xl font-bold text-gray-900">Connect Wallet</h2>
+        <div className="flex justify-between items-center p-4 sm:p-6 border-b border-gray-200">
+          <h2 className="text-lg sm:text-xl font-bold text-gray-900">Connect Wallet</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-gray-400 hover:text-gray-600 transition-colors p-1"
             disabled={isConnecting}
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {/* Available Wallets */}
           {availableWallets.length > 0 && (
             <div className="mb-6">
@@ -104,15 +104,15 @@ export const WalletConnectModal: React.FC<WalletConnectModalProps> = ({
           </div>
 
           {/* Info */}
-          <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+          <div className="mt-4 sm:mt-6 p-3 sm:p-4 bg-blue-50 rounded-lg">
             <div className="flex">
               <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                <svg className="h-4 w-4 sm:h-5 sm:w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                 </svg>
               </div>
-              <div className="ml-3">
-                <p className="text-sm text-blue-700">
+              <div className="ml-2 sm:ml-3">
+                <p className="text-xs sm:text-sm text-blue-700">
                   To use this dApp, you need a Cardano wallet extension installed in your browser. 
                   Click on any wallet above to install or connect.
                 </p>
@@ -144,7 +144,7 @@ const WalletButton: React.FC<WalletButtonProps> = ({
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`w-full flex items-center p-3 rounded-lg border transition-all ${
+      className={`w-full flex items-center p-3 sm:p-3 rounded-lg border transition-all ${
         isInstalled
           ? 'border-gray-200 hover:border-blue-300 hover:bg-blue-50 focus:ring-2 focus:ring-blue-500'
           : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
@@ -156,7 +156,7 @@ const WalletButton: React.FC<WalletButtonProps> = ({
           <img
             src={wallet.icon}
             alt={`${wallet.displayName} icon`}
-            className="w-10 h-10 rounded-lg shadow-sm transition-transform duration-200 group-hover:scale-105"
+            className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg shadow-sm transition-transform duration-200 group-hover:scale-105"
             onError={(e) => {
               // Fallback to generic wallet icon on error
               (e.target as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiByeD0iMTAiIGZpbGw9IiM2QjcyODAiLz4KPHN2ZyB4PSI4IiB5PSI4IiB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSI+CjxwYXRoIGQ9Ik0yMSA4QzIxIDYuOSAyMC4xIDYgMTkgNkg1QzMuOSA2IDMgNi45IDMgOFYxOUMzIDIwLjEgMy45IDIxIDUgMjFIMTlDMjAuMSAyMSAyMSAyMC4xIDIxIDE5VjhaIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiIGZpbGw9Im5vbmUiLz4KPGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMyIgZmlsbD0id2hpdGUiLz4KPC9zdmc+Cjwvc3ZnPgo=';
@@ -174,16 +174,16 @@ const WalletButton: React.FC<WalletButtonProps> = ({
       </div>
 
       {/* Wallet Info */}
-      <div className="ml-3 flex-1 text-left">
+      <div className="ml-2 sm:ml-3 flex-1 text-left">
         <div className="flex items-center">
-          <h4 className="text-sm font-medium text-gray-900">{wallet.displayName}</h4>
+          <h4 className="text-sm sm:text-sm font-medium text-gray-900">{wallet.displayName}</h4>
           {!isInstalled && (
-            <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+            <span className="ml-2 inline-flex items-center px-2 sm:px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
               Install
             </span>
           )}
         </div>
-        <p className="text-xs text-gray-500 mt-1">{wallet.description}</p>
+        <p className="text-xs text-gray-500 mt-1 pr-2">{wallet.description}</p>
       </div>
 
       {/* Status */}

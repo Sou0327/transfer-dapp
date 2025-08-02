@@ -56,14 +56,14 @@ export const TxPreview: React.FC<TxPreviewProps> = ({
   const { summary } = txResult;
 
   return (
-    <div className={`bg-white border border-gray-200 rounded-lg shadow-sm p-6 ${className}`}>
+    <div className={`bg-white border border-gray-200 rounded-lg shadow-sm p-4 sm:p-6 ${className}`}>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <h3 className="text-lg font-medium text-gray-900">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6">
+        <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2 sm:mb-0">
           トランザクション詳細
         </h3>
-        <div className="flex items-center text-sm text-gray-500">
-          <svg className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div className="flex items-center text-xs sm:text-sm text-gray-500">
+          <svg className="h-3 w-3 sm:h-4 sm:w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           署名準備完了
@@ -142,20 +142,20 @@ export const TxPreview: React.FC<TxPreviewProps> = ({
       <div className="space-y-3 mb-6">
         <h4 className="text-sm font-medium text-gray-700">トランザクション詳細</h4>
         
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          <div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 text-sm">
+          <div className="flex justify-between sm:block">
             <span className="text-gray-500">入力数:</span>
             <span className="ml-2 font-medium">{summary?.inputs || 0}</span>
           </div>
-          <div>
+          <div className="flex justify-between sm:block">
             <span className="text-gray-500">出力数:</span>
             <span className="ml-2 font-medium">{summary?.outputs || 0}</span>
           </div>
-          <div>
+          <div className="flex justify-between sm:block">
             <span className="text-gray-500">必要署名数:</span>
             <span className="ml-2 font-medium">{txResult.witnesses_required || 0}</span>
           </div>
-          <div>
+          <div className="flex justify-between sm:block">
             <span className="text-gray-500">TTL:</span>
             <span className="ml-2 font-medium text-xs">#{txResult.ttl}</span>
           </div>
@@ -163,20 +163,20 @@ export const TxPreview: React.FC<TxPreviewProps> = ({
 
         {/* Transaction Hash */}
         <div className="mt-4">
-          <span className="text-sm text-gray-500">トランザクションハッシュ:</span>
-          <div className="mt-1 p-2 bg-gray-50 rounded text-xs font-mono break-all">
+          <span className="text-xs sm:text-sm text-gray-500">トランザクションハッシュ:</span>
+          <div className="mt-1 p-2 sm:p-2 bg-gray-50 rounded text-xs font-mono break-all">
             {txResult.txHash}
           </div>
         </div>
       </div>
 
       {/* Security Notice */}
-      <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 mb-6">
+      <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3 sm:p-4 mb-4 sm:mb-6">
         <div className="flex items-start">
-          <svg className="h-5 w-5 text-yellow-400 mt-0.5 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-400 mt-0.5 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.99-.833-2.76 0L3.054 16.5c-.77.833.192 2.5 1.732 2.5z" />
           </svg>
-          <div className="text-sm text-yellow-800">
+          <div className="text-xs sm:text-sm text-yellow-800">
             <p className="font-medium mb-1">署名前の確認事項</p>
             <ul className="list-disc list-inside space-y-1 text-xs">
               <li>送金額と手数料が正しいことを確認してください</li>
@@ -188,18 +188,18 @@ export const TxPreview: React.FC<TxPreviewProps> = ({
       </div>
 
       {/* Action Buttons */}
-      <div className="flex space-x-3">
+      <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
         <button
           onClick={onCancel}
           disabled={isLoading}
-          className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-1 inline-flex justify-center items-center px-4 py-2 sm:py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed order-2 sm:order-1"
         >
           キャンセル
         </button>
         <button
           onClick={onConfirm}
           disabled={isLoading}
-          className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-1 inline-flex justify-center items-center px-4 py-2 sm:py-2 border border-transparent text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed order-1 sm:order-2"
           style={{
             backgroundColor: '#ea580c',
             color: 'white',

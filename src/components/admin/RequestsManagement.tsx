@@ -11,7 +11,6 @@ import {
   RequestStatus,
   FixedAmount,
   SweepRule,
-  RateBasedRule,
   AmountOrRule
 } from '../../types/otc/index';
 // import { useAdminAuth } from '../../hooks/useAdminAuth'; // Removed to fix build warning
@@ -26,7 +25,7 @@ interface RequestsManagementProps {
 
 interface CreateRequestFormData {
   currency: 'ADA';
-  amount_mode: 'fixed' | 'sweep' | 'rate_based';
+  amount_mode: 'fixed' | 'sweep';
   recipient: string;
   ttl_minutes: number;
   // Fixed amount fields
@@ -34,11 +33,17 @@ interface CreateRequestFormData {
   // Sweep fields
   ada_only: boolean;
   exclude_utxos: string;
-  // Rate-based fields
-  fiat_amount: string;
-  rate_source: string;
-  upper_limit_ada: string;
-  slippage_bps: string;
+
+}
+
+interface SignedTransactionData {
+  signedAt: string;
+  signedTx: string | object;
+  status: string;
+  metadata?: {
+    walletUsed?: string;
+    [key: string]: unknown;
+  };
 }
 
 export const RequestsManagement: React.FC<RequestsManagementProps> = ({
@@ -46,7 +51,6 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
   onCreateRequest,
   onUpdateStatus,
   onGenerateLink,
-  className = '',
 }) => {
   // const { } = useAdminAuth(); // 現在未使用
   const [activeTab, setActiveTab] = useState<'list' | 'create'>('list');
@@ -54,7 +58,7 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
   const [createError, setCreateError] = useState<string | null>(null);
   const [generatedRequest, setGeneratedRequest] = useState<CreateRequestResponse | null>(null);
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | null>(null);
-  const [signedTxData, setSignedTxData] = useState<{ [requestId: string]: any }>({});
+  const [signedTxData, setSignedTxData] = useState<{ [requestId: string]: SignedTransactionData }>({});
   const [loadingSignedData, setLoadingSignedData] = useState<{ [requestId: string]: boolean }>({});
 
   // Fetch signed transaction data
@@ -76,7 +80,7 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
   }, []);
 
   // WebSocket for real-time updates
-  const { isConnected: wsConnected, subscribe, unsubscribe } = useWebSocket({
+  useWebSocket({
     onStatusUpdate: (update) => {
       console.log('管理画面でステータス更新受信:', update);
       
@@ -96,10 +100,7 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
     fixed_amount: '',
     ada_only: true,
     exclude_utxos: '',
-    fiat_amount: '',
-    rate_source: 'coingecko',
-    upper_limit_ada: '',
-    slippage_bps: '100', // 1%
+
   });
 
   // Handle form input changes
@@ -136,32 +137,13 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
           }
         }
         break;
-
-      case 'rate_based':
-        if (!formData.fiat_amount.trim()) {
-          errors.push('法定通貨金額を入力してください');
-        } else {
-          const amount = parseFloat(formData.fiat_amount);
-          if (isNaN(amount) || amount <= 0) {
-            errors.push('有効な法定通貨金額を入力してください');
-          }
-        }
-
-        if (!formData.upper_limit_ada.trim()) {
-          errors.push('ADA上限額を入力してください');
-        } else {
-          const limit = parseFloat(formData.upper_limit_ada);
-          if (isNaN(limit) || limit <= 0) {
-            errors.push('有効なADA上限額を入力してください');
-          }
-        }
-
-        {
-          const slippage = parseFloat(formData.slippage_bps);
-          if (isNaN(slippage) || slippage < 0 || slippage > 1000) {
-            errors.push('スリッページは0〜1000bpsの範囲で入力してください');
-          }
-        }
+      
+      case 'sweep':
+        // スイープモードでは特別な検証は不要
+        break;
+        
+      default:
+        errors.push('無効な金額モードが選択されています');
         break;
     }
 
@@ -186,16 +168,6 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
             : undefined,
         };
         return sweepRule;
-      }
-
-      case 'rate_based': {
-        const rateRule: RateBasedRule = {
-          fiat_amount: parseFloat(formData.fiat_amount),
-          rate_source: formData.rate_source,
-          upper_limit_ada: (parseFloat(formData.upper_limit_ada) * 1_000_000).toString(), // Convert to lovelace
-          slippage_bps: parseFloat(formData.slippage_bps),
-        };
-        return rateRule;
       }
 
       default:
@@ -273,8 +245,6 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
       setFormData(prev => ({
         ...prev,
         fixed_amount: '',
-        fiat_amount: '',
-        upper_limit_ada: '',
         exclude_utxos: '',
       }));
 
@@ -305,7 +275,7 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
   }, [onGenerateLink]);
 
   // Submit signed transaction
-  const handleSubmitTransaction = useCallback(async (requestId: string, signedTxData: any) => {
+  const handleSubmitTransaction = useCallback(async (requestId: string, signedTxData: SignedTransactionData) => {
     try {
       // Here you would implement the actual transaction submission logic
       // For now, just show a placeholder
@@ -335,10 +305,7 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
       }
       case 'sweep':
         return '全ADA（スイープ）';
-      case 'rate_based': {
-        const rateAmount = request.amount_or_rule_json as RateBasedRule;
-        return `¥${rateAmount.fiat_amount.toLocaleString()} (レート基準)`;
-      }
+
       default:
         return 'Unknown';
     }
@@ -366,21 +333,21 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-6xl mx-auto px-8 py-12">
+      <div className="max-w-6xl mx-auto px-4 sm:px-8 py-6 sm:py-12">
         
         {/* Header */}
-        <div className="mb-16">
-          <h1 className="text-4xl font-light text-gray-900 tracking-tight">
+        <div className="mb-8 sm:mb-16">
+          <h1 className="text-2xl sm:text-4xl font-light text-gray-900 tracking-tight">
             リクエスト管理
           </h1>
-          <div className="flex items-center justify-between mt-8">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mt-4 sm:mt-8 gap-4">
             <div className="text-sm text-gray-600">
               OTC取引リクエストの作成と管理
             </div>
-            <div className="flex space-x-1 bg-gray-100 p-1 rounded-2xl">
+            <div className="flex space-x-1 bg-gray-100 p-1 rounded-2xl w-full sm:w-auto">
               <button
                 onClick={() => setActiveTab('list')}
-                className={`px-6 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
+                className={`flex-1 sm:flex-none px-4 sm:px-6 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
                   activeTab === 'list'
                     ? 'bg-white text-gray-900 shadow-sm'
                     : 'bg-transparent text-gray-600 hover:bg-gray-50'
@@ -390,7 +357,7 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
               </button>
               <button
                 onClick={() => setActiveTab('create')}
-                className={`px-6 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
+                className={`flex-1 sm:flex-none px-4 sm:px-6 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
                   activeTab === 'create'
                     ? 'bg-white text-gray-900 shadow-sm'
                     : 'bg-transparent text-gray-600 hover:bg-gray-50'
@@ -403,7 +370,7 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-16">
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-8 mb-8 sm:mb-16">
           
           {/* Total Requests */}
           <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
@@ -469,49 +436,40 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
             </h2>
           </div>
           
-          {requests.length === 0 ? (
-            <div className="p-8">
+          <div className="p-8">
+            {requests.length === 0 ? (
               <div className="text-center py-12">
                 <div className="text-gray-400 text-sm">
                   リクエストはありません
                 </div>
               </div>
-            </div>
-          ) : (
-            <div className="p-8">
-              {requests.length === 0 ? (
-                <div className="text-center py-12">
-                  <div className="text-gray-400 text-sm">
-                    リクエストはありません
-                  </div>
-                </div>
-              ) : (
+            ) : (
                 <div className="space-y-4">
                   {requests.map((request) => (
-                    <div key={request.id} className="bg-gray-50 rounded-xl p-6 hover:bg-gray-100 transition-colors">
-                      <div className="flex items-center justify-between">
+                    <div key={request.id} className="bg-gray-50 rounded-xl p-4 sm:p-6 hover:bg-gray-100 transition-colors">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center space-x-4 mb-3">
-                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(request.status)}`}>
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mb-3">
+                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium self-start ${getStatusColor(request.status)}`}>
                               {request.status}
                             </span>
                             <div className="text-lg font-medium text-gray-900">
                               {formatAmount(request)}
                             </div>
                           </div>
-                          <div className="flex items-center space-x-4 text-sm text-gray-500">
+                          <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 text-sm text-gray-500">
                             <span className="font-mono">ID: {request.id.slice(0, 8)}...</span>
-                            <span className="text-gray-300">•</span>
+                            <span className="hidden sm:inline text-gray-300">•</span>
                             <span>{new Date(request.created_at).toLocaleDateString('ja-JP')}</span>
-                            <span className="text-gray-300">•</span>
+                            <span className="hidden sm:inline text-gray-300">•</span>
                             <span>TTL: {request.ttl_slot}</span>
                           </div>
                         </div>
-                        <div className="flex items-center space-x-3">
+                        <div className="flex flex-wrap gap-2 sm:gap-3">
                           {request.status === RequestStatus.REQUESTED && (
                             <button
                               onClick={() => handleStatusUpdate(request.id, RequestStatus.EXPIRED)}
-                              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                              className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                             >
                               期限切れ
                             </button>
@@ -521,14 +479,14 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
                               <button
                                 onClick={() => fetchSignedTxData(request.id)}
                                 disabled={loadingSignedData[request.id]}
-                                className="px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors disabled:opacity-50"
+                                className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors disabled:opacity-50"
                               >
                                 {loadingSignedData[request.id] ? '読込中...' : '署名詳細'}
                               </button>
                               {signedTxData[request.id] && (
                                 <button
                                   onClick={() => handleSubmitTransaction(request.id, signedTxData[request.id])}
-                                  className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
+                                  className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
                                 >
                                   送信
                                 </button>
@@ -537,7 +495,7 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
                           )}
                           <button
                             onClick={() => handleGenerateLink(request.id)}
-                            className="px-4 py-2 text-sm font-medium text-white bg-gray-900 rounded-lg hover:bg-gray-800 transition-colors"
+                            className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-gray-900 rounded-lg hover:bg-gray-800 transition-colors"
                           >
                             リンク生成
                           </button>
@@ -545,26 +503,34 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
                         
                         {/* Show signed transaction details if available */}
                         {signedTxData[request.id] && (
-                          <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                          <div className="mt-4 p-3 sm:p-4 bg-blue-50 rounded-lg border border-blue-200">
                             <h4 className="text-sm font-medium text-blue-900 mb-3">署名済みトランザクション詳細</h4>
-                            <div className="space-y-2 text-sm">
-                              <div>
-                                <span className="font-medium text-blue-800">署名日時:</span>
-                                <span className="ml-2 text-blue-700">
+                            <div className="grid grid-cols-1 gap-3 text-sm">
+                              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                                <span className="font-medium text-blue-800 shrink-0">署名日時:</span>
+                                <span className="text-blue-700">
                                   {new Date(signedTxData[request.id].signedAt).toLocaleString('ja-JP')}
                                 </span>
                               </div>
-                              <div>
-                                <span className="font-medium text-blue-800">使用ウォレット:</span>
-                                <span className="ml-2 text-blue-700">{signedTxData[request.id].metadata?.walletUsed || 'Unknown'}</span>
+                              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                                <span className="font-medium text-blue-800 shrink-0">使用ウォレット:</span>
+                                <span className="text-blue-700">{signedTxData[request.id].metadata?.walletUsed || 'Unknown'}</span>
                               </div>
                               <div>
                                 <span className="font-medium text-blue-800">署名データ:</span>
                                 <div className="mt-1 p-2 bg-white rounded border font-mono text-xs break-all">
-                                  {typeof signedTxData[request.id].signedTx === 'string' 
-                                    ? signedTxData[request.id].signedTx.slice(0, 100) + '...'
-                                    : JSON.stringify(signedTxData[request.id].signedTx).slice(0, 100) + '...'
-                                  }
+                                  {(() => {
+                                    const signedTx = signedTxData[request.id].signedTx;
+                                    let txData: string;
+                                    
+                                    if (typeof signedTx === 'string') {
+                                      txData = signedTx;
+                                    } else {
+                                      txData = JSON.stringify(signedTx);
+                                    }
+                                    
+                                    return txData.length > 100 ? txData.slice(0, 100) + '...' : txData;
+                                  })()}
                                 </div>
                               </div>
                               <div>
@@ -580,27 +546,26 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
                 </div>
               )}
             </div>
-          )}
         </div>
       ) : (
         /* Create Request Form */
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
-          <div className="p-8 border-b border-gray-100">
-            <h2 className="text-xl font-medium text-gray-900">
+          <div className="p-4 sm:p-8 border-b border-gray-100">
+            <h2 className="text-lg sm:text-xl font-medium text-gray-900">
               新規リクエスト作成
             </h2>
           </div>
-          <div className="p-8">
+          <div className="p-4 sm:p-8">
 
-            <form onSubmit={handleCreateRequest} className="space-y-8">
+            <form onSubmit={handleCreateRequest} className="space-y-6 sm:space-y-8">
               {/* Error Display */}
               {createError && (
-                <div className="bg-red-50 rounded-2xl p-6 border border-red-100">
+                <div className="bg-red-50 rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-red-100">
                   <div className="flex items-start">
                     <div className="flex-shrink-0">
-                      <div className="w-5 h-5 rounded-full bg-red-500 mt-0.5"></div>
+                      <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-red-500 mt-0.5"></div>
                     </div>
-                    <div className="ml-4">
+                    <div className="ml-3 sm:ml-4">
                       <h3 className="text-sm font-medium text-red-800">
                         入力エラー
                       </h3>
@@ -613,14 +578,13 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
               )}
 
               {/* Amount Mode Selection */}
-              <div className="bg-gray-50 rounded-2xl p-6">
-                <label className="text-base font-medium text-gray-900 block mb-2">金額モード</label>
-                <p className="text-sm text-gray-600 mb-6">リクエスト金額の決定方法を選択します。</p>
-                <div className="space-y-4">
+              <div className="bg-gray-50 rounded-xl sm:rounded-2xl p-4 sm:p-6">
+                <label className="text-sm sm:text-base font-medium text-gray-900 block mb-2">金額モード</label>
+                <p className="text-sm text-gray-600 mb-4 sm:mb-6">リクエスト金額の決定方法を選択します。</p>
+                <div className="space-y-3 sm:space-y-4">
                   {[
                     { value: 'fixed', label: '固定額', description: '指定した額のADAを送信します。' },
-                    { value: 'sweep', label: 'スイープ', description: '手数料を差し引いた、利用可能なすべてのADAを送信します。' },
-                    { value: 'rate_based', label: 'レート基準', description: '法定通貨の価値からADAの量を計算します。' },
+                    { value: 'sweep', label: 'スイープ', description: '手数料を差し引いた、利用可能なすべてのADAを送信します。' }
                   ].map((option) => (
                     <div key={option.value} className="flex items-start">
                       <div className="flex items-center h-5">
@@ -646,7 +610,7 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
 
               {/* Amount Mode Specific Fields */}
               {formData.amount_mode === 'fixed' && (
-                <div className="bg-white rounded-2xl p-6 border border-gray-100">
+                <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-gray-100">
                   <label htmlFor="fixed_amount" className="block text-sm font-medium text-gray-900 mb-3">
                     固定額 (ADA) *
                   </label>
@@ -657,7 +621,7 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
                     min="0"
                     value={formData.fixed_amount}
                     onChange={(e) => handleInputChange('fixed_amount', e.target.value)}
-                    className="block w-full border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-gray-400 focus:border-transparent"
+                    className="block w-full border-gray-200 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2 sm:py-3 text-sm focus:ring-2 focus:ring-gray-400 focus:border-transparent"
                     placeholder="100.000000"
                   />
                 </div>
@@ -700,81 +664,6 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
                 </div>
               )}
 
-              {formData.amount_mode === 'rate_based' && (
-                <div className="space-y-5">
-                  <div>
-                    <label htmlFor="fiat_amount" className="block text-sm font-semibold text-gray-800">
-                      法定通貨額 (JPY) *
-                    </label>
-                    <div className="mt-2">
-                      <input
-                        type="number"
-                        id="fiat_amount"
-                        step="1"
-                        min="0"
-                        value={formData.fiat_amount}
-                        onChange={(e) => handleInputChange('fiat_amount', e.target.value)}
-                        className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-gray-500 focus:border-gray-500 sm:text-sm"
-                        placeholder="100000"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label htmlFor="rate_source" className="block text-sm font-semibold text-gray-800">
-                      レートソース
-                    </label>
-                    <div className="mt-2">
-                      <select
-                        id="rate_source"
-                        value={formData.rate_source}
-                        onChange={(e) => handleInputChange('rate_source', e.target.value)}
-                        className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-gray-500 focus:border-gray-500 sm:text-sm"
-                      >
-                        <option value="coingecko">CoinGecko</option>
-                        <option value="coinbase">Coinbase</option>
-                        <option value="binance">Binance</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div>
-                    <label htmlFor="upper_limit_ada" className="block text-sm font-semibold text-gray-800">
-                      ADA上限額 *
-                    </label>
-                    <div className="mt-2">
-                      <input
-                        type="number"
-                        id="upper_limit_ada"
-                        step="0.000001"
-                        min="0"
-                        value={formData.upper_limit_ada}
-                        onChange={(e) => handleInputChange('upper_limit_ada', e.target.value)}
-                        className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-gray-500 focus:border-gray-500 sm:text-sm"
-                        placeholder="3000.000000"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label htmlFor="slippage_bps" className="block text-sm font-semibold text-gray-800">
-                      スリッページ (bps) *
-                    </label>
-                    <div className="mt-2">
-                      <input
-                        type="number"
-                        id="slippage_bps"
-                        step="1"
-                        min="0"
-                        max="1000"
-                        value={formData.slippage_bps}
-                        onChange={(e) => handleInputChange('slippage_bps', e.target.value)}
-                        className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-gray-500 focus:border-gray-500 sm:text-sm"
-                        placeholder="100"
-                      />
-                    </div>
-                    <p className="mt-2 text-sm text-gray-500">100 bps = 1%</p>
-                  </div>
-                </div>
-              )}
-
               {/* Common Fields */}
               <div>
                 <label htmlFor="recipient" className="block text-sm font-semibold text-gray-800">
@@ -802,7 +691,7 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
                     type="number"
                     id="ttl_minutes"
                     min="5"
-                    max="15"
+                    max="2160"
                     value={formData.ttl_minutes}
                     onChange={(e) => handleInputChange('ttl_minutes', parseInt(e.target.value, 10))}
                     className="block w-full border-gray-300 rounded-lg shadow-sm focus:ring-gray-500 focus:border-gray-500 sm:text-sm"
@@ -811,11 +700,11 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
               </div>
 
               {/* Submit Button */}
-              <div className="pt-8">
+              <div className="pt-6 sm:pt-8">
                 <button
                   type="submit"
                   disabled={isCreating}
-                  className="w-full py-4 px-6 rounded-2xl text-base font-medium text-white bg-gray-900 hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-400 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all duration-200"
+                  className="w-full py-3 sm:py-4 px-4 sm:px-6 rounded-xl sm:rounded-2xl text-sm sm:text-base font-medium text-white bg-gray-900 hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-400 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all duration-200"
                 >
                   {isCreating ? '作成中...' : 'リクエストを作成'}
                 </button>
@@ -824,23 +713,23 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
 
             {/* Generated Request Display */}
             {generatedRequest && (
-              <div className="mt-8 p-6 bg-green-50 border border-green-100 rounded-2xl">
-                <h4 className="text-lg font-medium text-green-900 mb-4">
+              <div className="mt-6 sm:mt-8 p-4 sm:p-6 bg-green-50 border border-green-100 rounded-xl sm:rounded-2xl">
+                <h4 className="text-base sm:text-lg font-medium text-green-900 mb-4">
                   リクエストが作成されました！
                 </h4>
-                <div className="space-y-4">
+                <div className="space-y-3 sm:space-y-4">
                   <div>
                     <p className="text-sm font-medium text-green-700">リクエストID:</p>
-                    <p className="text-sm text-green-800 font-mono">{generatedRequest.requestId}</p>
+                    <p className="text-xs sm:text-sm text-green-800 font-mono break-all">{generatedRequest.requestId}</p>
                   </div>
                   <div>
                     <p className="text-sm font-medium text-green-700">署名用URL:</p>
-                    <p className="text-sm text-green-800 break-all">{generatedRequest.signUrl}</p>
+                    <p className="text-xs sm:text-sm text-green-800 break-all">{generatedRequest.signUrl}</p>
                   </div>
                   {qrCodeDataUrl && (
                     <div>
                       <p className="text-sm font-medium text-green-700 mb-2">QRコード:</p>
-                      <img src={qrCodeDataUrl} alt="QR Code" className="border border-gray-300 rounded" />
+                      <img src={qrCodeDataUrl} alt="QR Code" className="border border-gray-300 rounded max-w-full h-auto" />
                     </div>
                   )}
                   <button

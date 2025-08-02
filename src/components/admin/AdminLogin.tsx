@@ -65,7 +65,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
 
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
-  }, [formData]);;;
+  }, [formData, setFormErrors]);
 
   // Handle form submission
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
@@ -92,16 +92,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
     }
   }, [formData, validateForm, onLogin]);
 
-  // Get client IP address (simplified)
-  const getClientIP = async (): Promise<string> => {
-    try {
-      const response = await fetch('https://api.ipify.org?format=json');
-      const data = await response.json();
-      return data.ip || 'unknown';
-    } catch {
-      return 'unknown';
-    }
-  };
+
 
   // Toggle password visibility
   const togglePasswordVisibility = useCallback(() => {

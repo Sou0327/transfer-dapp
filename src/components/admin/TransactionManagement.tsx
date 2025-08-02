@@ -3,33 +3,9 @@
  * Shows transaction history, monitoring status, and submission management
  */
 import React, { useState, useCallback, useEffect } from 'react';
-import { createAuthenticatedFetch } from '../../hooks/useAdminAuth';
 
-interface TransactionData {
-  id: string;
-  tx_hash: string;
-  request_id: string;
-  status: 'SUBMITTED' | 'CONFIRMED' | 'FAILED';
-  submission_mode: 'server' | 'wallet';
-  confirmations: number;
-  block_height?: number;
-  block_hash?: string; 
-  block_time?: string;
-  submitted_at: string;
-  confirmed_at?: string;
-  last_checked?: string;
-  fee_paid?: number;
-  retry_count: number;
-}
 
-interface SubmissionStats {
-  total_submissions: number;
-  successful_submissions: number;
-  failed_submissions: number;
-  pending_submissions: number;
-  success_rate: number;
-  average_confirmation_time: number;
-}
+
 
 export const TransactionManagement: React.FC = () => {
   const [loading, setLoading] = useState(true);

@@ -366,7 +366,7 @@ export class AuthenticationService {
     return typeof password === 'string' && password.length >= 8 && password.length <= 128;
   }
 
-  private static async checkRateLimit(_email: string, _ipAddress?: string): Promise<void> {
+  private static async checkRateLimit(): Promise<void> {
     // レート制限の実装（実際の実装では外部キャッシュを使用）
     // 実装詳細は省略
     // key: `rate_limit_${_email}_${_ipAddress || 'unknown'}`
@@ -384,13 +384,13 @@ export class AuthenticationService {
     );
   }
 
-  private static async resetFailedAttempts(_email: string, _ipAddress?: string): Promise<void> {
+  private static async resetFailedAttempts(): Promise<void> {
     // 成功時の試行回数リセット
     // 実装詳細は省略
     // key: `failed_attempts_${_email}_${_ipAddress || 'unknown'}`
   }
 
-  private static async isJtiBlacklisted(_jti: string): Promise<boolean> {
+  private static async isJtiBlacklisted(): Promise<boolean> {
     // JTIブラックリストチェック（実際の実装では外部ストレージを使用）
     // 実装詳細は省略
     return false;

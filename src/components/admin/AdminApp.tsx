@@ -30,7 +30,7 @@ export const AdminApp: React.FC = () => {
   const [loginError, setLoginError] = useState<string | null>(null);
 
   // WebSocket for real-time admin updates
-  const { isConnected: wsConnected, isAuthenticated: wsAuthenticated, subscribe, unsubscribe } = useWebSocket({
+  const { isConnected: wsConnected, isAuthenticated: wsAuthenticated } = useWebSocket({
     onStatusUpdate: (update) => {
       console.log('🔥 管理者向けステータス更新受信:', update);
       console.log('🔥 現在のリクエスト数:', requests.length);
@@ -303,16 +303,26 @@ export const AdminApp: React.FC = () => {
       {/* Header */}
       <header className="bg-white shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-4 sm:py-6 gap-3 sm:gap-0">
             <div className="flex items-center">
-              <h1 className="text-2xl font-bold text-gray-900">₳ OTC管理システム</h1>
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900">₳ OTC管理システム</h1>
             </div>
-            <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-500">管理者: {session.email}</span>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+              <div className="flex items-center text-sm text-gray-700 bg-gray-50 px-3 py-2 rounded-md border">
+                <svg className="h-4 w-4 text-gray-500 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+                <span className="font-medium truncate max-w-[160px] sm:max-w-none" title={session.email}>
+                  {session.email}
+                </span>
+              </div>
               <button
                 onClick={() => logout()}
-                className="text-sm text-gray-500 hover:text-gray-700"
+                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors shadow-sm"
               >
+                <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
                 ログアウト
               </button>
             </div>
@@ -323,7 +333,7 @@ export const AdminApp: React.FC = () => {
       {/* Navigation */}
       <nav className="bg-gray-50 border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-center space-x-32">
+          <div className="flex justify-center space-x-8 sm:space-x-32 overflow-x-auto">
             {[
               { id: 'dashboard' as const, label: 'ダッシュボード' },
               { id: 'requests' as const, label: '請求管理' },
@@ -331,7 +341,7 @@ export const AdminApp: React.FC = () => {
               <button
                 key={tab.id}
                 onClick={() => handleTabChange(tab.id)}
-                className={`py-4 px-6 text-sm font-medium transition-colors duration-200 focus:outline-none ${activeTab === tab.id ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500 hover:text-gray-800 hover:border-b-2 hover:border-gray-300'}`}>
+                className={`py-3 sm:py-4 px-4 sm:px-6 text-sm font-medium transition-colors duration-200 focus:outline-none whitespace-nowrap ${activeTab === tab.id ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500 hover:text-gray-800 hover:border-b-2 hover:border-gray-300'}`}>
                 {tab.label}
               </button>
             ))}
@@ -340,8 +350,8 @@ export const AdminApp: React.FC = () => {
       </nav>
 
       {/* Main content */}
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
+      <main className="max-w-7xl mx-auto py-4 sm:py-6 px-4 sm:px-6 lg:px-8">
+        <div className="py-4 sm:py-6">
           {activeTab === 'dashboard' && <Dashboard />}
           {activeTab === 'requests' && (
             <RequestsManagement

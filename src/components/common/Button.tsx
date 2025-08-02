@@ -28,9 +28,9 @@ const getVariantClasses = (variant: ButtonProps['variant']) => {
 
 const getSizeClasses = (size: ButtonProps['size']) => {
   switch (size) {
-    case 'sm': return 'py-1 px-2 text-sm';
-    case 'lg': return 'py-3 px-6 text-lg';
-    default: return 'py-2 px-4';
+    case 'sm': return 'py-1 px-2 text-xs sm:text-sm';
+    case 'lg': return 'py-2 sm:py-3 px-4 sm:px-6 text-base sm:text-lg';
+    default: return 'py-2 px-3 sm:px-4 text-sm sm:text-base';
   }
 };
 
@@ -70,7 +70,7 @@ export const Button: React.FC<ButtonProps> = React.memo(({
       className={buttonClasses}
     >
       {loading && (
-        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2" />
+        <div className="animate-spin rounded-full h-3 w-3 sm:h-4 sm:w-4 border-b-2 border-current mr-1 sm:mr-2" />
       )}
       {children}
     </button>

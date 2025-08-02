@@ -3,43 +3,10 @@
  * Shows system overview, statistics, and recent activity
  */
 import React, { useState, useEffect, useCallback } from 'react';
-import { createAuthenticatedFetch } from '../../hooks/useAdminAuth';
-import { RequestStatus } from '../../types/otc/index';
 
-interface DashboardStats {
-  requests: {
-    total: number;
-    by_status: Record<RequestStatus, number>;
-    recent_count: number;
-    active_count: number;
-  };
-  transactions: {
-    total: number;
-    submitted: number;
-    confirmed: number;
-    failed: number;
-    success_rate: number;
-  };
-  monitoring?: {
-    utxo_service_running: boolean;
-    monitored_requests: number;
-    confirmation_service_running: boolean;
-    monitored_transactions: number;
-  };
-  submission: {
-    active_submissions: number;
-    pending_retries: number;
-    queue_length: number;
-  };
-}
 
-interface RecentActivity {
-  id: string;
-  type: 'request_created' | 'transaction_submitted' | 'transaction_confirmed' | 'transaction_failed';
-  description: string;
-  timestamp: string;
-  status?: string;
-}
+
+
 
 export const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);

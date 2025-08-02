@@ -152,8 +152,8 @@ export const CountdownBadge: React.FC<CountdownBadgeProps> = ({
   const getStatusStyles = () => {
     const baseClasses = {
       sm: 'px-2 py-1 text-xs',
-      md: 'px-3 py-1.5 text-sm',
-      lg: 'px-4 py-2 text-base'
+      md: 'px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm',
+      lg: 'px-3 sm:px-4 py-1.5 sm:py-2 text-sm sm:text-base'
     };
 
     const statusColors = {
@@ -168,7 +168,7 @@ export const CountdownBadge: React.FC<CountdownBadgeProps> = ({
 
   // Get status icon
   const getStatusIcon = () => {
-    const iconClasses = size === 'sm' ? 'h-3 w-3' : size === 'lg' ? 'h-5 w-5' : 'h-4 w-4';
+    const iconClasses = size === 'sm' ? 'h-3 w-3' : size === 'lg' ? 'h-4 w-4 sm:h-5 sm:w-5' : 'h-3 w-3 sm:h-4 sm:w-4';
     
     switch (status) {
       case 'active':
@@ -240,8 +240,8 @@ export const CountdownBadge: React.FC<CountdownBadgeProps> = ({
       
       {/* Additional info tooltip */}
       {size !== 'sm' && (
-        <div className="ml-2 group relative">
-          <svg className="h-4 w-4 text-gray-400 cursor-help" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div className="ml-1 sm:ml-2 group relative hidden sm:block">
+          <svg className="h-3 w-3 sm:h-4 sm:w-4 text-gray-400 cursor-help" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           

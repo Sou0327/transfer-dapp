@@ -9,8 +9,7 @@ const TOKEN_STORAGE_KEY = 'otc_admin_token';
 const SESSION_STORAGE_KEY = 'otc_admin_session';
 
 const SESSION_TIMEOUT = 30 * 60 * 1000; // 30分
-const MAX_LOGIN_ATTEMPTS = 3;
-const LOCKOUT_DURATION = 15 * 60 * 1000; // 15分
+
 
 // Note: AuthProvider component should be implemented in a separate .tsx file
 
@@ -280,48 +279,11 @@ export const getAuthState = () => {
 };
 
 // セキュリティヘルパー関数
-const isValidEmail = (email: string): boolean => {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email) && email.length <= 254;
-};
 
-const isValidPassword = (password: string): boolean => {
-  return password.length >= 8 && password.length <= 128;
-};
 
-const hashPassword = async (password: string): Promise<string> => {
-  // Web Crypto APIを使用してブラウザ互換のハッシュ化
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password + 'salt');
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-};
 
-const validateCredentials = async (email: string, hashedPassword: string): Promise<boolean> => {
-  // 開発環境用の簡単な認証
-  if (import.meta.env.NODE_ENV === 'development' || import.meta.env.DEV) {
-    return email === 'admin@otc.local' || email === 'admin';
-  }
-  
-  // 実際の実装では外部認証サービスを使用
-  const expectedHash = await hashPassword('admin123');
-  return email === 'admin@otc.local' && hashedPassword === expectedHash;
-};;
 
-const generateSecureSessionId = async (): Promise<string> => {
-  // Web Crypto APIを使用してブラウザ互換のランダム生成
-  const array = new Uint8Array(32);
-  crypto.getRandomValues(array);
-  return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
-};
 
-const generateSecureToken = async (): Promise<string> => {
-  // Web Crypto APIを使用してブラウザ互換のランダム生成
-  const array = new Uint8Array(48);
-  crypto.getRandomValues(array);
-  return btoa(String.fromCharCode(...array)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-};
 
 const generateCSRFToken = async (): Promise<string> => {
   // Web Crypto APIを使用してブラウザ互換のランダム生成
@@ -356,36 +318,14 @@ const isValidUrl = (url: string): boolean => {
   } catch {
     return false;
   }
-};;
-
-// ログイン試行管理
-const getLoginAttempts = (email: string) => {
-  const key = `login_attempts_${email}`;
-  const data = localStorage.getItem(key);
-  if (data) {
-    return JSON.parse(data);
-  }
-  return { count: 0, lastAttempt: 0 };
 };
 
-const recordLoginAttempt = (email: string, success: boolean) => {
-  const key = `login_attempts_${email}`;
-  if (success) {
-    localStorage.removeItem(key);
-  } else {
-    const attempts = getLoginAttempts(email);
-    attempts.count += 1;
-    attempts.lastAttempt = Date.now();
-    localStorage.setItem(key, JSON.stringify(attempts));
-  }
-};
+
 
 // トークンブラックリスト管理
 const tokenBlacklist = new Set<string>();
 
-const addToTokenBlacklist = (token: string) => {
-  tokenBlacklist.add(token);
-};
+
 
 const isTokenBlacklisted = (token: string): boolean => {
   return tokenBlacklist.has(token);

@@ -596,7 +596,7 @@ export function useWebSocket(handlers?: WebSocketEventHandlers) {
       // Don't disconnect here as other components might be using it
       // webSocketService.disconnect();
     };
-  }, []); // handlers依存を削除してエフェクトの重複実行を防ぐ
+  }, [handlers, isAuthenticated, isConnected]); // 必要な依存関係を追加
 
   // handlersが変更されたときのみsetHandlersを更新
   React.useEffect(() => {
