@@ -208,7 +208,7 @@ export interface CreateRequestRequest {
   amount_mode: "fixed" | "sweep" | "rate_based";
   amount_or_rule: AmountOrRule;
   recipient: string;
-  ttl_minutes: number; // 5-15 minutes
+  ttl_minutes: number; // 5-2160 minutes (36 hours)
 }
 
 export interface CreateRequestResponse {

@@ -30,7 +30,7 @@ export async function requestRoutes(fastify, options) {
           amount_mode: { type: 'string', enum: ['fixed', 'sweep', 'rate_based'] },
           amount_or_rule: { type: 'object' },
           recipient: { type: 'string', pattern: '^addr1[a-z0-9]+$' },
-          ttl_minutes: { type: 'number', minimum: 5, maximum: 15 }
+          ttl_minutes: { type: 'number', minimum: 5, maximum: 2160 }
         }
       },
       response: {

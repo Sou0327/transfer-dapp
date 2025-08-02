@@ -120,8 +120,8 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
     }
 
     // TTL validation
-    if (formData.ttl_minutes < 5 || formData.ttl_minutes > 15) {
-      errors.push('TTLは5分〜15分の間で設定してください');
+    if (formData.ttl_minutes < 5 || formData.ttl_minutes > 2160) {
+      errors.push('TTLは5分〜36時間（2160分）の間で設定してください');
     }
 
     // Amount mode specific validation
@@ -796,7 +796,7 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
                 <label htmlFor="ttl_minutes" className="block text-sm font-semibold text-gray-800">
                   有効期間 (TTL) *
                 </label>
-                <p className="text-sm text-gray-500 mt-1">リクエストが有効な期間（5〜15分）。</p>
+                <p className="text-sm text-gray-500 mt-1">リクエストが有効な期間（5分〜36時間）。36時間の場合は2160と入力してください。</p>
                 <div className="mt-2">
                   <input
                     type="number"

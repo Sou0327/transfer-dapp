@@ -42,6 +42,13 @@ export default async function handler(req, res) {
       // Create new request
       const { currency, amount_mode, amount_or_rule, recipient, ttl_minutes = 10 } = req.body;
 
+      // Validate TTL range (5 minutes to 36 hours)
+      if (ttl_minutes < 5 || ttl_minutes > 2160) {
+        return res.status(400).json({
+          error: 'TTLは5分〜36時間（2160分）の間で設定してください'
+        });
+      }
+
       // Generate request ID
       const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
       
