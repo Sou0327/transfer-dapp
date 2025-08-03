@@ -6,6 +6,7 @@ import { spawn } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs/promises';
 import path from 'path';
+import cbor from 'cbor';
 
 // Redis インスタンスを安全に初期化
 let redis = null;
@@ -160,12 +161,56 @@ export default async function handler(req, res) {
       console.log('🧪 Testing if signedTx is already a complete transaction...');
       console.log('🔍 SignedTx starts with:', signedTxData.signedTx.substring(0, 20));
       
-      // First, try using signedTx as-is (Yoroi might provide complete transaction)
-      console.log('🧪 Trying signedTx as complete transaction first...');
-      signedTxHex = signedTxData.signedTx;
-      console.log('✅ Using signedTx directly (testing approach)');
-      
-      // For now, just use signedTx directly to test
+      // Yoroi provides witness set, we need to construct complete transaction
+      if (signedTxData.metadata?.txBody) {
+        console.log('🔧 Constructing complete transaction using CBOR library...');
+        
+        try {
+          const txBodyHex = signedTxData.metadata.txBody;
+          const witnessSetHex = signedTxData.signedTx;
+          
+          console.log('📊 CBOR Construction:', {
+            txBodyHex: txBodyHex.substring(0, 20) + '...',
+            witnessSetHex: witnessSetHex.substring(0, 20) + '...',
+            txBodyLength: txBodyHex.length,
+            witnessSetLength: witnessSetHex.length
+          });
+          
+          // Decode CBOR components
+          const txBodyBuffer = Buffer.from(txBodyHex, 'hex');
+          const witnessSetBuffer = Buffer.from(witnessSetHex, 'hex');
+          
+          const txBody = cbor.decode(txBodyBuffer);
+          const witnessSet = cbor.decode(witnessSetBuffer);
+          
+          console.log('✅ Successfully decoded CBOR components');
+          
+          // Construct Conway Era transaction: [txBody, witnessSet, isValid, auxiliaryData]
+          const completeTx = [
+            txBody,
+            witnessSet, 
+            true,    // isValid flag
+            null     // auxiliaryData
+          ];
+          
+          // Encode complete transaction to CBOR
+          const completeTxBuffer = cbor.encode(completeTx);
+          signedTxHex = completeTxBuffer.toString('hex');
+          
+          console.log('✅ Complete transaction constructed with CBOR library');
+          console.log('📊 Complete transaction length:', signedTxHex.length);
+          
+        } catch (cborError) {
+          console.error('❌ CBOR construction failed:', cborError);
+          // Fallback to direct usage
+          signedTxHex = signedTxData.signedTx;
+          console.log('⚠️ Falling back to direct signedTx usage');
+        }
+      } else {
+        // No txBody metadata, use signedTx as-is
+        signedTxHex = signedTxData.signedTx;
+        console.log('✅ Using signedTx directly (no txBody metadata)');
+      }
     } else if (signedTxData.signedTx && typeof signedTxData.signedTx === 'object') {
       // オブジェクトの場合、適切なプロパティを探す
       if (signedTxData.signedTx.cborHex) {
