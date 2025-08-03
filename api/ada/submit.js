@@ -287,13 +287,13 @@ export default async function handler(req, res) {
               console.log('Original TTL in txBody:', txBody[3]);
               console.log('Request TTL slot:', requestData.ttl_slot);
               
-              // Create new txBody with correct TTL
-              fixedTxBody = [
-                txBody[0], // inputs
-                txBody[1], // outputs  
-                txBody[2], // fee
-                requestData.ttl_slot // correct TTL from request
-              ];
+              // Create new txBody with correct TTL (Conway Era Map format)
+              fixedTxBody = {
+                0: txBody[0], // inputs
+                1: txBody[1], // outputs  
+                2: txBody[2], // fee
+                3: requestData.ttl_slot // correct TTL from request
+              };
               
               console.log('✅ TTL fixed in transaction body');
             }
