@@ -111,8 +111,20 @@ export default async function handler(req, res) {
     for (const key of requestKeyFormats) {
       const requestDataRaw = await redisClient.get(key);
       if (requestDataRaw) {
-        existingRequest = JSON.parse(requestDataRaw);
-        console.log(`✅ Found existing request with key: ${key}`);
+        console.log(`🔍 Raw request data type: ${typeof requestDataRaw}`);
+        console.log(`🔍 Raw request data:`, requestDataRaw);
+        
+        // Handle both string and object responses from Redis
+        try {
+          if (typeof requestDataRaw === 'string') {
+            existingRequest = JSON.parse(requestDataRaw);
+          } else if (typeof requestDataRaw === 'object' && requestDataRaw !== null) {
+            existingRequest = requestDataRaw;
+          } else {
+            console.log(`⚠️ Unexpected data type: ${typeof requestDataRaw}`);
+            continue;
+          }
+          console.log(`✅ Found existing request with key: ${key}`);
         
         const updatedRequest = {
           ...existingRequest,

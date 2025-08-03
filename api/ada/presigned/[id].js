@@ -105,7 +105,17 @@ export default async function handler(req, res) {
 
     let signedData;
     try {
-      signedData = JSON.parse(signedDataRaw);
+      console.log(`🔍 Raw signed data type: ${typeof signedDataRaw}`);
+      console.log(`🔍 Raw signed data preview:`, typeof signedDataRaw === 'string' ? signedDataRaw.slice(0, 200) + '...' : signedDataRaw);
+      
+      // Handle both string and object responses from Redis
+      if (typeof signedDataRaw === 'string') {
+        signedData = JSON.parse(signedDataRaw);
+      } else if (typeof signedDataRaw === 'object' && signedDataRaw !== null) {
+        signedData = signedDataRaw;
+      } else {
+        throw new Error(`Unexpected data type: ${typeof signedDataRaw}`);
+      }
     } catch (parseError) {
       console.error('❌ Failed to parse signed data:', parseError);
       return res.status(500).json({
