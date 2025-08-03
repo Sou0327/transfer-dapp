@@ -149,7 +149,7 @@ export class CardanoService {
         coinsPerUtxoWord: (params.coins_per_utxo_word || params.utxo_cost_per_word || 4310).toString(),
         collateralPercentage: Number(params.collateral_percent || 150),
         maxCollateralInputs: Number(params.max_collateral_inputs || 3),
-        currentSlot: latestEpoch.end_time || Date.now(),
+        currentSlot: await this.getCurrentSlot(),
       };
 
       this.cacheTimestamp = now;
@@ -167,7 +167,15 @@ export class CardanoService {
   async getCurrentSlot(): Promise<number> {
     try {
       const latestBlock = await this.request<{ slot: number }>('/blocks/latest');
-      return latestBlock.slot || 0;
+      if (!latestBlock.slot) {
+      // Fallback calculation if API doesn't return slot
+      const shelleyStart = 1596059091; // July 29, 2020 21:44:51 UTC
+      const currentTime = Math.floor(Date.now() / 1000);
+      const calculatedSlot = Math.max(0, currentTime - shelleyStart);
+      console.log(`🕒 Frontend calculated current slot: ${calculatedSlot} (API slot was: ${latestBlock.slot})`);
+      return calculatedSlot;
+    }
+    return latestBlock.slot;
     } catch (error) {
       console.error('Failed to get current slot:', error);
       throw new Error('Failed to get current slot from Blockfrost');
