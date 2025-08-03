@@ -156,34 +156,42 @@ export default async function handler(req, res) {
     
     // 証人セット（witnessSet）かどうかを判定し、完全なトランザクションを構築
     if (typeof signedTxData.signedTx === 'string') {
-      // 既にHEX文字列の場合は、それが完全なトランザクションかwitnessSetかを判定
-      if (signedTxData.metadata?.txBody) {
-        // txBodyがある場合は、witnessSetなので完全なトランザクションを構築
+      // First, try using signedTx as complete transaction (Yoroi may provide complete tx)
+      console.log('🧪 Testing if signedTx is already a complete transaction...');
+      console.log('🔍 SignedTx starts with:', signedTxData.signedTx.substring(0, 20));
+      
+      // Check if signedTx looks like a complete transaction (usually starts with 84 for 4-element array)
+      if (signedTxData.signedTx.startsWith('84') || signedTxData.signedTx.startsWith('83')) {
+        // Likely a complete transaction (4 or 3 elements)
+        signedTxHex = signedTxData.signedTx;
+        console.log('✅ Using signedTx as complete transaction (starts with 84/83)');
+      } else if (signedTxData.metadata?.txBody) {
+        // If not complete transaction and we have txBody, try to construct
         console.log('🔧 Constructing complete transaction from txBody + witnessSet');
         
         try {
-          // Cardanoトランザクション形式: [txBody, witnessSet]
-          // CBOR配列として構築
           const txBodyHex = signedTxData.metadata.txBody;
           const witnessSetHex = signedTxData.signedTx;
           
           console.log('📊 Transaction components:', {
             txBodyLength: txBodyHex.length,
-            witnessSetLength: witnessSetHex.length
+            witnessSetLength: witnessSetHex.length,
+            txBodyStart: txBodyHex.substring(0, 10),
+            witnessSetStart: witnessSetHex.substring(0, 10)
           });
           
-          // 簡易的なCBOR配列構築（正確にはCBORライブラリを使うべき）
-          // ここでは、文字列結合での簡易実装
-          signedTxHex = `82${txBodyHex}${witnessSetHex}`;
-          console.log('✅ Complete transaction constructed');
+          // Try Conway Era format: [txBody, witnessSet, true, null] (4 elements)
+          // 84 = 4-element array, f5 = true (isValid), f6 = null (auxiliary_data)
+          signedTxHex = `84${txBodyHex}${witnessSetHex}f5f6`;
+          console.log('✅ Complete transaction constructed (Conway Era 4-element format)');
         } catch (error) {
           console.error('❌ Failed to construct complete transaction:', error);
           throw new Error('Failed to construct complete transaction from components');
         }
       } else {
-        // txBodyがない場合は既に完全なトランザクション
+        // No txBody, assume it's already complete
         signedTxHex = signedTxData.signedTx;
-        console.log('✅ Using signedTx as complete transaction');
+        console.log('✅ Using signedTx as complete transaction (fallback)');
       }
     } else if (signedTxData.signedTx && typeof signedTxData.signedTx === 'object') {
       // オブジェクトの場合、適切なプロパティを探す
