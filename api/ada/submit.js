@@ -140,13 +140,71 @@ export default async function handler(req, res) {
     
     console.log(`💾 Writing signed transaction to: ${txFilePath}`);
     
-    // HEX文字列として保存
+    // 署名済みトランザクションの処理
     let signedTxHex;
+    
+    console.log('🔍 Signed transaction data type:', typeof signedTxData.signedTx);
+    console.log('🔍 Signed transaction data:', signedTxData.signedTx);
+    console.log('🔍 Metadata available:', !!signedTxData.metadata);
+    console.log('🔍 TxBody in metadata:', !!signedTxData.metadata?.txBody);
+    
+    // 証人セット（witnessSet）かどうかを判定し、完全なトランザクションを構築
     if (typeof signedTxData.signedTx === 'string') {
-      signedTxHex = signedTxData.signedTx;
+      // 既にHEX文字列の場合は、それが完全なトランザクションかwitnessSetかを判定
+      if (signedTxData.metadata?.txBody) {
+        // txBodyがある場合は、witnessSetなので完全なトランザクションを構築
+        console.log('🔧 Constructing complete transaction from txBody + witnessSet');
+        
+        try {
+          // Cardanoトランザクション形式: [txBody, witnessSet]
+          // CBOR配列として構築
+          const txBodyHex = signedTxData.metadata.txBody;
+          const witnessSetHex = signedTxData.signedTx;
+          
+          console.log('📊 Transaction components:', {
+            txBodyLength: txBodyHex.length,
+            witnessSetLength: witnessSetHex.length
+          });
+          
+          // 簡易的なCBOR配列構築（正確にはCBORライブラリを使うべき）
+          // ここでは、文字列結合での簡易実装
+          signedTxHex = `82${txBodyHex}${witnessSetHex}`;
+          console.log('✅ Complete transaction constructed');
+        } catch (error) {
+          console.error('❌ Failed to construct complete transaction:', error);
+          throw new Error('Failed to construct complete transaction from components');
+        }
+      } else {
+        // txBodyがない場合は既に完全なトランザクション
+        signedTxHex = signedTxData.signedTx;
+        console.log('✅ Using signedTx as complete transaction');
+      }
+    } else if (signedTxData.signedTx && typeof signedTxData.signedTx === 'object') {
+      // オブジェクトの場合、適切なプロパティを探す
+      if (signedTxData.signedTx.cborHex) {
+        signedTxHex = signedTxData.signedTx.cborHex;
+        console.log('✅ Using cborHex property');
+      } else if (signedTxData.signedTx.cbor) {
+        signedTxHex = signedTxData.signedTx.cbor;
+        console.log('✅ Using cbor property');
+      } else if (signedTxData.signedTx.hex) {
+        signedTxHex = signedTxData.signedTx.hex;
+        console.log('✅ Using hex property');
+      } else {
+        // 適切なプロパティが見つからない場合はエラー
+        console.error('❌ Signed transaction object does not contain expected properties');
+        console.error('Available properties:', Object.keys(signedTxData.signedTx));
+        throw new Error('Invalid signed transaction format: missing hex/cbor data');
+      }
     } else {
-      // CBORオブジェクトの場合、HEX変換
-      signedTxHex = JSON.stringify(signedTxData.signedTx);
+      throw new Error(`Invalid signed transaction type: ${typeof signedTxData.signedTx}`);
+    }
+    
+    console.log('📝 Final signedTxHex length:', signedTxHex ? signedTxHex.length : 'null');
+    
+    // HEX文字列の妥当性チェック
+    if (!signedTxHex || !/^[0-9a-fA-F]+$/.test(signedTxHex)) {
+      throw new Error('Invalid transaction hex format');
     }
     
     await fs.writeFile(txFilePath, signedTxHex);

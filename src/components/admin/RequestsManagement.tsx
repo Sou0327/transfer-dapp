@@ -742,7 +742,7 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
                                   disabled={submittingTx[request.id]}
                                   className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors border-2 ${
                                     submittingTx[request.id]
-                                      ? 'bg-gray-400 text-white border-gray-400 cursor-not-allowed'
+                                      ? 'bg-gray-400 text-gray-700 border-gray-400 cursor-not-allowed'
                                       : 'bg-red-600 text-white border-red-700 hover:bg-red-700 hover:border-red-800 shadow-md hover:shadow-lg'
                                   }`}
                                 >
@@ -832,26 +832,9 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
                                           </div>
                                         </div>
                                         
-                                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-2">
-                                          <div className="bg-gray-50 p-3 rounded-lg flex-1">
-                                            <span className="font-medium text-blue-800 block mb-1">ステータス</span>
-                                            <span className="text-blue-700 text-sm">{signedTxData[request.id]?.status || '不明'}</span>
-                                          </div>
-                                          {canSubmit && (
-                                            <div className="sm:flex-shrink-0">
-                                              <button
-                                                onClick={() => handleSubmitTransaction(request.id, signedTxData[request.id])}
-                                                disabled={submittingTx[request.id]}
-                                                className={`w-full sm:w-auto px-6 py-3 text-sm font-medium rounded-lg transition-all duration-200 border-2 ${
-                                                  submittingTx[request.id]
-                                                    ? 'bg-gray-400 text-white border-gray-400 cursor-not-allowed'
-                                                    : 'bg-red-600 text-white border-red-700 hover:bg-red-700 hover:border-red-800 shadow-md hover:shadow-lg transform hover:scale-105'
-                                                }`}
-                                              >
-                                                {submittingTx[request.id] ? '🔄 送信中...' : '🚀 ブロックチェーンに送信'}
-                                              </button>
-                                            </div>
-                                          )}
+                                        <div className="bg-gray-50 p-3 rounded-lg">
+                          <span className="font-medium text-blue-800 block mb-1">ステータス</span>
+                          <span className="text-blue-700 text-sm">{signedTxData[request.id]?.status || '不明'}</span>
                                         </div>
                                       </>
                                     )}
