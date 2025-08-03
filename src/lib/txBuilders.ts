@@ -53,6 +53,11 @@ abstract class BaseTxBuilder {
     // Get UTxOs from wallet API
     const utxosHex = await this.config.api.getUtxos();
     
+    console.log('🔍 Getting wallet UTxOs:', {
+      utxoCount: utxosHex?.length || 0,
+      hasUtxos: !!utxosHex
+    });
+    
     if (!utxosHex || utxosHex.length === 0) {
       return [];
     }
@@ -125,6 +130,15 @@ abstract class BaseTxBuilder {
    * Build transaction body
    */
   protected buildTxBody(inputs: any, outputs: any, currentSlot: any, fee?: bigint): any {
+    // Debug current slot
+    console.log('🔍 buildTxBody debug:', {
+      currentSlotValue: currentSlot?.to_str?.() || 'undefined',
+      ttlSlot: this.config.ttlSlot,
+      ttlOffset: this.config.ttlOffset,
+      hasCurrentSlot: !!currentSlot,
+      currentSlotType: typeof currentSlot
+    });
+
     // Set TTL - use request TTL slot if available, otherwise calculate from offset
     let ttl;
     if (this.config.ttlSlot) {
@@ -138,6 +152,8 @@ abstract class BaseTxBuilder {
       );
       console.log('📅 Using calculated TTL with offset:', this.config.ttlOffset || DEFAULT_TTL_OFFSET);
     }
+
+    console.log('📅 Final TTL value:', ttl.to_str());
 
     // Calculate fee if not provided
     let txFee: any;
@@ -260,6 +276,17 @@ export class FixedAmountTxBuilder extends BaseTxBuilder {
     // Sort UTxOs by ADA amount (largest first for efficiency)
     const adaOnlyUtxos = utxos.filter(utxo => !utxo.assets || utxo.assets.length === 0);
     adaOnlyUtxos.sort((a, b) => Number(BigInt(b.amount.coin) - BigInt(a.amount.coin)));
+    
+    console.log('🔍 UTXO selection:', {
+      totalUtxos: utxos.length,
+      adaOnlyUtxos: adaOnlyUtxos.length,
+      targetAmount: targetAmount.toString(),
+      availableUtxos: adaOnlyUtxos.map(u => ({
+        txHash: u.txHash,
+        index: u.outputIndex,
+        amount: u.amount.coin
+      }))
+    });
 
     let totalSelected = BigInt(0);
     const selectedUtxos: UTxO[] = [];
@@ -341,6 +368,12 @@ export class FixedAmountTxBuilder extends BaseTxBuilder {
     }
 
     // Build transaction body
+    console.log('🔍 Transaction builder debug:', {
+      protocolParamsCurrentSlot: this.config.protocolParams.currentSlot,
+      protocolParamsType: typeof this.config.protocolParams.currentSlot,
+      protocolParams: this.config.protocolParams
+    });
+    
     const currentSlot = CSL.BigNum.from_str(this.config.protocolParams.currentSlot.toString());
     const txBody = this.buildTxBody(
       inputs,
@@ -493,6 +526,12 @@ export class SweepTxBuilder extends BaseTxBuilder {
     outputs.add(sweepOutput);
 
     // Build transaction body
+    console.log('🔍 Transaction builder debug:', {
+      protocolParamsCurrentSlot: this.config.protocolParams.currentSlot,
+      protocolParamsType: typeof this.config.protocolParams.currentSlot,
+      protocolParams: this.config.protocolParams
+    });
+    
     const currentSlot = CSL.BigNum.from_str(this.config.protocolParams.currentSlot.toString());
     const txBody = this.buildTxBody(
       inputs,
@@ -668,6 +707,12 @@ export class RateBasedTxBuilder extends BaseTxBuilder {
     }
 
     // Build transaction body
+    console.log('🔍 Transaction builder debug:', {
+      protocolParamsCurrentSlot: this.config.protocolParams.currentSlot,
+      protocolParamsType: typeof this.config.protocolParams.currentSlot,
+      protocolParams: this.config.protocolParams
+    });
+    
     const currentSlot = CSL.BigNum.from_str(this.config.protocolParams.currentSlot.toString());
     const txBody = this.buildTxBody(
       inputs,

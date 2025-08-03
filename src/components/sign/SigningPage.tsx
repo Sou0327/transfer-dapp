@@ -321,6 +321,13 @@ export const SigningPage: React.FC = () => {
       // Get wallet addresses
       const changeAddress = await api.getChangeAddress();
       const destinationAddress = state.request.recipient;
+      
+      // Debug addresses
+      console.log('🔍 Transaction addresses:', {
+        changeAddress,
+        destinationAddress,
+        selectedWallet
+      });
 
       // Create TxBuilder config
       const txBuilderConfig = {

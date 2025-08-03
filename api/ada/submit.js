@@ -138,6 +138,38 @@ export default async function handler(req, res) {
       status: signedTxData.status,
       hasSignedTx: !!signedTxData.signedTx
     });
+    
+    // Also fetch the original request data to get TTL information
+    console.log('🔍 Fetching original request data...');
+    const requestKeyFormats = [
+      requestId,
+      `request:${requestId}`
+    ];
+    
+    let requestData = null;
+    for (const key of requestKeyFormats) {
+      const requestDataRaw = await redisClient.get(key);
+      if (requestDataRaw) {
+        if (typeof requestDataRaw === 'string') {
+          requestData = JSON.parse(requestDataRaw);
+        } else {
+          requestData = requestDataRaw;
+        }
+        console.log(`✅ Found request data with key: ${key}`);
+        console.log('📋 Request data:', {
+          id: requestData.id,
+          ttl_slot: requestData.ttl_slot,
+          ttl_absolute: requestData.ttl_absolute,
+          created_at: requestData.created_at,
+          amount_mode: requestData.amount_mode
+        });
+        break;
+      }
+    }
+    
+    if (!requestData) {
+      console.warn('⚠️ Could not find original request data');
+    }
 
     if (!signedTxData.signedTx) {
       return res.status(400).json({
@@ -194,8 +226,53 @@ export default async function handler(req, res) {
             keys: typeof witnessSet === 'object' ? Object.keys(witnessSet) : 'not object'
           });
           
+          // Detailed witnessSet analysis  
+          if (witnessSet && typeof witnessSet === 'object') {
+            console.log('🔑 WitnessSet detailed analysis:');
+            if (Array.isArray(witnessSet)) {
+              console.log('  WitnessSet is array format');
+            } else if (witnessSet instanceof Map) {
+              console.log('  WitnessSet is a Map with keys:', Array.from(witnessSet.keys()));
+            } else {
+              console.log('  WitnessSet is object with keys:', Object.keys(witnessSet));
+              // Check for numbered keys (0, 1, 2, etc.)
+              if (witnessSet[0] !== undefined) {
+                console.log('  Has key 0 (vkey witnesses):', {
+                  type: typeof witnessSet[0],
+                  isArray: Array.isArray(witnessSet[0]),
+                  length: Array.isArray(witnessSet[0]) ? witnessSet[0].length : 'not array'
+                });
+                if (Array.isArray(witnessSet[0])) {
+                  witnessSet[0].forEach((witness, idx) => {
+                    console.log(`    VKey witness ${idx}:`, {
+                      hasVkey: !!witness[0],
+                      hasSig: !!witness[1],
+                      vkeyLength: witness[0] ? witness[0].length : 0,
+                      sigLength: witness[1] ? witness[1].length : 0
+                    });
+                  });
+                }
+              }
+            }
+          }
+          
           // Check if txBody is already a complete transaction (4-element array)
-          if (Array.isArray(txBody) && txBody.length === 4) {
+          // Additional debugging for txBody
+          if (Array.isArray(txBody)) {
+            console.log('📋 TxBody elements:');
+            txBody.forEach((element, index) => {
+              console.log(`  [${index}]:`, {
+                type: typeof element,
+                isArray: Array.isArray(element),
+                length: Array.isArray(element) ? element.length : undefined,
+                value: index === 3 ? element : undefined // Show TTL value (index 3)
+              });
+            });
+          }
+          
+          // IMPORTANT: Always construct complete transaction from body + witness set
+          // Transaction body (4 elements: inputs, outputs, fee, ttl) is NOT a complete transaction
+          if (false) {
             console.log('🎯 TxBody is already a complete transaction! Using it directly.');
             signedTxHex = txBodyHex;  // Use the complete transaction as-is
           } else {

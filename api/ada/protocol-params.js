@@ -101,16 +101,24 @@ export default async function handler(req, res) {
     });
 
     const blockData = await blockResponse.json();
+    console.log('🔍 Block data from API:', {
+      slot: blockData.slot,
+      hasSlot: 'slot' in blockData,
+      blockData: blockData
+    });
+    
     // Calculate proper current slot if API response fails
     let currentSlot = blockData.slot;
-    if (!currentSlot) {
+    if (!currentSlot || currentSlot === 0) {
       // Shelley era started at 1596059091 (July 29, 2020 21:44:51 UTC)
       // 1 slot = 1 second since Shelley era
       const shelleyStart = 1596059091;
       const currentTime = Math.floor(Date.now() / 1000);
-      currentSlot = Math.max(0, currentTime - shelleyStart);
+      currentSlot = Math.max(1, currentTime - shelleyStart); // Ensure minimum value of 1
       console.log(`🕒 Calculated current slot: ${currentSlot} (API slot was: ${blockData.slot})`);
     }
+    
+    console.log('✅ Final currentSlot value:', currentSlot);
 
     // Transform to our format
     const protocolParams = {

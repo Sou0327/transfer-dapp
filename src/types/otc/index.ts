@@ -75,7 +75,7 @@ export interface OTCRequest {
   updated_at: string;
   
   // Additional properties for compatibility
-  ttl_absolute?: Date;
+  ttl_absolute?: Date | string; // Can be Date or ISO string
   destination_address?: string; // alias for recipient
   amount_rule?: AmountOrRule; // alias for amount_or_rule_json
   
