@@ -414,30 +414,66 @@ export const SigningPage: React.FC = () => {
         walletUsed: selectedWallet
       });
       
+      const requestBody = {
+        requestId: state.request.id,
+        signedTx: witnessSet,
+        metadata: {
+          txBody: txHex,
+          walletUsed: selectedWallet,
+          timestamp: new Date().toISOString()
+        }
+      };
+      
+      console.log('📤 POST リクエスト詳細:', {
+        url: '/api/ada/presigned',
+        method: 'POST',
+        requestBodyKeys: Object.keys(requestBody),
+        requestId: requestBody.requestId,
+        hasSignedTx: !!requestBody.signedTx,
+        signedTxType: typeof requestBody.signedTx,
+        signedTxLength: typeof requestBody.signedTx === 'string' ? requestBody.signedTx.length : 'not string',
+        signedTx: requestBody.signedTx,
+        metadata: requestBody.metadata
+      });
+
       const response = await fetch('/api/ada/presigned', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          requestId: state.request.id,
-          signedTx: witnessSet,
-          metadata: {
-            txBody: txHex,
-            walletUsed: selectedWallet,
-            timestamp: new Date().toISOString()
-          }
-        }),
+        body: JSON.stringify(requestBody),
+      });
+      
+      console.log('📡 POST レスポンス詳細:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        headers: Object.fromEntries(response.headers.entries()),
+        url: response.url
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+        const responseText = await response.text();
+        console.error('❌ POST エラーレスポンス:', {
+          status: response.status,
+          statusText: response.statusText,
+          responseText
+        });
+        
+        let errorData = {};
+        try {
+          errorData = JSON.parse(responseText);
+        } catch {
+          errorData = { error: `サーバーエラー: ${response.status}` };
+        }
+        
         setError(errorData.error || '署名データの保存に失敗しました', 'network');
         setState(prev => ({ ...prev, submissionStatus: 'failed' }));
         return;
       }
 
       const result = await response.json();
+      console.log('✅ POST 成功:', result);
       
       // Store the signed transaction data and show completion message
       setState(prev => ({ 

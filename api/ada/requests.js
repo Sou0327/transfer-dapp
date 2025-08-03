@@ -116,7 +116,16 @@ export default async function handler(req, res) {
           // Immediate verification
           const verifyData = await redisClient.get(key);
           if (verifyData) {
-            const parsed = JSON.parse(verifyData);
+            // Handle both string and object responses from Redis
+            let parsed;
+            if (typeof verifyData === 'string') {
+              parsed = JSON.parse(verifyData);
+            } else if (typeof verifyData === 'object' && verifyData !== null) {
+              parsed = verifyData;
+            } else {
+              console.log(`⚠️ Unexpected verification data type: ${typeof verifyData}`);
+              parsed = { amount_mode: 'unknown' };
+            }
             console.log(`✅ Verification successful for key ${key}, amount_mode: ${parsed.amount_mode}`);
           } else {
             console.log(`❌ Verification failed for key ${key} - no data returned`);
@@ -134,7 +143,15 @@ export default async function handler(req, res) {
         
         if (existingRequestsRaw) {
           try {
-            const parsed = JSON.parse(existingRequestsRaw);
+            let parsed;
+            // Handle both string and object responses from Redis
+            if (typeof existingRequestsRaw === 'string') {
+              parsed = JSON.parse(existingRequestsRaw);
+            } else if (typeof existingRequestsRaw === 'object' && existingRequestsRaw !== null) {
+              parsed = existingRequestsRaw;
+            } else {
+              throw new Error(`Unexpected data type: ${typeof existingRequestsRaw}`);
+            }
             existingRequests = Array.isArray(parsed) ? parsed : [parsed];
           } catch (parseError) {
             console.log('⚠️ Existing requests_list parse failed, creating new list:', parseError.message);
@@ -178,8 +195,15 @@ export default async function handler(req, res) {
         
         if (requestIdsRaw) {
           try {
-            // JSON配列として解析を試行
-            const parsed = JSON.parse(requestIdsRaw);
+            // Handle both string and object responses from Redis
+            let parsed;
+            if (typeof requestIdsRaw === 'string') {
+              parsed = JSON.parse(requestIdsRaw);
+            } else if (typeof requestIdsRaw === 'object' && requestIdsRaw !== null) {
+              parsed = requestIdsRaw;
+            } else {
+              throw new Error(`Unexpected data type: ${typeof requestIdsRaw}`);
+            }
             requestIds = Array.isArray(parsed) ? parsed : [parsed];
             console.log('✅ Successfully parsed requests_list as JSON array');
           } catch (parseError) {
@@ -206,7 +230,18 @@ export default async function handler(req, res) {
         const requestPromises = requestIds.map(async (id) => {
           try {
             const requestDataRaw = await redisClient.get(`request:${id}`);
-            return requestDataRaw ? JSON.parse(requestDataRaw) : null;
+            if (requestDataRaw) {
+              // Handle both string and object responses from Redis
+              if (typeof requestDataRaw === 'string') {
+                return JSON.parse(requestDataRaw);
+              } else if (typeof requestDataRaw === 'object' && requestDataRaw !== null) {
+                return requestDataRaw;
+              } else {
+                console.log(`⚠️ Unexpected request data type for ${id}: ${typeof requestDataRaw}`);
+                return null;
+              }
+            }
+            return null;
           } catch (error) {
             console.error(`Failed to get request ${id}:`, error);
             return null;

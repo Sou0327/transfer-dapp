@@ -94,7 +94,13 @@ export default async function handler(req, res) {
     const verifyData = await redisClient.get(cacheKey);
     if (verifyData) {
       console.log(`✅ Storage verification successful - data exists in Redis`);
-      console.log(`📊 Stored data size: ${verifyData.length} characters`);
+      console.log(`📊 Storage verification details:`, {
+        dataType: typeof verifyData,
+        dataSize: typeof verifyData === 'string' ? verifyData.length : 'not string',
+        isEmptyObject: typeof verifyData === 'object' && Object.keys(verifyData).length === 0,
+        dataKeys: typeof verifyData === 'object' ? Object.keys(verifyData) : 'not object',
+        dataContent: verifyData
+      });
     } else {
       console.error(`❌ Storage verification failed - data not found in Redis!`);
     }

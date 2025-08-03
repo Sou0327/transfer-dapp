@@ -35,7 +35,7 @@ export const AdminApp: React.FC = () => {
       console.log('🔥 管理者向けステータス更新受信:', update);
       console.log('🔥 現在のリクエスト数:', requests.length);
       
-      // リクエストリストを更新
+      // リクエストリストを即座に更新
       setRequests(prev => {
         const updatedList = prev.map(req => 
           req.id === update.request_id 
@@ -43,8 +43,23 @@ export const AdminApp: React.FC = () => {
             : req
         );
         console.log('🔥 更新後のリクエスト:', updatedList);
+        
+        // ローカルストレージのバックアップも更新
+        try {
+          localStorage.setItem('otc_admin_requests_backup', JSON.stringify(updatedList));
+          console.log('💾 WebSocket更新後のバックアップ保存完了');
+        } catch (error) {
+          console.warn('⚠️ WebSocket更新後のバックアップ保存に失敗:', error);
+        }
+        
         return updatedList;
       });
+      
+      // サーバーから最新データを再取得（5秒後に実行して競合を避ける）
+      setTimeout(() => {
+        console.log('🔄 WebSocket更新後のリクエスト再取得...');
+        fetchRequests();
+      }, 2000);
     },
     onConnect: () => {
       console.log('🔥 管理者WebSocket接続成功');
@@ -103,11 +118,65 @@ export const AdminApp: React.FC = () => {
         method: 'GET',
         headers
       });
-      const data = await response.json();
       
-      setRequests(data.requests || []);
+      console.log('📡 API Response status:', response.status);
+      console.log('📡 API Response ok:', response.ok);
+      
+      if (!response.ok) {
+        console.error('❌ API Error:', response.status, response.statusText);
+        return;
+      }
+      
+      const data = await response.json();
+      console.log('📋 API Response data:', data);
+      console.log('📊 Requests found:', data.requests?.length || 0);
+      
+      if (data.requests && data.requests.length > 0) {
+        console.log('✅ Setting requests:', data.requests);
+        setRequests(data.requests);
+        
+        // ローカルストレージにバックアップ保存
+        try {
+          localStorage.setItem('otc_admin_requests_backup', JSON.stringify(data.requests));
+          console.log('💾 リクエストデータをローカルストレージにバックアップ');
+        } catch (error) {
+          console.warn('⚠️ ローカルストレージへの保存に失敗:', error);
+        }
+      } else {
+        console.log('⚠️ No requests found from server');
+        
+        // サーバーから取得できない場合、ローカルストレージから復元を試行
+        try {
+          const backup = localStorage.getItem('otc_admin_requests_backup');
+          if (backup) {
+            const backupRequests = JSON.parse(backup);
+            console.log('🔄 ローカルストレージからリクエストを復元:', backupRequests.length);
+            setRequests(backupRequests);
+          } else {
+            console.log('📭 ローカルストレージにもバックアップなし');
+            setRequests([]);
+          }
+        } catch (error) {
+          console.error('❌ ローカルストレージからの復元に失敗:', error);
+          setRequests([]);
+        }
+      }
     } catch (error) {
       console.error('Failed to fetch requests:', error);
+      
+      // サーバーエラー時はローカルバックアップから復元を試行
+      if (requests.length === 0) {
+        try {
+          const backup = localStorage.getItem('otc_admin_requests_backup');
+          if (backup) {
+            const backupRequests = JSON.parse(backup);
+            console.log('🔄 サーバーエラー時のローカルバックアップ復元:', backupRequests.length);
+            setRequests(backupRequests);
+          }
+        } catch (backupError) {
+          console.error('❌ ローカルバックアップ復元も失敗:', backupError);
+        }
+      }
     } finally {
       // setRequestsLoading(false); // Removed since variable was removed
     }
@@ -181,9 +250,46 @@ export const AdminApp: React.FC = () => {
     }
 
     const result = await response.json();
+    console.log('✅ リクエスト作成成功:', result);
     
-    // Refresh requests list
-    await fetchRequests();
+    // 即座にローカルリストに新しいリクエストを追加
+    if (result.requestId) {
+      const newRequest: OTCRequest = {
+        id: result.requestId,
+        currency: requestData.currency,
+        amount_mode: requestData.amount_mode,
+        amount_or_rule_json: requestData.amount_or_rule,
+        recipient: requestData.recipient,
+        status: 'REQUESTED' as RequestStatus,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        ttl_minutes: requestData.ttl_minutes,
+        ttl_slot: Math.floor(Date.now() / 1000) + (requestData.ttl_minutes * 60),
+        ttl_absolute: new Date(Date.now() + requestData.ttl_minutes * 60 * 1000).toISOString()
+      };
+      
+      console.log('📝 ローカルリストに新しいリクエストを追加:', newRequest);
+      setRequests(prev => {
+        const updated = [newRequest, ...prev];
+        console.log('📊 更新後のリクエスト数:', updated.length);
+        
+        // ローカルストレージのバックアップも更新
+        try {
+          localStorage.setItem('otc_admin_requests_backup', JSON.stringify(updated));
+          console.log('💾 新規リクエスト作成後のバックアップ保存完了');
+        } catch (error) {
+          console.warn('⚠️ 新規リクエスト作成後のバックアップ保存に失敗:', error);
+        }
+        
+        return updated;
+      });
+    }
+    
+    // サーバーから最新リストも取得（バックアップとして）
+    setTimeout(() => {
+      console.log('🔄 サーバーからの最新リスト取得...');
+      fetchRequests();
+    }, 1000);
     
     return result;
   }, [fetchRequests]);
@@ -244,17 +350,55 @@ export const AdminApp: React.FC = () => {
 
   // Handle tab change
   const handleTabChange = useCallback((tab: AdminTab) => {
+    console.log(`🔄 Tab changed to: ${tab}`);
     setActiveTab(tab);
     
-    // Load data when switching to requests tab
-    if (tab === 'requests' && requests.length === 0) {
+    // Always load data when switching to requests tab
+    if (tab === 'requests') {
+      console.log('📋 Loading requests data...');
+      // まずローカルバックアップから即座に表示
+      try {
+        const backup = localStorage.getItem('otc_admin_requests_backup');
+        if (backup) {
+          const backupRequests = JSON.parse(backup);
+          console.log('⚡ ローカルバックアップから即座に表示:', backupRequests.length);
+          setRequests(backupRequests);
+        }
+      } catch (error) {
+        console.warn('⚠️ ローカルバックアップの読み込みに失敗:', error);
+      }
+      
+      // その後サーバーから最新データを取得
       fetchRequests();
     }
-  }, [requests.length, fetchRequests]);
+  }, [fetchRequests]);
 
-  // Initialize requests data when authenticated
+  // Initialize requests data when authenticated  
   useEffect(() => {
+    console.log('🔍 Session effect triggered:', { 
+      hasSession: !!session, 
+      activeTab, 
+      requestsLength: requests.length 
+    });
+    
     if (session && activeTab === 'requests') {
+      console.log('📋 Fetching requests due to session/tab change...');
+      
+      // セッション開始時にまずローカルバックアップから復元
+      if (requests.length === 0) {
+        try {
+          const backup = localStorage.getItem('otc_admin_requests_backup');
+          if (backup) {
+            const backupRequests = JSON.parse(backup);
+            console.log('🔄 セッション開始時のローカルバックアップ復元:', backupRequests.length);
+            setRequests(backupRequests);
+          }
+        } catch (error) {
+          console.warn('⚠️ セッション開始時のバックアップ復元に失敗:', error);
+        }
+      }
+      
+      // その後サーバーから最新データを取得
       fetchRequests();
     }
   }, [session, activeTab, fetchRequests]);

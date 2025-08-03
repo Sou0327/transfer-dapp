@@ -66,25 +66,72 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
   const fetchSignedTxData = useCallback(async (requestId: string) => {
     console.log(`🔍 Fetching signed transaction data for: ${requestId}`);
     setLoadingSignedData(prev => ({ ...prev, [requestId]: true }));
+    
     try {
-      const response = await fetch(`/api/ada/presigned/${requestId}`);
-      console.log(`📡 API Response status: ${response.status}`);
+      const url = `/api/ada/presigned/${requestId}`;
+      console.log(`📡 Attempting to fetch from: ${url}`);
+      
+      const response = await fetch(url);
+      console.log(`📡 API Response:`, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries()),
+        url: response.url
+      });
       
       if (response.ok) {
         const data = await response.json();
         console.log(`📋 API Response data:`, data);
+        console.log(`📊 Response data keys:`, Object.keys(data));
         
-        if (data.found) {
+        if (data.found && data.data) {
           console.log(`✅ Found signed data for ${requestId}:`, data.data);
+          console.log(`📊 Signed data keys:`, Object.keys(data.data));
           setSignedTxData(prev => ({ ...prev, [requestId]: data.data }));
         } else {
-          console.log(`❌ No signed data found for ${requestId}`);
+          console.log(`❌ No signed data found for ${requestId}`, {
+            found: data.found,
+            hasData: !!data.data,
+            dataKeys: data.data ? Object.keys(data.data) : 'no data'
+          });
+          
+          // デバッグ用：エラー情報を詳細表示
+          setSignedTxData(prev => ({ 
+            ...prev, 
+            [requestId]: {
+              error: true,
+              message: `署名データが見つかりません (found: ${data.found})`,
+              debugInfo: data
+            }
+          }));
         }
       } else {
-        console.error(`❌ API Error: ${response.status}`);
+        console.error(`❌ API Error: ${response.status} ${response.statusText}`);
+        const responseText = await response.text();
+        console.error(`❌ Response body:`, responseText);
+        
+        // エラー情報を表示用に保存
+        setSignedTxData(prev => ({ 
+          ...prev, 
+          [requestId]: {
+            error: true,
+            message: `API エラー: ${response.status} ${response.statusText}`,
+            responseText
+          }
+        }));
       }
     } catch (error) {
       console.error('💥 Failed to fetch signed transaction data:', error);
+      
+      // ネットワークエラーなどの情報を表示用に保存
+      setSignedTxData(prev => ({ 
+        ...prev, 
+        [requestId]: {
+          error: true,
+          message: `取得エラー: ${error.message}`,
+          error: error
+        }
+      }));
     } finally {
       setLoadingSignedData(prev => ({ ...prev, [requestId]: false }));
     }
@@ -435,8 +482,17 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
   // Auto-fetch signed transaction data for signed requests
   useEffect(() => {
     const signedRequests = requests.filter(r => r.status === RequestStatus.SIGNED);
+    console.log(`🔍 署名済みリクエスト検出: ${signedRequests.length}件`);
+    
     signedRequests.forEach(request => {
+      console.log(`🔍 Request ${request.id} - 署名データ確認:`, {
+        hasSignedData: !!signedTxData[request.id],
+        isLoading: !!loadingSignedData[request.id],
+        status: request.status
+      });
+      
       if (!signedTxData[request.id] && !loadingSignedData[request.id]) {
+        console.log(`📋 自動取得開始: ${request.id}`);
         fetchSignedTxData(request.id);
       }
     });
@@ -652,7 +708,7 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
                               期限切れ
                             </button>
                           )}
-                          {request.status === RequestStatus.SIGNED && signedTxData[request.id] && signedTxData[request.id].signedTx && (
+                          {request.status === RequestStatus.SIGNED && (
                             <button
                               onClick={() => fetchSignedTxData(request.id)}
                               disabled={loadingSignedData[request.id]}
@@ -667,7 +723,10 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
                           >
                             リンクコピー
                           </button>
-                          {request.status === RequestStatus.SIGNED && signedTxData[request.id] && signedTxData[request.id].signedTx && (
+                          {request.status === RequestStatus.SIGNED && 
+                           signedTxData[request.id] && 
+                           signedTxData[request.id].signedTx && 
+                           !signedTxData[request.id].error && (
                             <button
                               onClick={() => handleSubmitTransaction(request.id, signedTxData[request.id])}
                               disabled={submittingTx[request.id]}
@@ -683,51 +742,82 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
                         </div>
 
                         {/* Show signed transaction details if available */}
-                        {request.status === RequestStatus.SIGNED && signedTxData[request.id] && (
+                        {request.status === RequestStatus.SIGNED && (
                           <div className="mt-4 p-3 sm:p-4 bg-blue-50 rounded-lg border border-blue-200">
                             <h4 className="text-sm font-medium text-blue-900 mb-3">署名済みトランザクション詳細</h4>
                             {console.log(`🔍 Debug - Signed data for ${request.id}:`, signedTxData[request.id])}
+                            
+                            {/* 診断情報 */}
+                            <div className="mb-3 p-2 bg-blue-100 rounded text-xs">
+                              <strong>診断:</strong> データ取得状況 - 
+                              {signedTxData[request.id] ? '✅ データあり' : '❌ データなし'} / 
+                              {loadingSignedData[request.id] ? '🔄 読込中' : '✅ 読込完了'}
+                            </div>
+                            
                             <div className="grid grid-cols-1 gap-3 text-sm">
-                              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                                <span className="font-medium text-blue-800 shrink-0">署名日時:</span>
-                                <span className="text-blue-700">
-                                  {signedTxData[request.id]?.signedAt ? 
-                                    new Date(signedTxData[request.id].signedAt).toLocaleString('ja-JP') : 
-                                    '不明'
-                                  }
-                                </span>
-                              </div>
-                              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                                <span className="font-medium text-blue-800 shrink-0">使用ウォレット:</span>
-                                <span className="text-blue-700">{signedTxData[request.id]?.metadata?.walletUsed || 'Unknown'}</span>
-                              </div>
-                              <div>
-                                <span className="font-medium text-blue-800">署名データ:</span>
-                                <div className="mt-1 p-2 bg-white rounded border font-mono text-xs break-all">
-                                  {(() => {
-                                    const signedTx = signedTxData[request.id]?.signedTx;
-                                    let txData: string;
-
-                                    if (!signedTx) {
-                                      txData = '署名データなし（まだ取得されていません）';
-                                    } else if (typeof signedTx === 'string') {
-                                      txData = signedTx;
-                                    } else {
-                                      try {
-                                        txData = JSON.stringify(signedTx);
-                                      } catch (error) {
-                                        txData = 'Invalid transaction data';
-                                      }
-                                    }
-
-                                    return txData && txData.length > 100 ? txData.slice(0, 100) + '...' : txData;
-                                  })()}
+                              {signedTxData[request.id]?.error ? (
+                                // エラー情報の表示
+                                <div className="bg-red-100 border border-red-300 rounded p-3">
+                                  <h5 className="font-medium text-red-800 mb-2">署名データ取得エラー</h5>
+                                  <p className="text-red-700 text-sm mb-2">{signedTxData[request.id].message}</p>
+                                  {signedTxData[request.id].debugInfo && (
+                                    <details className="text-xs">
+                                      <summary className="cursor-pointer text-red-600">デバッグ情報</summary>
+                                      <pre className="mt-2 bg-red-50 p-2 rounded overflow-auto">
+                                        {JSON.stringify(signedTxData[request.id].debugInfo, null, 2)}
+                                      </pre>
+                                    </details>
+                                  )}
                                 </div>
-                              </div>
-                              <div>
-                                <span className="font-medium text-blue-800">ステータス:</span>
-                                <span className="ml-2 text-blue-700">{signedTxData[request.id]?.status || '不明'}</span>
-                              </div>
+                              ) : (
+                                // 正常データの表示
+                                <>
+                                  <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                                    <span className="font-medium text-blue-800 shrink-0">署名日時:</span>
+                                    <span className="text-blue-700">
+                                      {signedTxData[request.id]?.signedAt ? 
+                                        new Date(signedTxData[request.id].signedAt).toLocaleString('ja-JP') : 
+                                        '不明'
+                                      }
+                                    </span>
+                                  </div>
+                                  <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                                    <span className="font-medium text-blue-800 shrink-0">使用ウォレット:</span>
+                                    <span className="text-blue-700">{signedTxData[request.id]?.metadata?.walletUsed || 'Unknown'}</span>
+                                  </div>
+                                </>
+                              )}
+                              {!signedTxData[request.id]?.error && (
+                                <>
+                                  <div>
+                                    <span className="font-medium text-blue-800">署名データ:</span>
+                                    <div className="mt-1 p-2 bg-white rounded border font-mono text-xs break-all">
+                                      {(() => {
+                                        const signedTx = signedTxData[request.id]?.signedTx;
+                                        let txData: string;
+
+                                        if (!signedTx) {
+                                          txData = '署名データなし（まだ取得されていません）';
+                                        } else if (typeof signedTx === 'string') {
+                                          txData = signedTx;
+                                        } else {
+                                          try {
+                                            txData = JSON.stringify(signedTx);
+                                          } catch (error) {
+                                            txData = 'Invalid transaction data';
+                                          }
+                                        }
+
+                                        return txData && txData.length > 100 ? txData.slice(0, 100) + '...' : txData;
+                                      })()}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <span className="font-medium text-blue-800">ステータス:</span>
+                                    <span className="ml-2 text-blue-700">{signedTxData[request.id]?.status || '不明'}</span>
+                                  </div>
+                                </>
+                              )}
                             </div>
                           </div>
                         )}

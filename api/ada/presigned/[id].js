@@ -103,6 +103,13 @@ export default async function handler(req, res) {
       });
     }
 
+    console.log(`📊 Raw data details:`, {
+      dataType: typeof signedDataRaw,
+      dataLength: typeof signedDataRaw === 'string' ? signedDataRaw.length : 'not string',
+      dataContent: signedDataRaw,
+      isEmptyObject: typeof signedDataRaw === 'object' && Object.keys(signedDataRaw).length === 0
+    });
+
     let signedData;
     try {
       console.log(`🔍 Raw signed data type: ${typeof signedDataRaw}`);
