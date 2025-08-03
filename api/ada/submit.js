@@ -120,7 +120,18 @@ export default async function handler(req, res) {
       });
     }
 
-    const signedTxData = JSON.parse(signedTxDataRaw);
+    // Handle both string and object responses from Redis
+    let signedTxData;
+    if (typeof signedTxDataRaw === 'string') {
+      signedTxData = JSON.parse(signedTxDataRaw);
+    } else if (typeof signedTxDataRaw === 'object' && signedTxDataRaw !== null) {
+      signedTxData = signedTxDataRaw;
+    } else {
+      console.error('❌ Unexpected data type from Redis:', typeof signedTxDataRaw);
+      return res.status(500).json({
+        error: 'Invalid data format in database'
+      });
+    }
     console.log('📋 Found signed transaction data:', {
       requestId: signedTxData.requestId,
       status: signedTxData.status,
