@@ -101,7 +101,20 @@ export const useWallet = (): UseWalletReturn => {
       const api = await walletApi.enable();
       
       // Use complete signing (partialSign = false) to include all required signatures
+      console.log('🔍 About to call api.signTx with:', {
+        txHex: tx,
+        txHexLength: tx.length,
+        partialSign: false,
+        wallet: state.selectedWallet
+      });
+      
       const signedTx = await api.signTx(tx, false);
+      
+      console.log('🔍 Received signedTx from wallet:', {
+        signedTx,
+        signedTxType: typeof signedTx,
+        signedTxLength: typeof signedTx === 'string' ? signedTx.length : 'not string'
+      });
       
       setState(prev => ({ ...prev, loading: false }));
       return signedTx;

@@ -277,17 +277,47 @@ export default async function handler(req, res) {
             signedTxHex = txBodyHex;  // Use the complete transaction as-is
           } else {
             console.log('🔧 Constructing complete transaction from components...');
+            
+            // Fix TTL in transaction body if needed
+            let fixedTxBody = txBody;
+            
+            // Check if TTL needs fixing (request has valid ttl_slot)
+            if (requestData && requestData.ttl_slot && requestData.ttl_slot > 0) {
+              console.log('🔧 Fixing TTL in transaction body...');
+              console.log('Original TTL in txBody:', txBody[3]);
+              console.log('Request TTL slot:', requestData.ttl_slot);
+              
+              // Create new txBody with correct TTL
+              fixedTxBody = [
+                txBody[0], // inputs
+                txBody[1], // outputs  
+                txBody[2], // fee
+                requestData.ttl_slot // correct TTL from request
+              ];
+              
+              console.log('✅ TTL fixed in transaction body');
+            }
+            
             // Construct Conway Era transaction: [txBody, witnessSet, isValid, auxiliaryData]
             const completeTx = [
-              txBody,
+              fixedTxBody,
               witnessSet, 
-              true,    // isValid flag
+              true,    // isValid flag - f5 in CBOR
               null     // auxiliaryData
             ];
+            
+            console.log('🔍 Conway Era transaction structure:', {
+              txBodyElements: fixedTxBody.length,
+              witnessSetType: Array.isArray(witnessSet) ? 'array' : 'map',
+              isValid: true,
+              auxiliaryData: null
+            });
             
             // Encode complete transaction to CBOR
             const completeTxBuffer = cbor.encode(completeTx);
             signedTxHex = completeTxBuffer.toString('hex');
+            
+            console.log('✅ Conway Era transaction encoded successfully');
           }
           
           console.log('✅ Complete transaction constructed with CBOR library');

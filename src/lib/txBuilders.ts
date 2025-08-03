@@ -415,25 +415,43 @@ export class SweepTxBuilder extends BaseTxBuilder {
   }
 
   async buildTransaction(): Promise<TransactionBuildResult> {
+    console.log('🚀 SweepTxBuilder.buildTransaction() started');
     try {
       // Get all available UTxOs
+      console.log('📥 Getting wallet UTxOs...');
       const utxos = await this.getWalletUtxos();
+      console.log('📊 UTxOs retrieved:', { count: utxos.length });
       
       if (utxos.length === 0) {
+        console.error('❌ No UTxOs available');
         throw new Error('使用可能なUTxOがありません');
       }
 
       // Calculate sweep amount
+      console.log('💰 Calculating sweep amount...');
       const sweepResult = await this.calculateSweepAmount(utxos);
+      console.log('💰 Sweep calculation result:', {
+        sweepAmount: sweepResult.sweepAmount.toString(),
+        selectedUtxos: sweepResult.selectedUtxos.length,
+        estimatedFee: sweepResult.estimatedFee.toString()
+      });
       
       if (sweepResult.sweepAmount <= 0) {
+        console.error('❌ Sweep amount is zero or negative:', sweepResult.sweepAmount);
         throw new Error('Sweep amount is zero or negative after fees');
       }
 
       // Build transaction
+      console.log('🔧 Building sweep transaction...');
       const txResult = await this.buildSweepTx(sweepResult);
+      console.log('✅ Sweep transaction built successfully:', {
+        txHex: txResult.txHex.substring(0, 32) + '...',
+        txHash: txResult.txHash,
+        fee: txResult.fee,
+        ttl: txResult.ttl
+      });
       
-      return {
+      const result = {
         success: true,
         txHex: txResult.txHex,
         txHash: txResult.txHash,
@@ -448,8 +466,12 @@ export class SweepTxBuilder extends BaseTxBuilder {
           total_fee: txResult.fee
         }
       };
+      
+      console.log('✅ SweepTxBuilder.buildTransaction() completed successfully');
+      return result;
 
     } catch (error) {
+      console.error('❌ SweepTxBuilder.buildTransaction() failed:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Sweep transaction build failed'

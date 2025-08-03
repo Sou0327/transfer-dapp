@@ -356,12 +356,16 @@ export const SigningPage: React.FC = () => {
 
       switch (state.request.amount_mode) {
         case 'fixed':
+          console.log('🔧 Creating FixedAmountTxBuilder');
           txBuilder = new FixedAmountTxBuilder(txBuilderConfig, amountRule as FixedAmount);
           break;
         case 'sweep':
+          console.log('🔧 Creating SweepTxBuilder with rule:', amountRule);
           txBuilder = new SweepTxBuilder(txBuilderConfig, amountRule as SweepRule);
+          console.log('✅ SweepTxBuilder created successfully');
           break;
         case 'rate_based':
+          console.log('🔧 Creating RateBasedTxBuilder');
           txBuilder = new RateBasedTxBuilder(txBuilderConfig, amountRule as RateBasedRule);
           break;
         default:
@@ -369,7 +373,9 @@ export const SigningPage: React.FC = () => {
           return;
       }
 
+      console.log('🔧 About to call buildTransaction()');
       const txData = await txBuilder.buildTransaction();
+      console.log('✅ buildTransaction() completed successfully:', txData);
 
       setState(prev => ({ 
         ...prev, 
@@ -380,7 +386,13 @@ export const SigningPage: React.FC = () => {
       }));
 
     } catch (error) {
-      console.error('Transaction building failed:', error);
+      console.error('🚨 Transaction building failed:', error);
+      console.error('🚨 Error details:', {
+        errorType: typeof error,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+        at_stage: 'buildTransaction_call'
+      });
       
       if (error instanceof Error) {
         if (error.message.includes('insufficient funds') || error.message.includes('不足')) {
@@ -413,8 +425,21 @@ export const SigningPage: React.FC = () => {
       setState(prev => ({ ...prev, submissionStatus: 'submitting' }));
       clearError();
 
+      console.log('🔍 handleSignTransaction called with:', {
+        txHex,
+        txHexLength: txHex.length,
+        selectedWallet,
+        requestId: state.request.id
+      });
+
       // Sign transaction
       const witnessSet = await walletSignTx(txHex);
+      
+      console.log('🔍 walletSignTx returned:', {
+        witnessSet,
+        witnessSetType: typeof witnessSet,
+        witnessSetLength: typeof witnessSet === 'string' ? witnessSet.length : 'not string'
+      });
       
       // Store pre-signed data
       console.log('🔥 署名完了 - サーバーにデータ送信中:', {
