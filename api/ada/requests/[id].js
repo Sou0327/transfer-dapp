@@ -1,23 +1,8 @@
 // Vercel Serverless Function: GET /api/ada/requests/:id
-// 個別リクエスト取得
+// Vercel Serverless Function: GET /api/ada/requests/:id
+// 個別リクエスト取得 - Vercel KV使用
 
-// Simple in-memory cache (共有)
-const cache = new Map();
-const requestsList = new Map();
-
-const CacheService = {
-  get: (key) => {
-    const item = cache.get(key);
-    if (!item) return null;
-    
-    if (Date.now() > item.expires) {
-      cache.delete(key);
-      return null;
-    }
-    
-    return item.data;
-  }
-};
+import { kv } from '@vercel/kv';
 
 export default async function handler(req, res) {
   // CORS設定
@@ -38,34 +23,26 @@ export default async function handler(req, res) {
     
     console.log(`🔍 Looking for request: ${id}`);
     
-    // Emergency test code removed - now using actual data retrieval logic
+    // Direct retrieval from Vercel KV
+    let requestData = null;
     
-    // 🚨 WORKAROUND: Call the list API to get all requests
-    // then find the specific one by ID
-    
-    const baseUrl = req.headers.origin || 'http://localhost:4000';
-    const listResponse = await fetch(`${baseUrl}/api/ada/requests`);
-    
-    if (!listResponse.ok) {
-      console.log(`Failed to fetch requests list: ${listResponse.status}`);
-      return res.status(500).json({
-        error: 'Failed to fetch requests list',
-        statusCode: 500
-      });
+    try {
+      const cacheKey = `request:${id}`;
+      requestData = await kv.get(cacheKey);
+      console.log(`🔍 KV check for ${id}:`, { found: !!requestData });
+    } catch (error) {
+      console.error('KV get error:', error);
     }
     
-    const listData = await listResponse.json();
-    const requestData = listData.requests?.find(req => req.id === id);
-    
     if (!requestData) {
-      console.log(`Request not found: ${id}`);
+      console.log(`Request not found in KV: ${id}`);
       return res.status(404).json({
         error: 'Request not found',
         statusCode: 404
       });
     }
     
-    console.log(`✅ Found request: ${id}, status: ${requestData.status}`);
+    console.log(`✅ Found request in KV: ${id}, status: ${requestData.status}`);
     
     // デバッグ: レスポンスデータの詳細ログ
     console.log(`🔍 API レスポンスデバッグ:`, {

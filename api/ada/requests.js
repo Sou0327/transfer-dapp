@@ -1,29 +1,33 @@
 // Vercel Serverless Function: POST /api/ada/requests, GET /api/ada/requests
-// リクエスト作成と一覧取得
+// Vercel Serverless Function: POST /api/ada/requests, GET /api/ada/requests
+// リクエスト作成と一覧取得 - Vercel KV使用
 
-// Simple in-memory cache for development
-const cache = new Map();
-const requestsList = new Map();
+import { kv } from '@vercel/kv';
+
+// Vercel KV cache for production
+// Removed in-memory maps - using Vercel KV instead
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 const CacheService = {
-  get: (key) => {
-    const item = cache.get(key);
-    if (!item) return null;
-    
-    if (Date.now() > item.expires) {
-      cache.delete(key);
+  get: async (key) => {
+    try {
+      return await kv.get(key);
+    } catch (error) {
+      console.error('KV get error:', error);
       return null;
     }
-    
-    return item.data;
   },
   
-  set: (key, data, ttlSeconds) => {
-    cache.set(key, {
-      data,
-      expires: Date.now() + (ttlSeconds * 1000)
-    });
+  set: async (key, data, ttlSeconds) => {
+    try {
+      if (ttlSeconds) {
+        await kv.setex(key, ttlSeconds, data);
+      } else {
+        await kv.set(key, data);
+      }
+    } catch (error) {
+      console.error('KV set error:', error);
+    }
   }
 };
 
@@ -70,12 +74,18 @@ export default async function handler(req, res) {
         ttl_absolute: ttlAbsolute
       };
 
-      // Store in cache
+      // Store in Vercel KV
       const cacheKey = `request:${requestId}`;
       await CacheService.set(cacheKey, otcRequest, ttl_minutes * 60);
       
-      // Add to requests list for enumeration
-      requestsList.set(requestId, otcRequest);
+      // Add to requests list for enumeration in KV
+      try {
+        const existingRequests = await kv.get('requests_list') || [];
+        const updatedRequests = [...existingRequests, requestId];
+        await kv.set('requests_list', updatedRequests);
+      } catch (error) {
+        console.error('Failed to update requests list:', error);
+      }
 
       // Generate signing URL
       const signUrl = `${req.headers.origin || 'http://localhost:4000'}/sign/${requestId}`;
@@ -88,16 +98,37 @@ export default async function handler(req, res) {
       });
 
     } else if (req.method === 'GET') {
-      // Get all requests (admin-side access)
-      const requests = Array.from(requestsList.values())
-        .filter(req => {
-          // Filter out expired requests
-          if (req.ttl_absolute && new Date(req.ttl_absolute) < new Date()) {
-            return false;
+      // Get all requests (admin-side access) from Vercel KV
+      let requests = [];
+      try {
+        const requestIds = await kv.get('requests_list') || [];
+        
+        // Get all request details
+        const requestPromises = requestIds.map(async (id) => {
+          try {
+            return await kv.get(`request:${id}`);
+          } catch (error) {
+            console.error(`Failed to get request ${id}:`, error);
+            return null;
           }
-          return true;
-        })
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        });
+        
+        const allRequests = await Promise.all(requestPromises);
+        
+        requests = allRequests
+          .filter(req => req !== null) // Remove null entries
+          .filter(req => {
+            // Filter out expired requests
+            if (req.ttl_absolute && new Date(req.ttl_absolute) < new Date()) {
+              return false;
+            }
+            return true;
+          })
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      } catch (error) {
+        console.error('Failed to get requests from KV:', error);
+        requests = [];
+      }
       
       return res.status(200).json({
         requests
