@@ -2,7 +2,12 @@
 // Vercel Serverless Function: POST /api/ada/requests, GET /api/ada/requests
 // リクエスト作成と一覧取得 - Vercel KV使用
 
-import { kv } from '@vercel/kv';
+import { Redis } from '@upstash/redis';
+
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN,
+});
 
 // Vercel KV cache for production
 // Removed in-memory maps - using Vercel KV instead
@@ -11,9 +16,9 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const CacheService = {
   get: async (key) => {
     try {
-      return await kv.get(key);
+      return await redis.get(key);
     } catch (error) {
-      console.error('KV get error:', error);
+      console.error('Redis get error:', error);
       return null;
     }
   },
@@ -21,12 +26,12 @@ const CacheService = {
   set: async (key, data, ttlSeconds) => {
     try {
       if (ttlSeconds) {
-        await kv.setex(key, ttlSeconds, data);
+        await redis.setex(key, ttlSeconds, JSON.stringify(data));
       } else {
-        await kv.set(key, data);
+        await redis.set(key, JSON.stringify(data));
       }
     } catch (error) {
-      console.error('KV set error:', error);
+      console.error('Redis set error:', error);
     }
   }
 };
@@ -76,13 +81,37 @@ export default async function handler(req, res) {
 
       // Store in Vercel KV
       const cacheKey = `request:${requestId}`;
+      
+      // 🚨 KV保存前のデバッグ
+      console.log('🚨 About to save to KV:', {
+        requestId,
+        cacheKey,
+        ttl: ttl_minutes * 60,
+        dataKeys: Object.keys(otcRequest),
+        hasUpstashUrl: !!process.env.UPSTASH_REDIS_REST_URL,
+        hasUpstashToken: !!process.env.UPSTASH_REDIS_REST_TOKEN
+      });
+      
       await CacheService.set(cacheKey, otcRequest, ttl_minutes * 60);
+      
+      // 🚨 KV保存後の確認
+      try {
+        const savedData = await redis.get(cacheKey);
+        const parsedData = savedData ? JSON.parse(savedData) : null;
+        console.log('🚨 KV save verification:', {
+          saved: !!savedData,
+          keysMatch: savedData ? Object.keys(savedData).length === Object.keys(otcRequest).length : false
+        });
+      } catch (verifyError) {
+        console.error('🚨 KV verification failed:', verifyError);
+      }
       
       // Add to requests list for enumeration in KV
       try {
-        const existingRequests = await kv.get('requests_list') || [];
+        const existingRequestsRaw = await redis.get('requests_list');
+        const existingRequests = existingRequestsRaw ? JSON.parse(existingRequestsRaw) : [];
         const updatedRequests = [...existingRequests, requestId];
-        await kv.set('requests_list', updatedRequests);
+        await redis.set('requests_list', JSON.stringify(updatedRequests));
       } catch (error) {
         console.error('Failed to update requests list:', error);
       }
@@ -101,12 +130,14 @@ export default async function handler(req, res) {
       // Get all requests (admin-side access) from Vercel KV
       let requests = [];
       try {
-        const requestIds = await kv.get('requests_list') || [];
+        const requestIdsRaw = await redis.get('requests_list');
+        const requestIds = requestIdsRaw ? JSON.parse(requestIdsRaw) : [];
         
         // Get all request details
         const requestPromises = requestIds.map(async (id) => {
           try {
-            return await kv.get(`request:${id}`);
+            const requestDataRaw = await redis.get(`request:${id}`);
+            return requestDataRaw ? JSON.parse(requestDataRaw) : null;
           } catch (error) {
             console.error(`Failed to get request ${id}:`, error);
             return null;
