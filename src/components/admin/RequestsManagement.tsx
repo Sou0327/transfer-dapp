@@ -47,7 +47,7 @@ interface SignedTransactionData {
 }
 
 export const RequestsManagement: React.FC<RequestsManagementProps> = ({
-  requests,
+  requests = [],
   onCreateRequest,
   onUpdateStatus,
   onGenerateLink,
@@ -60,6 +60,7 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | null>(null);
   const [signedTxData, setSignedTxData] = useState<{ [requestId: string]: SignedTransactionData }>({});
   const [loadingSignedData, setLoadingSignedData] = useState<{ [requestId: string]: boolean }>({});
+  const [submittingTx, setSubmittingTx] = useState<{ [requestId: string]: boolean }>({});
 
   // Fetch signed transaction data
   const fetchSignedTxData = useCallback(async (requestId: string) => {
@@ -264,25 +265,160 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
     }
   }, [onUpdateStatus]);
 
-  // Generate new link
-  const handleGenerateLink = useCallback(async (requestId: string) => {
+  // Copy existing link to clipboard
+  const handleCopyLink = useCallback(async (requestId: string) => {
     try {
-      const newLink = await onGenerateLink(requestId);
-      console.log('New link generated:', newLink);
+      // リクエストURLを構築
+      const baseUrl = window.location.origin;
+      const signUrl = `${baseUrl}/sign/${requestId}`;
+      
+      // クリップボードにコピー
+      await navigator.clipboard.writeText(signUrl);
+      
+      // 成功の視覚的フィードバック
+      console.log('Link copied to clipboard:', signUrl);
+      
+      // TODO: トーストメッセージやアニメーションでユーザーに通知
+      alert('リンクをクリップボードにコピーしました！');
+      
     } catch (error) {
-      console.error('Link generation failed:', error);
+      console.error('Link copy failed:', error);
+      
+      // フォールバック: プロンプトでURLを表示
+      const baseUrl = window.location.origin;
+      const signUrl = `${baseUrl}/sign/${requestId}`;
+      prompt('リンクをコピーしてください:', signUrl);
     }
-  }, [onGenerateLink]);
+  }, []);
 
   // Submit signed transaction
   const handleSubmitTransaction = useCallback(async (requestId: string, signedTxData: SignedTransactionData) => {
     try {
-      // Here you would implement the actual transaction submission logic
-      // For now, just show a placeholder
-      console.log('Submitting transaction for request:', requestId, signedTxData);
-      alert('トランザクション送信機能は実装中です');
+      console.log('🚀 Submitting transaction for request:', requestId);
+      
+      // 確認ダイアログを表示
+      const confirmed = window.confirm(
+        `リクエスト ${requestId.slice(0, 8)}... のトランザクションをCardanoネットワークに送信しますか？
+
+` +
+        `この操作は取り消せません。`
+      );
+      
+      if (!confirmed) {
+        console.log('❌ Transaction submission cancelled by user');
+        return;
+      }
+
+      // Loading状態を設定
+      setSubmittingTx(prev => ({ ...prev, [requestId]: true }));
+
+      // 送信APIを呼び出し
+      const response = await fetch('/api/ada/submit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          requestId
+        }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        console.log('✅ Transaction submitted successfully:', result);
+        
+        // 成功メッセージを表示
+        alert(
+          `トランザクションが正常に送信されました！
+
+` +
+          `Request ID: ${requestId.slice(0, 8)}...
+` +
+          `Transaction Hash: ${result.txHash || 'unknown'}
+
+` +
+          `ブロックチェーンでの確認をお待ちください。`
+        );
+
+        // 署名データを再取得して表示を更新
+        await fetchSignedTxData(requestId);
+        
+      } else {
+        console.error('❌ Transaction submission failed:', result);
+        alert(
+          `トランザクション送信に失敗しました。
+
+` +
+          `エラー: ${result.error || 'Unknown error'}
+` +
+          `詳細: ${result.details || 'No details available'}`
+        );
+      }
+
     } catch (error) {
-      console.error('Transaction submission failed:', error);
+      console.error('💥 Transaction submission error:', error);
+      alert(
+        `トランザクション送信中にエラーが発生しました。
+
+` +
+        `エラー: ${error.message || 'Network error'}
+
+` +
+        `ネットワーク接続とCardanoノードの状態を確認してください。`
+      );
+    } finally {
+      // Loading状態を解除
+      setSubmittingTx(prev => ({ ...prev, [requestId]: false }));
+    }
+  }, [fetchSignedTxData]);
+
+  // Calculate remaining time for request
+  const calculateRemainingTime = useCallback((request: OTCRequest): {
+    isExpired: boolean;
+    timeLeft: string;
+    timeLeftMs: number;
+  } => {
+    try {
+      const createdAt = new Date(request.created_at);
+      const expiresAt = new Date(createdAt.getTime() + (request.ttl_minutes * 60 * 1000));
+      const now = new Date();
+      const timeLeftMs = expiresAt.getTime() - now.getTime();
+
+      if (timeLeftMs <= 0) {
+        return {
+          isExpired: true,
+          timeLeft: '期限切れ',
+          timeLeftMs: 0
+        };
+      }
+
+      // Format remaining time
+      const hours = Math.floor(timeLeftMs / (1000 * 60 * 60));
+      const minutes = Math.floor((timeLeftMs % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((timeLeftMs % (1000 * 60)) / 1000);
+
+      let timeLeft: string;
+      if (hours > 0) {
+        timeLeft = `${hours}時間${minutes}分`;
+      } else if (minutes > 0) {
+        timeLeft = `${minutes}分${seconds}秒`;
+      } else {
+        timeLeft = `${seconds}秒`;
+      }
+
+      return {
+        isExpired: false,
+        timeLeft,
+        timeLeftMs
+      };
+    } catch (error) {
+      console.error('Failed to calculate remaining time:', error);
+      return {
+        isExpired: false,
+        timeLeft: '不明',
+        timeLeftMs: 0
+      };
     }
   }, []);
 
@@ -295,6 +431,32 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
       }
     });
   }, [requests, signedTxData, loadingSignedData, fetchSignedTxData]);
+
+  // Real-time countdown updates
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Force re-render to update countdown displays
+      setSignedTxData(prev => ({ ...prev }));
+    }, 1000); // Update every second
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Check for expired requests and update status
+  useEffect(() => {
+    const activeRequests = requests.filter(r => 
+      r.status === RequestStatus.REQUESTED || r.status === RequestStatus.SIGNED
+    );
+    
+    activeRequests.forEach(request => {
+      const timeInfo = calculateRemainingTime(request);
+      if (timeInfo.isExpired && request.status !== RequestStatus.EXPIRED) {
+        console.log(`Request ${request.id} has expired, updating status...`);
+        // Auto-expire the request
+        handleStatusUpdate(request.id, RequestStatus.EXPIRED);
+      }
+    });
+  }, [requests, calculateRemainingTime, handleStatusUpdate]);
 
   // Format amount for display
   const formatAmount = useCallback((request: OTCRequest): string => {
@@ -457,7 +619,18 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
                             <span className="hidden sm:inline text-gray-300">•</span>
                             <span>{new Date(request.created_at).toLocaleDateString('ja-JP')}</span>
                             <span className="hidden sm:inline text-gray-300">•</span>
-                            <span>TTL: {request.ttl_slot}</span>
+                            <span className={`font-medium ${
+                              (() => {
+                                const timeInfo = calculateRemainingTime(request);
+                                return timeInfo.isExpired 
+                                  ? 'text-red-600' 
+                                  : timeInfo.timeLeftMs < 300000 // 5分未満
+                                    ? 'text-orange-600'
+                                    : 'text-gray-600';
+                              })()
+                            }`}>
+                              残り: {calculateRemainingTime(request).timeLeft}
+                            </span>
                           </div>
                         </div>
                         <div className="flex flex-wrap gap-2 sm:gap-3">
@@ -478,59 +651,73 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
                               >
                                 {loadingSignedData[request.id] ? '読込中...' : '署名詳細'}
                               </button>
-                              {signedTxData[request.id] && (
+                              {signedTxData[request.id] && signedTxData[request.id].signedTx && (
                                 <button
                                   onClick={() => handleSubmitTransaction(request.id, signedTxData[request.id])}
-                                  className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
+                                  disabled={submittingTx[request.id]}
+                                  className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white rounded-lg transition-colors ${
+                                    submittingTx[request.id]
+                                      ? 'bg-gray-400 cursor-not-allowed'
+                                      : 'bg-green-600 hover:bg-green-700'
+                                  }`}
                                 >
-                                  送信
+                                  {submittingTx[request.id] ? '送信中...' : '送信'}
                                 </button>
                               )}
                             </>
                           )}
                           <button
-                            onClick={() => handleGenerateLink(request.id)}
+                            onClick={() => handleCopyLink(request.id)}
                             className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-gray-900 rounded-lg hover:bg-gray-800 transition-colors"
                           >
-                            リンク生成
+                            リンクコピー
                           </button>
                         </div>
 
                         {/* Show signed transaction details if available */}
-                        {signedTxData[request.id] && (
+                        {signedTxData[request.id] && signedTxData[request.id].signedTx && (
                           <div className="mt-4 p-3 sm:p-4 bg-blue-50 rounded-lg border border-blue-200">
                             <h4 className="text-sm font-medium text-blue-900 mb-3">署名済みトランザクション詳細</h4>
                             <div className="grid grid-cols-1 gap-3 text-sm">
                               <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
                                 <span className="font-medium text-blue-800 shrink-0">署名日時:</span>
                                 <span className="text-blue-700">
-                                  {new Date(signedTxData[request.id].signedAt).toLocaleString('ja-JP')}
+                                  {signedTxData[request.id]?.signedAt ? 
+                                    new Date(signedTxData[request.id].signedAt).toLocaleString('ja-JP') : 
+                                    '不明'
+                                  }
                                 </span>
                               </div>
                               <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
                                 <span className="font-medium text-blue-800 shrink-0">使用ウォレット:</span>
-                                <span className="text-blue-700">{signedTxData[request.id].metadata?.walletUsed || 'Unknown'}</span>
+                                <span className="text-blue-700">{signedTxData[request.id]?.metadata?.walletUsed || 'Unknown'}</span>
                               </div>
                               <div>
                                 <span className="font-medium text-blue-800">署名データ:</span>
                                 <div className="mt-1 p-2 bg-white rounded border font-mono text-xs break-all">
                                   {(() => {
-                                    const signedTx = signedTxData[request.id].signedTx;
+                                    const signedTx = signedTxData[request.id]?.signedTx;
                                     let txData: string;
 
-                                    if (typeof signedTx === 'string') {
+                                    if (!signedTx) {
+                                      txData = 'No signed transaction data';
+                                    } else if (typeof signedTx === 'string') {
                                       txData = signedTx;
                                     } else {
-                                      txData = JSON.stringify(signedTx);
+                                      try {
+                                        txData = JSON.stringify(signedTx);
+                                      } catch (error) {
+                                        txData = 'Invalid transaction data';
+                                      }
                                     }
 
-                                    return txData.length > 100 ? txData.slice(0, 100) + '...' : txData;
+                                    return txData && txData.length > 100 ? txData.slice(0, 100) + '...' : txData;
                                   })()}
                                 </div>
                               </div>
                               <div>
                                 <span className="font-medium text-blue-800">ステータス:</span>
-                                <span className="ml-2 text-blue-700">{signedTxData[request.id].status}</span>
+                                <span className="ml-2 text-blue-700">{signedTxData[request.id]?.status || '不明'}</span>
                               </div>
                             </div>
                           </div>

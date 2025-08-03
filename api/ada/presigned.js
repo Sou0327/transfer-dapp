@@ -1,49 +1,63 @@
-// Vercel Serverless Function: POST /api/ada/presigned
-// 署名済みトランザクション保存
+// Vercel Serverless Function: POST /api/ada/presigned, GET /api/ada/presigned/[id]
+// 署名済みトランザクション保存・取得
 
-// Simple in-memory cache (共有)
-const cache = new Map();
-const requestsList = new Map();
+import { Redis } from '@upstash/redis';
 
-const CacheService = {
-  get: (key) => {
-    const item = cache.get(key);
-    if (!item) return null;
-    
-    if (Date.now() > item.expires) {
-      cache.delete(key);
-      return null;
+// Redis インスタンスを安全に初期化
+let redis = null;
+
+const initRedis = () => {
+  if (!redis && process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
+    try {
+      redis = new Redis({
+        url: process.env.KV_REST_API_URL,
+        token: process.env.KV_REST_API_TOKEN,
+      });
+      console.log('✅ Redis client initialized for presigned');
+    } catch (error) {
+      console.error('❌ Redis initialization failed for presigned:', error);
+      redis = null;
     }
-    
-    return item.data;
-  },
-  
-  set: (key, data, ttlSeconds) => {
-    cache.set(key, {
-      data,
-      expires: Date.now() + (ttlSeconds * 1000)
-    });
   }
+  return redis;
 };
 
 export default async function handler(req, res) {
+  console.log('=== 📝 Presigned POST API Debug Start ===');
+  console.log('Method:', req.method);
+  console.log('URL:', req.url);
+  console.log('Body keys:', Object.keys(req.body || {}));
+  
   // CORS設定
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   
   if (req.method === 'OPTIONS') {
+    console.log('✅ OPTIONS request handled');
     return res.status(200).end();
   }
 
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    console.log('❌ Method not allowed:', req.method);
+    return res.status(405).json({ error: 'Method not allowed - POST only' });
+  }
+
+  const redisClient = initRedis();
+  if (!redisClient) {
+    console.error('❌ Redis client not available');
+    return res.status(500).json({
+      error: 'Database connection error'
+    });
   }
 
   try {
+    // 署名データ保存
+    console.log('📝 Storing signed transaction...');
     const { requestId, signedTx, metadata } = req.body;
 
     if (!requestId || !signedTx) {
+      console.log('❌ Missing required fields');
       return res.status(400).json({
         error: 'requestId and signedTx are required'
       });
@@ -59,36 +73,50 @@ export default async function handler(req, res) {
       txHash: null // Will be populated when admin submits
     };
 
-    // Store in cache (in production this would be in database)
+    console.log('💾 Storing signed transaction data:', {
+      requestId,
+      hasSignedTx: !!signedTx,
+      metadata: metadata || {},
+    });
+
+    // Store in Redis
     const cacheKey = `signed-tx:${requestId}`;
-    await CacheService.set(cacheKey, signedTxData, 86400); // 24 hours
+    await redisClient.set(cacheKey, JSON.stringify(signedTxData));
+    console.log(`✅ Signed transaction stored with key: ${cacheKey}`);
 
     // Update request status to signed
-    console.log(`🔥 Processing signed transaction for request: ${requestId}`);
+    console.log(`🔄 Updating request status to SIGNED: ${requestId}`);
     
-    const requestCacheKey = `request:${requestId}`;
-    const existingRequest = await CacheService.get(requestCacheKey);
+    const requestKeyFormats = [
+      requestId,
+      `request:${requestId}`,
+    ];
     
-    console.log(`🔥 Existing request found: ${!!existingRequest}`);
+    let existingRequest = null;
+    for (const key of requestKeyFormats) {
+      const requestDataRaw = await redisClient.get(key);
+      if (requestDataRaw) {
+        existingRequest = JSON.parse(requestDataRaw);
+        console.log(`✅ Found existing request with key: ${key}`);
+        
+        const updatedRequest = {
+          ...existingRequest,
+          status: 'SIGNED',
+          signedAt: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        
+        await redisClient.set(key, JSON.stringify(updatedRequest));
+        console.log(`✅ Request status updated to SIGNED for: ${requestId}`);
+        break;
+      }
+    }
     
-    if (existingRequest) {
-      const updatedRequest = {
-        ...existingRequest,
-        status: 'SIGNED',
-        signedAt: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-      await CacheService.set(requestCacheKey, updatedRequest, 86400);
-      
-      // Update requests list as well
-      requestsList.set(requestId, updatedRequest);
-      
-      console.log(`🔥 Request status updated to SIGNED for: ${requestId}`);
-    } else {
-      console.log(`❌ No cached request found for: ${requestId}`);
+    if (!existingRequest) {
+      console.log(`⚠️ No request found for: ${requestId}`);
     }
 
-    console.log(`Transaction signed for request ${requestId}`);
+    console.log(`✅ Transaction signed for request ${requestId}`);
 
     return res.status(200).json({
       success: true,
@@ -98,9 +126,14 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error('Failed to store signed transaction:', error);
+    console.error('💥 Presigned POST API Error:', {
+      message: error.message,
+      name: error.name,
+      stack: error.stack
+    });
     return res.status(500).json({
-      error: 'Failed to store signed transaction'
+      error: 'Internal server error',
+      details: error.message
     });
   }
 }

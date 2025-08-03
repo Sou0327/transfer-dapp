@@ -130,7 +130,17 @@ export default async function handler(req, res) {
       try {
         console.log('📋 Updating requests list...');
         const existingRequestsRaw = await redisClient.get('requests_list');
-        const existingRequests = existingRequestsRaw ? JSON.parse(existingRequestsRaw) : [];
+        let existingRequests = [];
+        
+        if (existingRequestsRaw) {
+          try {
+            const parsed = JSON.parse(existingRequestsRaw);
+            existingRequests = Array.isArray(parsed) ? parsed : [parsed];
+          } catch (parseError) {
+            console.log('⚠️ Existing requests_list parse failed, creating new list:', parseError.message);
+            existingRequests = typeof existingRequestsRaw === 'string' ? [existingRequestsRaw] : [];
+          }
+        }
         const updatedRequests = [...existingRequests, requestId];
         await redisClient.set('requests_list', JSON.stringify(updatedRequests));
         console.log('✅ Requests list updated, total requests:', updatedRequests.length);
@@ -164,7 +174,32 @@ export default async function handler(req, res) {
       let requests = [];
       try {
         const requestIdsRaw = await redisClient.get('requests_list');
-        const requestIds = requestIdsRaw ? JSON.parse(requestIdsRaw) : [];
+        let requestIds = [];
+        
+        if (requestIdsRaw) {
+          try {
+            // JSON配列として解析を試行
+            const parsed = JSON.parse(requestIdsRaw);
+            requestIds = Array.isArray(parsed) ? parsed : [parsed];
+            console.log('✅ Successfully parsed requests_list as JSON array');
+          } catch (parseError) {
+            // JSON解析失敗時は単一文字列として扱う
+            console.log('⚠️ JSON parse failed, treating as single string:', parseError.message);
+            console.log('Raw data:', requestIdsRaw);
+            
+            // 単一文字列の場合は配列として扱う
+            if (typeof requestIdsRaw === 'string') {
+              requestIds = [requestIdsRaw];
+              
+              // データを正しい形式で再保存
+              console.log('🔧 Fixing requests_list format...');
+              await redisClient.set('requests_list', JSON.stringify(requestIds));
+              console.log('✅ Fixed requests_list format');
+            } else {
+              requestIds = [];
+            }
+          }
+        }
         console.log('📋 Found request IDs:', requestIds.length);
         
         // Get all request details
