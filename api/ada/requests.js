@@ -229,18 +229,38 @@ export default async function handler(req, res) {
         // Get all request details
         const requestPromises = requestIds.map(async (id) => {
           try {
-            const requestDataRaw = await redisClient.get(`request:${id}`);
+            // Try multiple key formats (same as presigned.js)
+            const keyFormats = [id, `request:${id}`];
+            let requestDataRaw = null;
+            let foundKey = null;
+            
+            for (const key of keyFormats) {
+              console.log(`🔍 Checking key format: ${key}`);
+              requestDataRaw = await redisClient.get(key);
+              if (requestDataRaw) {
+                foundKey = key;
+                console.log(`✅ Found data with key: ${key}`);
+                break;
+              } else {
+                console.log(`❌ No data found with key: ${key}`);
+              }
+            }
+            
             if (requestDataRaw) {
               // Handle both string and object responses from Redis
               if (typeof requestDataRaw === 'string') {
-                return JSON.parse(requestDataRaw);
+                const parsed = JSON.parse(requestDataRaw);
+                console.log(`📊 Request ${id} status from key ${foundKey}: ${parsed.status}`);
+                return parsed;
               } else if (typeof requestDataRaw === 'object' && requestDataRaw !== null) {
+                console.log(`📊 Request ${id} status from key ${foundKey}: ${requestDataRaw.status}`);
                 return requestDataRaw;
               } else {
                 console.log(`⚠️ Unexpected request data type for ${id}: ${typeof requestDataRaw}`);
                 return null;
               }
             }
+            console.log(`❌ No data found for request ${id} with any key format`);
             return null;
           } catch (error) {
             console.error(`Failed to get request ${id}:`, error);
