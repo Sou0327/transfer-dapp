@@ -36,16 +36,26 @@ export default async function handler(req, res) {
   try {
     const { id } = req.query;
     
-    console.log(`Looking for request: ${id}`);
+    console.log(`🔍 Looking for request: ${id}`);
     
-    // First check in requestsList
-    let requestData = requestsList.get(id);
+    // Emergency test code removed - now using actual data retrieval logic
     
-    if (!requestData) {
-      // Check in cache
-      const cacheKey = `request:${id}`;
-      requestData = await CacheService.get(cacheKey);
+    // 🚨 WORKAROUND: Call the list API to get all requests
+    // then find the specific one by ID
+    
+    const baseUrl = req.headers.origin || 'http://localhost:4000';
+    const listResponse = await fetch(`${baseUrl}/api/ada/requests`);
+    
+    if (!listResponse.ok) {
+      console.log(`Failed to fetch requests list: ${listResponse.status}`);
+      return res.status(500).json({
+        error: 'Failed to fetch requests list',
+        statusCode: 500
+      });
     }
+    
+    const listData = await listResponse.json();
+    const requestData = listData.requests?.find(req => req.id === id);
     
     if (!requestData) {
       console.log(`Request not found: ${id}`);
@@ -55,7 +65,7 @@ export default async function handler(req, res) {
       });
     }
     
-    console.log(`Found request: ${id}, status: ${requestData.status}`);
+    console.log(`✅ Found request: ${id}, status: ${requestData.status}`);
     
     // デバッグ: レスポンスデータの詳細ログ
     console.log(`🔍 API レスポンスデバッグ:`, {

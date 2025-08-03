@@ -193,26 +193,33 @@ export async function transaction<T>(
  */
 
 export class RequestDAO {
+  // Temporary in-memory storage for testing
+  private static memoryStorage: Map<string, OTCRequest> = new Map();
+
   /**
    * Create a new OTC request
    */
   static async create(data: Omit<OTCRequest, 'id' | 'created_at' | 'updated_at'>): Promise<OTCRequest> {
-    // Import secure ID generation
-    const { generateSecureRequestId } = await import('./security/secureId');
-    
-    // Generate custom request ID
-    const requestId = generateSecureRequestId({
-      length: 32,
-      prefix: 'req',
-      includeTimestamp: true,
-      encoding: 'base58'
-    });
+    // Generate simple request ID for now
+    const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+
+    // Fallback to in-memory storage if database is not available
+    if (!process.env.DATABASE_URL) {
+      const request: OTCRequest = {
+        id: requestId,
+        ...data,
+        created_at: new Date(),
+        updated_at: new Date()
+      };
+      this.memoryStorage.set(requestId, request);
+      return request;
+    }
 
     const result = await query<OTCRequest>(`
       INSERT INTO ada_requests (
         id, currency, amount_mode, amount_or_rule_json, recipient, 
         ttl_slot, status, created_by
-      ) VALUES (security/secureId, $2, $3, $4, $5, $6, $7, $8)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *
     `, [
       requestId,
@@ -232,8 +239,13 @@ export class RequestDAO {
    * Get request by ID
    */
   static async findById(id: string): Promise<OTCRequest | null> {
+    // Fallback to in-memory storage if database is not available
+    if (!process.env.DATABASE_URL) {
+      return this.memoryStorage.get(id) || null;
+    }
+
     const result = await query<OTCRequest>(`
-      SELECT * FROM ada_requests WHERE id = security/secureId
+      SELECT * FROM ada_requests WHERE id = $1
     `, [id]);
     
     return result.rows[0] || null;
@@ -250,9 +262,21 @@ export class RequestDAO {
    * Update request status
    */
   static async updateStatus(id: string, status: RequestStatus): Promise<boolean> {
+    // Fallback to in-memory storage if database is not available
+    if (!process.env.DATABASE_URL) {
+      const request = this.memoryStorage.get(id);
+      if (request) {
+        request.status = status;
+        request.updated_at = new Date();
+        this.memoryStorage.set(id, request);
+        return true;
+      }
+      return false;
+    }
+
     const result = await query(`
       UPDATE ada_requests 
-      SET status = security/secureId, updated_at = CURRENT_TIMESTAMP 
+      SET status = $1, updated_at = CURRENT_TIMESTAMP 
       WHERE id = $2
     `, [status, id]);
     
@@ -263,9 +287,18 @@ export class RequestDAO {
    * Get requests by admin
    */
   static async findByAdmin(adminId: string, limit = 50, offset = 0): Promise<OTCRequest[]> {
+    // Fallback to in-memory storage if database is not available
+    if (!process.env.DATABASE_URL) {
+      const requests = Array.from(this.memoryStorage.values())
+        .filter(req => req.created_by === adminId)
+        .sort((a, b) => b.created_at.getTime() - a.created_at.getTime())
+        .slice(offset, offset + limit);
+      return requests;
+    }
+
     const result = await query<OTCRequest>(`
       SELECT * FROM ada_requests 
-      WHERE created_by = security/secureId 
+      WHERE created_by = $1 
       ORDER BY created_at DESC 
       LIMIT $2 OFFSET $3
     `, [adminId, limit, offset]);
@@ -277,12 +310,30 @@ export class RequestDAO {
    * Get requests with expired TTL
    */
   static async findExpired(currentSlot: number): Promise<OTCRequest[]> {
+    // Fallback to in-memory storage if database is not available
+    if (!process.env.DATABASE_URL) {
+      return Array.from(this.memoryStorage.values())
+        .filter(req => req.ttl_slot < currentSlot && ['REQUESTED', 'SIGNED'].includes(req.status as string));
+    }
+
     const result = await query<OTCRequest>(`
       SELECT * FROM ada_requests 
-      WHERE ttl_slot < security/secureId AND status IN ('REQUESTED', 'SIGNED')
+      WHERE ttl_slot < $1 AND status IN ('REQUESTED', 'SIGNED')
     `, [currentSlot]);
     
     return result.rows;
+  }
+
+  /**
+   * Get all requests (for in-memory storage debugging)
+   */
+  static async getAll(): Promise<OTCRequest[]> {
+    if (!process.env.DATABASE_URL) {
+      return Array.from(this.memoryStorage.values());
+    }
+    
+    // This method only works with in-memory storage for now
+    return [];
   }
 }
 

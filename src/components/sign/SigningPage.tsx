@@ -219,6 +219,22 @@ export const SigningPage: React.FC = () => {
           amount_or_rule_in_response: data.request?.amount_or_rule_json
         });
         
+        // 🚨 追加デバッグ: データ全体とrequest部分を詳細確認
+        console.log('🚨 レスポンスデータ全体:', data);
+        console.log('🚨 data.request詳細:', data.request);
+        console.log('🚨 dataのキー:', Object.keys(data));
+        
+        if (data.request) {
+          console.log('🚨 data.requestのキー:', Object.keys(data.request));
+          console.log('🚨 amount_mode値:', data.request.amount_mode);
+          console.log('🚨 amount_or_rule_json値:', data.request.amount_or_rule_json);
+          console.log('🚨 created_at値:', data.request.created_at);
+          console.log('🚨 ttl_absolute値:', data.request.ttl_absolute);
+          console.log('🚨 recipient値:', data.request.recipient);
+        } else {
+          console.log('🚨 data.requestがnullまたはundefined!');
+        }
+        
         setState(prev => ({ ...prev, request: data.request, loading: false }));
 
       } catch (error) {

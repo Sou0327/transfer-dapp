@@ -439,7 +439,10 @@ export async function protocolRoutes(fastify, options) {
         200: {
           type: 'object',
           properties: {
-            request: { type: 'object' }
+            request: { 
+              type: 'object',
+              additionalProperties: true  // 🔧 この行を追加
+            }
           }
         },
         404: {
@@ -459,6 +462,12 @@ export async function protocolRoutes(fastify, options) {
       
       // First check in requestsList
       let requestData = requestsList.get(id);
+      
+      // 🚨 DEBUG: 詳細なデバッグ情報
+      console.log('🚨 DEBUG requestData:', JSON.stringify(requestData, null, 2));
+      console.log('🚨 DEBUG requestsList size:', requestsList.size);
+      console.log('🚨 DEBUG requestsList keys:', Array.from(requestsList.keys()));
+      
       fastify.log.info(`🔍 requestsList check for ${id}:`, {
         found: !!requestData,
         requestsListSize: requestsList.size,
@@ -487,6 +496,15 @@ export async function protocolRoutes(fastify, options) {
       fastify.log.info(`Found request: ${id}, status: ${requestData.status}`);
       
       // デバッグ: レスポンスデータの詳細ログ
+      // 🚨 DEBUG: レスポンス前の最終チェック
+      console.log('🚨 FINAL DEBUG before response:', {
+        id: requestData?.id,
+        amount_mode: requestData?.amount_mode,
+        amount_or_rule_json: requestData?.amount_or_rule_json,
+        allKeys: requestData ? Object.keys(requestData) : 'NO KEYS',
+        fullData: JSON.stringify(requestData, null, 2)
+      });
+      
       fastify.log.info(`🔍 API レスポンスデバッグ:`, {
         id: requestData.id,
         amount_mode: requestData.amount_mode,
@@ -496,9 +514,11 @@ export async function protocolRoutes(fastify, options) {
         allKeys: Object.keys(requestData)
       });
       
-      return {
-        request: requestData
-      };
+      // 🚨 最終レスポンスのデバッグ
+      const response = { request: requestData };
+      console.log('🚨 ACTUAL RESPONSE TO BE SENT:', JSON.stringify(response, null, 2));
+      
+      return response;
       
     } catch (error) {
       fastify.log.error('Failed to get request by ID:', error);

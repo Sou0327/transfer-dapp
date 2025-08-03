@@ -170,13 +170,50 @@ export async function requestRoutes(fastify, options) {
     try {
       const { id } = request.params;
 
+      console.log(`🔍 Individual request API called for: ${id}`);
+
+      // 🚨 TEMPORARY: Try to get from list API first as fallback
+      try {
+        const baseUrl = 'http://localhost:3001';
+        const listResponse = await fetch(`${baseUrl}/api/ada/requests`);
+        
+        if (listResponse.ok) {
+          const listData = await listResponse.json();
+          const requestFromList = listData.requests?.find(req => req.id === id);
+          
+          if (requestFromList) {
+            console.log(`✅ Found request in list API: ${id}`);
+            
+            // Get associated pre-signed data
+            const presigned = await PreSignedDAO.findByRequestId?.(id) || null;
+
+            // Get associated transaction data
+            const transaction = await TransactionDAO.findByRequestId?.(id) || null;
+
+            return {
+              ...requestFromList,
+              created_at: requestFromList.created_at,
+              updated_at: requestFromList.updated_at,
+              presigned,
+              transaction
+            };
+          }
+        }
+      } catch (fallbackError) {
+        console.log('List API fallback failed:', fallbackError);
+      }
+
+      // Try normal database lookup
       const otcRequest = await RequestDAO.findById(id);
       if (!otcRequest) {
+        console.log(`❌ Request not found in database: ${id}`);
         return reply.code(404).send({ error: 'Request not found' });
       }
 
+      console.log(`✅ Found request in database: ${id}`);
+
       // Get associated pre-signed data
-      const presigned = await PreSignedDAO.findByRequestId(id);
+      const presigned = await PreSignedDAO.findByRequestId?.(id) || null;
 
       // Get associated transaction data
       const transaction = await TransactionDAO.findByRequestId?.(id) || null;
@@ -190,11 +227,12 @@ export async function requestRoutes(fastify, options) {
       };
 
     } catch (error) {
-      fastify.log.error('Failed to get request:', error);
+      console.error('Failed to get request:', error);
       return reply.code(500).send({
         error: 'Failed to retrieve request'
       });
     }
+  });
   });
 
   // Get requests by admin (for dashboard)
