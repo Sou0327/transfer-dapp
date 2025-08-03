@@ -519,8 +519,6 @@ export default async function handler(req, res) {
           
           console.log('📊 Complete transaction length:', signedTxHex.length);
           
-          } // End of else block for CBOR reconstruction
-          
         } catch (cborError) {
           console.error('❌ CBOR construction failed:', cborError);
           // Fallback to direct usage
