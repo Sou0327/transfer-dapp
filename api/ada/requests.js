@@ -261,6 +261,12 @@ export default async function handler(req, res) {
           })
           .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
           
+        // Debug: Show each request's status
+        console.log('📊 Retrieved requests status details:');
+        requests.forEach((req, index) => {
+          console.log(`  ${index + 1}. ID: ${req.id.slice(0, 20)}... Status: "${req.status}" Updated: ${req.updated_at}`);
+        });
+        
         console.log('✅ Retrieved requests:', requests.length);
       } catch (error) {
         console.error('❌ Failed to get requests from Redis:', error);

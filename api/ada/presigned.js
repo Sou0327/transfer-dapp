@@ -141,6 +141,30 @@ export default async function handler(req, res) {
           
           await redisClient.set(key, JSON.stringify(updatedRequest));
           console.log(`✅ Request status updated to SIGNED for: ${requestId}`);
+          
+          // 🔍 更新後の確認: 実際に更新されたかチェック
+          try {
+            const verifyUpdatedData = await redisClient.get(key);
+            if (verifyUpdatedData) {
+              let parsedUpdatedData;
+              if (typeof verifyUpdatedData === 'string') {
+                parsedUpdatedData = JSON.parse(verifyUpdatedData);
+              } else {
+                parsedUpdatedData = verifyUpdatedData;
+              }
+              console.log(`🔍 Update verification for key ${key}:`, {
+                currentStatus: parsedUpdatedData.status,
+                signedAt: parsedUpdatedData.signedAt,
+                updated_at: parsedUpdatedData.updated_at,
+                requestId: parsedUpdatedData.id
+              });
+            } else {
+              console.error(`❌ Update verification failed - no data found after update for key: ${key}`);
+            }
+          } catch (verifyError) {
+            console.error(`❌ Update verification error for key ${key}:`, verifyError);
+          }
+          
           break;
         } catch (parseError) {
           console.error(`❌ Failed to parse/update request data for key ${key}:`, parseError);
@@ -154,6 +178,19 @@ export default async function handler(req, res) {
     }
 
     console.log(`✅ Transaction signed for request ${requestId}`);
+
+    // WebSocket通知を送信（もしWebSocketサーバーが利用可能なら）
+    try {
+      // 管理者向けにステータス更新を通知
+      console.log('📡 Attempting to send WebSocket notification...');
+      
+      // Note: WebSocket通知の実装は環境に依存
+      // ここでは将来の実装のためのプレースホルダー
+      
+    } catch (wsError) {
+      console.warn('⚠️ WebSocket notification failed:', wsError.message);
+      // WebSocket通知失敗は署名処理の失敗にはしない
+    }
 
     return res.status(200).json({
       success: true,
