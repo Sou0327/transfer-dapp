@@ -682,14 +682,66 @@ export default async function handler(req, res) {
                 });
               }
               
-              // Analyze witness set
+              // 🔍 DEEP WITNESS ANALYSIS
               const analyzeWitnessSet = witnessSetHex || signedTxData.signedTx;
               if (analyzeWitnessSet && typeof analyzeWitnessSet === 'string') {
                 const witnessSetDecoded = cbor.decode(Buffer.from(analyzeWitnessSet, 'hex'));
-                console.log('🔑 Witness set analysis:', {
+                console.log('🔑 Deep witness set analysis:', {
                   hasVkeys: !!witnessSetDecoded[0],
-                  vkeyCount: witnessSetDecoded[0] ? witnessSetDecoded[0].length : 0
+                  vkeyCount: witnessSetDecoded[0] ? witnessSetDecoded[0].length : 0,
+                  isMap: witnessSetDecoded instanceof Map,
+                  mapKeys: witnessSetDecoded instanceof Map ? Array.from(witnessSetDecoded.keys()) : 'not a map'
                 });
+                
+                // Detailed VKey witness analysis
+                let vkeyWitnesses = null;
+                if (witnessSetDecoded instanceof Map && witnessSetDecoded.has(0)) {
+                  vkeyWitnesses = witnessSetDecoded.get(0);
+                } else if (witnessSetDecoded[0]) {
+                  vkeyWitnesses = witnessSetDecoded[0];
+                }
+                
+                if (vkeyWitnesses && Array.isArray(vkeyWitnesses)) {
+                  console.log('🔍 VKey Witnesses detailed analysis:');
+                  vkeyWitnesses.forEach((witness, idx) => {
+                    if (Array.isArray(witness) && witness.length >= 2) {
+                      const pubKeyBytes = witness[0];
+                      const signatureBytes = witness[1];
+                      
+                      console.log(`  Witness ${idx}:`, {
+                        pubKeyLength: pubKeyBytes ? pubKeyBytes.length : 'missing',
+                        signatureLength: signatureBytes ? signatureBytes.length : 'missing',
+                        pubKeyHex: pubKeyBytes ? pubKeyBytes.toString('hex').substring(0, 16) + '...' : 'missing'
+                      });
+                      
+                      // Compute Blake2b-224 key hash from public key
+                      if (pubKeyBytes && pubKeyBytes.length === 32) {
+                        try {
+                          const crypto = require('crypto');
+                          const blake2bHash = crypto.createHash('blake2b256').update(pubKeyBytes).digest();
+                          const keyHash = blake2bHash.slice(0, 28).toString('hex'); // First 28 bytes
+                          
+                          console.log(`    Computed Key Hash: ${keyHash}`);
+                          console.log(`    Matches Missing: ${keyHash === missingKeyHash ? '✅ YES' : '❌ NO'}`);
+                          
+                          if (keyHash === missingKeyHash) {
+                            console.log('🎯 FOUND: This witness matches the missing key hash!');
+                            console.log('🔧 Issue: Signature is present but not being recognized');
+                          }
+                        } catch (hashError) {
+                          console.error('❌ Key hash computation failed:', hashError.message);
+                        }
+                      }
+                    }
+                  });
+                  
+                  console.log('🎯 Signature Analysis Summary:');
+                  console.log(`  Required Key Hash: ${missingKeyHash}`);
+                  console.log(`  Provided Witnesses: ${vkeyWitnesses.length}`);
+                  console.log('  Issue Analysis: Check if signature corresponds to correct key or if CIP-30 partialSign is needed');
+                } else {
+                  console.log('❌ No VKey witnesses found or invalid structure');
+                }
               }
             } catch (debugError) {
               console.error('❌ Debug analysis failed:', debugError.message);
