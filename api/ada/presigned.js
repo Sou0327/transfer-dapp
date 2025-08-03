@@ -132,16 +132,20 @@ export default async function handler(req, res) {
           }
           console.log(`✅ Found existing request with key: ${key}`);
         
-        const updatedRequest = {
-          ...existingRequest,
-          status: 'SIGNED',
-          signedAt: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-        
-        await redisClient.set(key, JSON.stringify(updatedRequest));
-        console.log(`✅ Request status updated to SIGNED for: ${requestId}`);
-        break;
+          const updatedRequest = {
+            ...existingRequest,
+            status: 'SIGNED',
+            signedAt: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+          
+          await redisClient.set(key, JSON.stringify(updatedRequest));
+          console.log(`✅ Request status updated to SIGNED for: ${requestId}`);
+          break;
+        } catch (parseError) {
+          console.error(`❌ Failed to parse/update request data for key ${key}:`, parseError);
+          continue;
+        }
       }
     }
     
