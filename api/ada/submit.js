@@ -281,43 +281,151 @@ export default async function handler(req, res) {
             // Fix TTL in transaction body if needed
             let fixedTxBody = txBody;
             
-            // Check if TTL needs fixing (request has valid ttl_slot)
+            // 🚨 EMERGENCY TTL FIX: Prevent CSL BigNum overflow
             if (requestData && requestData.ttl_slot && requestData.ttl_slot > 0) {
-              console.log('🔧 Fixing TTL in transaction body...');
+              console.log('🔧 Checking TTL for potential overflow...');
               console.log('Original TTL in txBody:', txBody[3]);
               console.log('Request TTL slot:', requestData.ttl_slot);
               
-              // Create new txBody with correct TTL (Conway Era Map format)
-              fixedTxBody = {
-                0: txBody[0], // inputs
-                1: txBody[1], // outputs  
-                2: txBody[2], // fee
-                3: requestData.ttl_slot // correct TTL from request
-              };
+              // Check if TTL is too large (CSL BigNum overflow threshold ~2^53)
+              const TTL_OVERFLOW_THRESHOLD = 100000000; // ~100M slots (safe threshold)
+              let safeTtl = requestData.ttl_slot;
               
-              console.log('✅ TTL fixed in transaction body');
+              if (requestData.ttl_slot > TTL_OVERFLOW_THRESHOLD) {
+                // Use current slot + 2 hours as safe alternative
+                const currentSlot = Math.floor(Date.now() / 1000) - 1596059091 + 4492800; // Rough current slot
+                safeTtl = currentSlot + 7200; // +2 hours
+                console.log('🚨 EMERGENCY: TTL too large, using safe value:', safeTtl);
+                console.log('🚨 Original request TTL was:', requestData.ttl_slot, '(would cause overflow)');
+              }
+              
+              // Handle both array and map txBody formats
+              if (Array.isArray(txBody)) {
+                // Legacy array format [inputs, outputs, fee, ttl]
+                fixedTxBody = [
+                  txBody[0], // inputs
+                  txBody[1], // outputs  
+                  txBody[2], // fee
+                  safeTtl    // safe TTL
+                ];
+                console.log('✅ TTL fixed in array-format transaction body');
+              } else if (typeof txBody === 'object' && txBody !== null) {
+                // CBOR Map format (numeric keys: 0=inputs, 1=outputs, 2=fee, 3=ttl)
+                if (txBody instanceof Map) {
+                  fixedTxBody = new Map(txBody);
+                  fixedTxBody.set(3, safeTtl);
+                } else {
+                  // Plain object with numeric keys
+                  fixedTxBody = { ...txBody };
+                  fixedTxBody[3] = safeTtl;
+                }
+                console.log('✅ TTL fixed in map-format transaction body');
+              }
             }
             
-            // Construct Conway Era transaction: [txBody, witnessSet, isValid, auxiliaryData]
+            // 🏗️ Construct Conway Era transaction: [transaction_body, transaction_witness_set, is_valid, auxiliary_data]
+            // Based on research: Conway Era MUST have exactly 4 elements
+            
+            // Ensure witness set is properly structured as CBOR map
+            let processedWitnessSet = witnessSet;
+            if (witnessSet && typeof witnessSet === 'object') {
+              // Convert plain object to Map if needed for CBOR encoding
+              if (!(witnessSet instanceof Map) && !Array.isArray(witnessSet)) {
+                console.log('🔧 Converting witness set object to Map for CBOR compatibility');
+                processedWitnessSet = new Map();
+                Object.keys(witnessSet).forEach(key => {
+                  const numKey = parseInt(key, 10);
+                  if (!isNaN(numKey)) {
+                    processedWitnessSet.set(numKey, witnessSet[key]);
+                  }
+                });
+              }
+              console.log('✅ Witness set processed for Conway Era format');
+            }
+            
+            // Construct the complete Conway Era transaction
             const completeTx = [
-              fixedTxBody,
-              witnessSet, 
-              true,    // isValid flag - f5 in CBOR
-              null     // auxiliaryData
+              fixedTxBody,           // transaction_body (CBOR map with numeric keys)
+              processedWitnessSet,   // transaction_witness_set (CBOR map)
+              true,                  // is_valid (boolean) - REQUIRED for Conway Era
+              null                   // auxiliary_data - REQUIRED position even if null
             ];
             
-            console.log('🔍 Conway Era transaction structure:', {
-              txBodyElements: fixedTxBody.length,
-              witnessSetType: Array.isArray(witnessSet) ? 'array' : 'map',
-              isValid: true,
-              auxiliaryData: null
+            console.log('🏗️ Conway Era transaction structure:', {
+              bodyType: Array.isArray(fixedTxBody) ? 'array' : 'map',
+              witnessType: processedWitnessSet instanceof Map ? 'Map' : typeof processedWitnessSet,
+              isValidFlag: true,
+              auxiliaryData: null,
+              totalElements: completeTx.length
             });
             
-            // Encode complete transaction to CBOR
-            const completeTxBuffer = cbor.encode(completeTx);
-            signedTxHex = completeTxBuffer.toString('hex');
             
-            console.log('✅ Conway Era transaction encoded successfully');
+            // 🧪 Pre-encoding validation based on research findings
+            console.log('🧪 Pre-encoding Conway Era transaction validation:');
+            
+            // Validate transaction structure
+            if (completeTx.length !== 4) {
+              throw new Error(`Conway Era requires exactly 4 elements, got ${completeTx.length}`);
+            }
+            
+            // Validate body structure
+            const bodyValidation = {
+              isPresent: !!completeTx[0],
+              type: Array.isArray(completeTx[0]) ? 'array' : typeof completeTx[0],
+              hasElements: Array.isArray(completeTx[0]) ? completeTx[0].length > 0 : Object.keys(completeTx[0] || {}).length > 0
+            };
+            
+            // Validate witness set
+            const witnessValidation = {
+              isPresent: !!completeTx[1],
+              type: completeTx[1] instanceof Map ? 'Map' : (Array.isArray(completeTx[1]) ? 'array' : typeof completeTx[1]),
+              hasVkeyWitnesses: false
+            };
+            
+            if (completeTx[1]) {
+              if (completeTx[1] instanceof Map) {
+                witnessValidation.hasVkeyWitnesses = completeTx[1].has(0) && Array.isArray(completeTx[1].get(0));
+              } else if (typeof completeTx[1] === 'object') {
+                witnessValidation.hasVkeyWitnesses = Array.isArray(completeTx[1][0]);
+              }
+            }
+            
+            console.log('📋 Conway Era validation results:', {
+              totalElements: completeTx.length,
+              body: bodyValidation,
+              witnessSet: witnessValidation,
+              isValid: completeTx[2] === true,
+              auxiliaryData: completeTx[3] === null ? 'null' : typeof completeTx[3]
+            });
+            
+            // Perform CBOR encoding with enhanced error handling
+            try {
+              const completeTxBuffer = cbor.encode(completeTx);
+              signedTxHex = completeTxBuffer.toString('hex');
+              
+              console.log('✅ Conway Era transaction encoded successfully');
+              console.log('📊 CBOR encoding results:', {
+                originalStructure: '4-element array',
+                cborHexLength: signedTxHex.length,
+                cborPrefix: signedTxHex.substring(0, 10) + '...',
+                expectedPrefix: '84' // CBOR array of 4 elements
+              });
+              
+              // Verify CBOR starts with correct array indicator
+              if (!signedTxHex.startsWith('84')) {
+                console.warn('⚠️ CBOR does not start with 84 (4-element array), got:', signedTxHex.substring(0, 2));
+              }
+              
+            } catch (encodingError) {
+              console.error('❌ CBOR encoding failed:', encodingError);
+              console.error('🔍 Problematic transaction structure:', {
+                bodyType: typeof completeTx[0],
+                witnessType: typeof completeTx[1],
+                isValidType: typeof completeTx[2],
+                auxDataType: typeof completeTx[3]
+              });
+              throw new Error(`CBOR encoding failed: ${encodingError.message}`);
+            }
           }
           
           console.log('✅ Complete transaction constructed with CBOR library');
