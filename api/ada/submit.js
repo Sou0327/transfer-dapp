@@ -288,8 +288,67 @@ export default async function handler(req, res) {
           
           if (isCompleteTransaction) {
             console.log('🎯 BREAKTHROUGH: txBodyHex is already a complete Conway Era transaction!');
-            console.log('✅ Using txBodyHex directly without reconstruction');
-            signedTxHex = txBodyHex;  // Use the complete transaction as-is
+            
+            // 🔧 CRITICAL: Even for complete transactions, we need to fix TTL
+            if (requestData && requestData.ttl_slot && requestData.ttl_slot > 0) {
+              console.log('🔧 Fixing TTL in complete transaction...');
+              console.log('Original complete transaction TTL in txBody[0][3]:', txBody[0][3] || 'not found');
+              console.log('Request TTL slot:', requestData.ttl_slot);
+              
+              // Check TTL overflow and create safe TTL
+              const TTL_OVERFLOW_THRESHOLD = 100000000; 
+              let safeTtl = requestData.ttl_slot;
+              
+              if (requestData.ttl_slot > TTL_OVERFLOW_THRESHOLD) {
+                const currentSlot = Math.floor(Date.now() / 1000) - 1596059091 + 4492800;
+                safeTtl = currentSlot + 7200; // +2 hours
+                console.log('🚨 EMERGENCY: TTL too large, using safe value:', safeTtl);
+              }
+              
+              // Extract and modify transaction body from complete transaction
+              let modifiedTxBody = txBody[0]; // Extract transaction body
+              
+              if (modifiedTxBody instanceof Map) {
+                modifiedTxBody = new Map(modifiedTxBody);
+                modifiedTxBody.set(3, safeTtl); // Update TTL in map
+                console.log('✅ TTL updated in Map-format transaction body');
+              } else {
+                // Plain object - convert to Map and update TTL
+                const newTxBodyMap = new Map();
+                Object.keys(modifiedTxBody).forEach(key => {
+                  const numKey = parseInt(key, 10);
+                  if (!isNaN(numKey)) {
+                    newTxBodyMap.set(numKey, modifiedTxBody[key]);
+                  }
+                });
+                newTxBodyMap.set(3, safeTtl); // Update TTL
+                modifiedTxBody = newTxBodyMap;
+                console.log('✅ TTL updated in converted Map-format transaction body');
+              }
+              
+              // Reconstruct complete transaction with fixed TTL
+              const fixedCompleteTx = [
+                modifiedTxBody,     // Fixed transaction body with correct TTL
+                txBody[1],          // Original witness set
+                txBody[2],          // Original isValid flag
+                txBody[3]           // Original auxiliary data
+              ];
+              
+              // Encode the fixed complete transaction
+              const fixedTxBuffer = cbor.encode(fixedCompleteTx);
+              signedTxHex = fixedTxBuffer.toString('hex');
+              
+              console.log('✅ Complete transaction TTL fixed and re-encoded');
+              console.log('📊 Fixed transaction:', {
+                source: 'Complete transaction with TTL fix',
+                safeTtl: safeTtl,
+                cborPrefix: signedTxHex.substring(0, 8) + '...'
+              });
+              
+            } else {
+              console.log('✅ Using complete transaction directly (no TTL fix needed)');
+              signedTxHex = txBodyHex;  // Use the complete transaction as-is
+            }
           } else {
             console.log('🔧 Constructing complete transaction from components...');
             
