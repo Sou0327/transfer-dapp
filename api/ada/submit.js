@@ -270,10 +270,25 @@ export default async function handler(req, res) {
             });
           }
           
-          // IMPORTANT: Always construct complete transaction from body + witness set
-          // Transaction body (4 elements: inputs, outputs, fee, ttl) is NOT a complete transaction
-          if (false) {
-            console.log('🎯 TxBody is already a complete transaction! Using it directly.');
+          // 🔥 CRITICAL DETECTION: Check if txBodyHex is actually a complete transaction
+          const isCompleteTransaction = (
+            Array.isArray(txBody) &&
+            txBody.length === 4 &&
+            typeof txBody[0] === 'object' && // transaction body (map)
+            typeof txBody[1] === 'object' && // witness set (map)  
+            typeof txBody[2] === 'boolean' && // isValid flag ← KEY INDICATOR!
+            (txBody[3] === null || typeof txBody[3] === 'object') // auxiliary data
+          );
+          
+          console.log('🔍 Complete Transaction Detection:', {
+            isCompleteTransaction: isCompleteTransaction,
+            evidence: typeof txBody[2] === 'boolean' ? 'Element[2] is boolean (isValid flag)' : 'Element[2] is not boolean',
+            decision: isCompleteTransaction ? 'USE txBodyHex DIRECTLY' : 'RECONSTRUCT transaction'
+          });
+          
+          if (isCompleteTransaction) {
+            console.log('🎯 BREAKTHROUGH: txBodyHex is already a complete Conway Era transaction!');
+            console.log('✅ Using txBodyHex directly without reconstruction');
             signedTxHex = txBodyHex;  // Use the complete transaction as-is
           } else {
             console.log('🔧 Constructing complete transaction from components...');
@@ -323,6 +338,30 @@ export default async function handler(req, res) {
                 
                 console.log('✅ Transaction Body converted to CBOR Map format');
                 console.log('🗂️ Map keys:', Array.from(convertedTxBody.keys()));
+                
+                // 🔍 Detailed Transaction Body Map validation
+                console.log('🔍 Transaction Body Map contents validation:');
+                console.log('  [0] inputs:', {
+                  isPresent: !!convertedTxBody.get(0),
+                  type: Array.isArray(convertedTxBody.get(0)) ? 'array' : typeof convertedTxBody.get(0),
+                  length: Array.isArray(convertedTxBody.get(0)) ? convertedTxBody.get(0).length : 'not array',
+                  sample: Array.isArray(convertedTxBody.get(0)) && convertedTxBody.get(0).length > 0 ? 'has items' : 'empty or invalid'
+                });
+                console.log('  [1] outputs:', {
+                  isPresent: !!convertedTxBody.get(1),
+                  type: Array.isArray(convertedTxBody.get(1)) ? 'array' : typeof convertedTxBody.get(1),
+                  length: Array.isArray(convertedTxBody.get(1)) ? convertedTxBody.get(1).length : 'not array'
+                });
+                console.log('  [2] fee:', {
+                  isPresent: convertedTxBody.get(2) !== undefined,
+                  type: typeof convertedTxBody.get(2),
+                  value: convertedTxBody.get(2)
+                });
+                console.log('  [3] ttl:', {
+                  isPresent: convertedTxBody.get(3) !== undefined,
+                  type: typeof convertedTxBody.get(3), 
+                  value: convertedTxBody.get(3)
+                });
                 
               } else if (typeof txBody === 'object' && txBody !== null) {
                 // Already in map format, just update TTL
@@ -462,8 +501,25 @@ export default async function handler(req, res) {
             }
           }
           
-          console.log('✅ Complete transaction constructed with CBOR library');
+          // 📊 Final transaction analysis
+          if (isCompleteTransaction) {
+            console.log('📊 Direct transaction usage:', {
+              source: 'txBodyHex (already complete)',
+              length: signedTxHex.length,
+              cborPrefix: signedTxHex.substring(0, 8) + '...'
+            });
+          } else {
+            console.log('✅ Complete transaction constructed with CBOR library');
+            console.log('📊 Reconstructed transaction:', {
+              source: 'CBOR library construction', 
+              length: signedTxHex.length,
+              cborPrefix: signedTxHex.substring(0, 8) + '...'
+            });
+          }
+          
           console.log('📊 Complete transaction length:', signedTxHex.length);
+          
+          } // End of else block for CBOR reconstruction
           
         } catch (cborError) {
           console.error('❌ CBOR construction failed:', cborError);
