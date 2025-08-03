@@ -299,28 +299,54 @@ export default async function handler(req, res) {
                 console.log('🚨 Original request TTL was:', requestData.ttl_slot, '(would cause overflow)');
               }
               
-              // Handle both array and map txBody formats
+              // 🚨 CRITICAL FIX: Transaction Body MUST be CBOR Map, NOT Array
+              // Research confirms: "transaction body is a CBOR map with specific integer keys"
+              
+              let convertedTxBody;
+              
               if (Array.isArray(txBody)) {
-                // Legacy array format [inputs, outputs, fee, ttl]
-                fixedTxBody = [
-                  txBody[0], // inputs
-                  txBody[1], // outputs  
-                  txBody[2], // fee
-                  safeTtl    // safe TTL
-                ];
-                console.log('✅ TTL fixed in array-format transaction body');
+                // Convert array format [inputs, outputs, fee, ttl] to CBOR map format
+                console.log('🔧 Converting Transaction Body from array to CBOR map format...');
+                console.log('📋 Original array elements:', {
+                  inputs: txBody[0] ? 'present' : 'missing',
+                  outputs: txBody[1] ? 'present' : 'missing', 
+                  fee: txBody[2] ? 'present' : 'missing',
+                  ttl: txBody[3] ? 'present' : 'missing'
+                });
+                
+                // Create CBOR Map: {0: inputs, 1: outputs, 2: fee, 3: ttl}
+                convertedTxBody = new Map();
+                convertedTxBody.set(0, txBody[0]); // inputs
+                convertedTxBody.set(1, txBody[1]); // outputs
+                convertedTxBody.set(2, txBody[2]); // fee
+                convertedTxBody.set(3, safeTtl);   // safe TTL
+                
+                console.log('✅ Transaction Body converted to CBOR Map format');
+                console.log('🗂️ Map keys:', Array.from(convertedTxBody.keys()));
+                
               } else if (typeof txBody === 'object' && txBody !== null) {
-                // CBOR Map format (numeric keys: 0=inputs, 1=outputs, 2=fee, 3=ttl)
+                // Already in map format, just update TTL
                 if (txBody instanceof Map) {
-                  fixedTxBody = new Map(txBody);
-                  fixedTxBody.set(3, safeTtl);
+                  convertedTxBody = new Map(txBody);
+                  convertedTxBody.set(3, safeTtl);
+                  console.log('✅ TTL updated in existing CBOR Map');
                 } else {
-                  // Plain object with numeric keys
-                  fixedTxBody = { ...txBody };
-                  fixedTxBody[3] = safeTtl;
+                  // Plain object - convert to Map for CBOR encoding
+                  convertedTxBody = new Map();
+                  Object.keys(txBody).forEach(key => {
+                    const numKey = parseInt(key, 10);
+                    if (!isNaN(numKey)) {
+                      convertedTxBody.set(numKey, txBody[key]);
+                    }
+                  });
+                  convertedTxBody.set(3, safeTtl); // Update TTL
+                  console.log('✅ Object converted to CBOR Map with TTL fix');
                 }
-                console.log('✅ TTL fixed in map-format transaction body');
+              } else {
+                throw new Error(`Invalid Transaction Body type: ${typeof txBody}`);
               }
+              
+              fixedTxBody = convertedTxBody;
             }
             
             // 🏗️ Construct Conway Era transaction: [transaction_body, transaction_witness_set, is_valid, auxiliary_data]
@@ -352,8 +378,10 @@ export default async function handler(req, res) {
             ];
             
             console.log('🏗️ Conway Era transaction structure:', {
-              bodyType: Array.isArray(fixedTxBody) ? 'array' : 'map',
+              bodyType: fixedTxBody instanceof Map ? 'Map' : (Array.isArray(fixedTxBody) ? 'array' : typeof fixedTxBody),
+              bodyKeys: fixedTxBody instanceof Map ? Array.from(fixedTxBody.keys()) : 'not a map',
               witnessType: processedWitnessSet instanceof Map ? 'Map' : typeof processedWitnessSet,
+              witnessKeys: processedWitnessSet instanceof Map ? Array.from(processedWitnessSet.keys()) : 'not a map',
               isValidFlag: true,
               auxiliaryData: null,
               totalElements: completeTx.length
@@ -371,8 +399,9 @@ export default async function handler(req, res) {
             // Validate body structure
             const bodyValidation = {
               isPresent: !!completeTx[0],
-              type: Array.isArray(completeTx[0]) ? 'array' : typeof completeTx[0],
-              hasElements: Array.isArray(completeTx[0]) ? completeTx[0].length > 0 : Object.keys(completeTx[0] || {}).length > 0
+              type: completeTx[0] instanceof Map ? 'Map' : (Array.isArray(completeTx[0]) ? 'array' : typeof completeTx[0]),
+              hasElements: completeTx[0] instanceof Map ? completeTx[0].size > 0 : (Array.isArray(completeTx[0]) ? completeTx[0].length > 0 : Object.keys(completeTx[0] || {}).length > 0),
+              mapKeys: completeTx[0] instanceof Map ? Array.from(completeTx[0].keys()) : 'not a map'
             };
             
             // Validate witness set
@@ -405,15 +434,20 @@ export default async function handler(req, res) {
               
               console.log('✅ Conway Era transaction encoded successfully');
               console.log('📊 CBOR encoding results:', {
-                originalStructure: '4-element array',
+                originalStructure: 'Conway Era: [Map, Map, boolean, null]',
                 cborHexLength: signedTxHex.length,
                 cborPrefix: signedTxHex.substring(0, 10) + '...',
-                expectedPrefix: '84' // CBOR array of 4 elements
+                expectedPrefix: '84A4' // CBOR: 84=4-element array, A4=4-element map (txBody)
               });
               
-              // Verify CBOR starts with correct array indicator
+              // Verify CBOR starts with correct Conway Era structure
               if (!signedTxHex.startsWith('84')) {
                 console.warn('⚠️ CBOR does not start with 84 (4-element array), got:', signedTxHex.substring(0, 2));
+              }
+              if (signedTxHex.length >= 4 && !signedTxHex.startsWith('84A4')) {
+                console.warn('⚠️ CBOR does not start with 84A4 (4-array + 4-map), got:', signedTxHex.substring(0, 4));
+              } else if (signedTxHex.startsWith('84A4')) {
+                console.log('✅ Perfect! CBOR starts with 84A4 (Conway Era format)');
               }
               
             } catch (encodingError) {
