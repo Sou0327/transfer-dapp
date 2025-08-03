@@ -144,12 +144,7 @@ export default async function handler(req, res) {
       });
     }
 
-    // 署名済みトランザクションをファイルに保存
-    const tempDir = '/tmp';
-    const txFileName = `signed-tx-${requestId}-${Date.now()}.signed`;
-    const txFilePath = path.join(tempDir, txFileName);
-    
-    console.log(`💾 Writing signed transaction to: ${txFilePath}`);
+    // Process signed transaction data for Blockfrost submission
     
     // 署名済みトランザクションの処理
     let signedTxHex;
@@ -218,32 +213,55 @@ export default async function handler(req, res) {
       throw new Error('Invalid transaction hex format');
     }
     
-    await fs.writeFile(txFilePath, signedTxHex);
-
+    // Use Blockfrost API instead of cardano-cli for Vercel environment
+    console.log('🚀 Submitting transaction to Cardano network via Blockfrost API...');
+    
+    let txHash = null;
+    let submitOutput = '';
+    
     try {
-      // Cardano CLIでトランザクションを送信
-      const submitArgs = [
-        'transaction', 'submit',
-        '--mainnet',
-        '--tx-file', txFilePath
-      ];
-
-      console.log('🚀 Submitting transaction to Cardano network...');
-      const submitOutput = await executeCardanoCli(submitArgs);
-      console.log('✅ Transaction submitted successfully:', submitOutput);
-
-      // トランザクションハッシュを抽出（通常は出力に含まれる）
-      let txHash = null;
-      try {
-        // cardano-cli transaction txid でハッシュを取得
-        const txidArgs = [
-          'transaction', 'txid',
-          '--tx-file', txFilePath
-        ];
-        txHash = await executeCardanoCli(txidArgs);
-        console.log('📝 Transaction hash:', txHash);
-      } catch (error) {
-        console.warn('⚠️ Failed to get transaction hash:', error.message);
+      // Submit transaction using Blockfrost API
+      const blockfrostUrl = 'https://cardano-mainnet.blockfrost.io/api/v0/tx/submit';
+      const blockfrostApiKey = process.env.BLOCKFROST_API_KEY;
+      
+      if (!blockfrostApiKey) {
+        throw new Error('BLOCKFROST_API_KEY environment variable is not set');
+      }
+      
+      console.log('📡 Sending transaction to Blockfrost:', {
+        url: blockfrostUrl,
+        txHexLength: signedTxHex.length,
+        hasApiKey: !!blockfrostApiKey
+      });
+      
+      const response = await fetch(blockfrostUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/cbor',
+          'project_id': blockfrostApiKey,
+        },
+        body: Buffer.from(signedTxHex, 'hex'),
+      });
+      
+      console.log('📡 Blockfrost response status:', response.status);
+      
+      if (response.ok) {
+        txHash = await response.text();
+        submitOutput = `Transaction submitted successfully via Blockfrost. Hash: ${txHash}`;
+        console.log('✅ Transaction submitted successfully:', submitOutput);
+      } else {
+        const errorText = await response.text();
+        console.error('❌ Blockfrost submission failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText
+        });
+        throw new Error(`Blockfrost API error (${response.status}): ${errorText}`);
+      }
+      
+    } catch (blockfrostError) {
+      console.error('💥 Blockfrost submission error:', blockfrostError);
+      throw blockfrostError;
       }
 
       // Redis内のデータを更新
@@ -282,13 +300,7 @@ export default async function handler(req, res) {
         }
       }
 
-      // 一時ファイルを削除
-      try {
-        await fs.unlink(txFilePath);
-        console.log('🗑️ Temporary file cleaned up');
-      } catch (error) {
-        console.warn('⚠️ Failed to cleanup temporary file:', error.message);
-      }
+      // No file cleanup needed for Blockfrost API submission
 
       return res.status(200).json({
         success: true,
@@ -311,12 +323,7 @@ export default async function handler(req, res) {
 
       await redisClient.set(signedTxKey, JSON.stringify(errorSignedTxData));
 
-      // 一時ファイルを削除
-      try {
-        await fs.unlink(txFilePath);
-      } catch (error) {
-        // ignore cleanup errors
-      }
+      // No file cleanup needed for Blockfrost API submission
 
       return res.status(500).json({
         error: 'Transaction submission failed',
