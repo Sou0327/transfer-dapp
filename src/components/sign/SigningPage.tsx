@@ -460,9 +460,9 @@ export const SigningPage: React.FC = () => {
           responseText
         });
         
-        let errorData = {};
+        let errorData: { error?: string } = {};
         try {
-          errorData = JSON.parse(responseText);
+          errorData = JSON.parse(responseText) as { error?: string };
         } catch {
           errorData = { error: `サーバーエラー: ${response.status}` };
         }

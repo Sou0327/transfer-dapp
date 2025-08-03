@@ -37,20 +37,24 @@ interface CreateRequestFormData {
 }
 
 interface SignedTransactionData {
-  signedAt: string;
-  signedTx: string | object;
-  status: string;
+  signedAt?: string;
+  signedTx?: string | object;
+  status?: string;
   metadata?: {
     walletUsed?: string;
     [key: string]: unknown;
   };
+  error?: boolean;
+  message?: string;
+  debugInfo?: unknown;
 }
 
 export const RequestsManagement: React.FC<RequestsManagementProps> = ({
   requests = [],
   onCreateRequest,
   onUpdateStatus,
-  onGenerateLink,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  onGenerateLink: _onGenerateLink,
 }) => {
   // const { } = useAdminAuth(); // 現在未使用
   const [activeTab, setActiveTab] = useState<'list' | 'create'>('list');
@@ -101,8 +105,11 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
             [requestId]: {
               error: true,
               message: `署名データが見つかりません (found: ${data.found})`,
-              debugInfo: data
-            }
+              debugInfo: data,
+              signedAt: undefined,
+              signedTx: undefined,
+              status: 'error'
+            } as SignedTransactionData
           }));
         }
       } else {
@@ -116,21 +123,28 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
           [requestId]: {
             error: true,
             message: `API エラー: ${response.status} ${response.statusText}`,
-            responseText
-          }
+            debugInfo: { responseText },
+            signedAt: undefined,
+            signedTx: undefined,
+            status: 'error'
+          } as SignedTransactionData
         }));
       }
     } catch (error) {
       console.error('💥 Failed to fetch signed transaction data:', error);
       
       // ネットワークエラーなどの情報を表示用に保存
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       setSignedTxData(prev => ({ 
         ...prev, 
         [requestId]: {
           error: true,
-          message: `取得エラー: ${error.message}`,
-          error: error
-        }
+          message: `取得エラー: ${errorMessage}`,
+          debugInfo: error,
+          signedAt: undefined,
+          signedTx: undefined,
+          status: 'error'
+        } as SignedTransactionData
       }));
     } finally {
       setLoadingSignedData(prev => ({ ...prev, [requestId]: false }));
@@ -349,7 +363,8 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
   }, []);
 
   // Submit signed transaction
-  const handleSubmitTransaction = useCallback(async (requestId: string, signedTxData: SignedTransactionData) => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleSubmitTransaction = useCallback(async (requestId: string, _transactionData: SignedTransactionData) => {
     try {
       console.log('🚀 Submitting transaction for request:', requestId);
       
@@ -415,11 +430,12 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
 
     } catch (error) {
       console.error('💥 Transaction submission error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Network error';
       alert(
         `トランザクション送信中にエラーが発生しました。
 
 ` +
-        `エラー: ${error.message || 'Network error'}
+        `エラー: ${errorMessage}
 
 ` +
         `ネットワーク接続とCardanoノードの状態を確認してください。`
@@ -667,163 +683,187 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
                   </div>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {requests.map((request) => (
-                    <div key={request.id} className="bg-gray-50 rounded-xl p-4 sm:p-6 hover:bg-gray-100 transition-colors">
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mb-3">
-                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium self-start ${getStatusColor(request.status)}`}>
-                              {request.status}
-                            </span>
-                            <div className="text-lg font-medium text-gray-900">
-                              {formatAmount(request)}
-                            </div>
-                          </div>
-                          <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 text-sm text-gray-500">
-                            <span className="font-mono">ID: {request.id.slice(0, 8)}...</span>
-                            <span className="hidden sm:inline text-gray-300">•</span>
-                            <span>{new Date(request.created_at).toLocaleDateString('ja-JP')}</span>
-                            <span className="hidden sm:inline text-gray-300">•</span>
-                            <span className={`font-medium ${
-                              (() => {
-                                const timeInfo = calculateRemainingTime(request);
-                                return timeInfo.isExpired 
-                                  ? 'text-red-600' 
-                                  : timeInfo.timeLeftMs < 300000 // 5分未満
-                                    ? 'text-orange-600'
-                                    : 'text-gray-600';
-                              })()
-                            }`}>
-                              残り: {calculateRemainingTime(request).timeLeft}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex flex-wrap gap-2 sm:gap-3">
-                          {request.status === RequestStatus.REQUESTED && (
-                            <button
-                              onClick={() => handleStatusUpdate(request.id, RequestStatus.EXPIRED)}
-                              className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                            >
-                              期限切れ
-                            </button>
-                          )}
-                          {request.status === RequestStatus.SIGNED && (
-                            <button
-                              onClick={() => fetchSignedTxData(request.id)}
-                              disabled={loadingSignedData[request.id]}
-                              className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors disabled:opacity-50"
-                            >
-                              {loadingSignedData[request.id] ? '読込中...' : '署名詳細'}
-                            </button>
-                          )}
-                          <button
-                            onClick={() => handleCopyLink(request.id)}
-                            className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-gray-900 rounded-lg hover:bg-gray-800 transition-colors"
-                          >
-                            リンクコピー
-                          </button>
-                          {request.status === RequestStatus.SIGNED && 
-                           signedTxData[request.id] && 
-                           signedTxData[request.id].signedTx && 
-                           !signedTxData[request.id].error && (
-                            <button
-                              onClick={() => handleSubmitTransaction(request.id, signedTxData[request.id])}
-                              disabled={submittingTx[request.id]}
-                              className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white rounded-lg transition-colors ${
-                                submittingTx[request.id]
-                                  ? 'bg-gray-400 cursor-not-allowed'
-                                  : 'bg-red-600 hover:bg-red-700'
-                              }`}
-                            >
-                              {submittingTx[request.id] ? '送信中...' : '送金実行'}
-                            </button>
-                          )}
-                        </div>
-
-                        {/* Show signed transaction details if available */}
-                        {request.status === RequestStatus.SIGNED && (
-                          <div className="mt-4 p-3 sm:p-4 bg-blue-50 rounded-lg border border-blue-200">
-                            <h4 className="text-sm font-medium text-blue-900 mb-3">署名済みトランザクション詳細</h4>
-                            {console.log(`🔍 Debug - Signed data for ${request.id}:`, signedTxData[request.id])}
-                            
-                            {/* 診断情報 */}
-                            <div className="mb-3 p-2 bg-blue-100 rounded text-xs">
-                              <strong>診断:</strong> データ取得状況 - 
-                              {signedTxData[request.id] ? '✅ データあり' : '❌ データなし'} / 
-                              {loadingSignedData[request.id] ? '🔄 読込中' : '✅ 読込完了'}
-                            </div>
-                            
-                            <div className="grid grid-cols-1 gap-3 text-sm">
-                              {signedTxData[request.id]?.error ? (
-                                // エラー情報の表示
-                                <div className="bg-red-100 border border-red-300 rounded p-3">
-                                  <h5 className="font-medium text-red-800 mb-2">署名データ取得エラー</h5>
-                                  <p className="text-red-700 text-sm mb-2">{signedTxData[request.id].message}</p>
-                                  {signedTxData[request.id].debugInfo && (
-                                    <details className="text-xs">
-                                      <summary className="cursor-pointer text-red-600">デバッグ情報</summary>
-                                      <pre className="mt-2 bg-red-50 p-2 rounded overflow-auto">
-                                        {JSON.stringify(signedTxData[request.id].debugInfo, null, 2)}
-                                      </pre>
-                                    </details>
-                                  )}
+                <div className="space-y-4">                  {requests.map((request) => {
+                    const timeInfo = calculateRemainingTime(request);
+                    const hasSignedData = signedTxData[request.id] && !signedTxData[request.id]?.error;
+                    const canSubmit = request.status === RequestStatus.SIGNED && hasSignedData && signedTxData[request.id]?.signedTx;
+                    
+                    return (
+                      <div key={request.id} className="bg-gray-50 rounded-xl p-4 sm:p-6 hover:bg-gray-100 transition-colors">
+                        <div className="flex flex-col gap-4">
+                          {/* メイン情報とボタン */}
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mb-3">
+                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium self-start ${getStatusColor(request.status)}`}>
+                                  {request.status}
+                                </span>
+                                <div className="text-lg font-medium text-gray-900">
+                                  {formatAmount(request)}
                                 </div>
-                              ) : (
-                                // 正常データの表示
-                                <>
-                                  <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                                    <span className="font-medium text-blue-800 shrink-0">署名日時:</span>
-                                    <span className="text-blue-700">
-                                      {signedTxData[request.id]?.signedAt ? 
-                                        new Date(signedTxData[request.id].signedAt).toLocaleString('ja-JP') : 
-                                        '不明'
-                                      }
-                                    </span>
-                                  </div>
-                                  <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                                    <span className="font-medium text-blue-800 shrink-0">使用ウォレット:</span>
-                                    <span className="text-blue-700">{signedTxData[request.id]?.metadata?.walletUsed || 'Unknown'}</span>
-                                  </div>
-                                </>
+                              </div>
+                              <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 text-sm text-gray-500">
+                                <span className="font-mono">ID: {request.id.slice(0, 8)}...</span>
+                                <span className="hidden sm:inline text-gray-300">•</span>
+                                <span>{new Date(request.created_at).toLocaleDateString('ja-JP')}</span>
+                                <span className="hidden sm:inline text-gray-300">•</span>
+                                <span className={`font-medium ${
+                                  timeInfo.isExpired 
+                                    ? 'text-red-600' 
+                                    : timeInfo.timeLeftMs < 300000 // 5分未満
+                                      ? 'text-orange-600'
+                                      : 'text-gray-600'
+                                }`}>
+                                  残り: {timeInfo.timeLeft}
+                                </span>
+                              </div>
+                            </div>
+                            
+                            {/* アクションボタン */}
+                            <div className="flex flex-wrap gap-2 sm:gap-3">
+                              {request.status === RequestStatus.REQUESTED && (
+                                <button
+                                  onClick={() => handleStatusUpdate(request.id, RequestStatus.EXPIRED)}
+                                  className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                                >
+                                  期限切れ
+                                </button>
                               )}
-                              {!signedTxData[request.id]?.error && (
-                                <>
-                                  <div>
-                                    <span className="font-medium text-blue-800">署名データ:</span>
-                                    <div className="mt-1 p-2 bg-white rounded border font-mono text-xs break-all">
-                                      {(() => {
-                                        const signedTx = signedTxData[request.id]?.signedTx;
-                                        let txData: string;
-
-                                        if (!signedTx) {
-                                          txData = '署名データなし（まだ取得されていません）';
-                                        } else if (typeof signedTx === 'string') {
-                                          txData = signedTx;
-                                        } else {
-                                          try {
-                                            txData = JSON.stringify(signedTx);
-                                          } catch (error) {
-                                            txData = 'Invalid transaction data';
-                                          }
-                                        }
-
-                                        return txData && txData.length > 100 ? txData.slice(0, 100) + '...' : txData;
-                                      })()}
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <span className="font-medium text-blue-800">ステータス:</span>
-                                    <span className="ml-2 text-blue-700">{signedTxData[request.id]?.status || '不明'}</span>
-                                  </div>
-                                </>
+                              
+                              <button
+                                onClick={() => handleCopyLink(request.id)}
+                                className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-gray-900 rounded-lg hover:bg-gray-800 transition-colors"
+                              >
+                                リンクコピー
+                              </button>
+                              {canSubmit && (
+                                <button
+                                  onClick={() => handleSubmitTransaction(request.id, signedTxData[request.id])}
+                                  disabled={submittingTx[request.id]}
+                                  className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors border-2 ${
+                                    submittingTx[request.id]
+                                      ? 'bg-gray-400 text-white border-gray-400 cursor-not-allowed'
+                                      : 'bg-red-600 text-white border-red-700 hover:bg-red-700 hover:border-red-800 shadow-md hover:shadow-lg'
+                                  }`}
+                                >
+                                  {submittingTx[request.id] ? '送信中...' : '🚀 送金実行'}
+                                </button>
                               )}
                             </div>
                           </div>
-                        )}
+
+                          {/* 署名済みトランザクション詳細（分離された位置） */}
+                          {request.status === RequestStatus.SIGNED && signedTxData[request.id] && (
+                            <div className="border-t border-gray-200 pt-4">
+                              <details className="bg-blue-50 rounded-lg border border-blue-200 overflow-hidden">
+                                <summary className="p-3 cursor-pointer hover:bg-blue-100 text-sm font-medium text-blue-900 flex items-center justify-between">
+                                  <span className="flex items-center">
+                                    📋 署名済みトランザクション詳細
+                                    <span className="text-xs text-blue-600 ml-2 bg-blue-200 px-2 py-1 rounded-full">
+                                      {signedTxData[request.id]?.error ? 'エラーあり' : 'データ取得済み'}
+                                    </span>
+                                  </span>
+                                  <span className="text-blue-400 text-xs">クリックで展開 ▼</span>
+                                </summary>
+                                
+                                <div className="p-4 border-t border-blue-200 bg-white">
+                                  <div className="space-y-4 text-sm">
+                                    {signedTxData[request.id]?.error ? (
+                                      // エラー情報の表示
+                                      <div className="bg-red-100 border border-red-300 rounded-lg p-3">
+                                        <h5 className="font-medium text-red-800 mb-2">署名データ取得エラー</h5>
+                                        <p className="text-red-700 text-sm mb-2">{signedTxData[request.id]?.message || 'エラーメッセージなし'}</p>
+                                        {Boolean(signedTxData[request.id]?.debugInfo) && (
+                                          <details className="text-xs">
+                                            <summary className="cursor-pointer text-red-600 hover:text-red-800">デバッグ情報を表示</summary>
+                                            <pre className="mt-2 bg-red-50 p-3 rounded overflow-auto text-xs border border-red-200">
+                                              {(() => {
+                                                try {
+                                                  return JSON.stringify(signedTxData[request.id]?.debugInfo, null, 2);
+                                                } catch {
+                                                  return 'デバッグ情報の表示に失敗しました';
+                                                }
+                                              })()}
+                                            </pre>
+                                          </details>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      // 正常データの表示
+                                      <>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                          <div className="bg-gray-50 p-3 rounded-lg">
+                                            <span className="font-medium text-blue-800 block mb-1">署名日時</span>
+                                            <span className="text-blue-700 text-sm">
+                                              {signedTxData[request.id]?.signedAt ? 
+                                                new Date(signedTxData[request.id].signedAt!).toLocaleString('ja-JP') : 
+                                                '不明'
+                                              }
+                                            </span>
+                                          </div>
+                                          <div className="bg-gray-50 p-3 rounded-lg">
+                                            <span className="font-medium text-blue-800 block mb-1">使用ウォレット</span>
+                                            <span className="text-blue-700 text-sm">{signedTxData[request.id]?.metadata?.walletUsed || 'Unknown'}</span>
+                                          </div>
+                                        </div>
+                                        
+                                        <div className="bg-gray-50 p-3 rounded-lg">
+                                          <span className="font-medium text-blue-800 block mb-2">署名データ</span>
+                                          <div className="p-3 bg-white rounded border font-mono text-xs break-all max-h-40 overflow-y-auto border-gray-300">
+                                            {(() => {
+                                              const signedTx = signedTxData[request.id]?.signedTx;
+                                              let txData: string;
+
+                                              if (!signedTx) {
+                                                txData = '署名データなし（まだ取得されていません）';
+                                              } else if (typeof signedTx === 'string') {
+                                                txData = signedTx;
+                                              } else {
+                                                try {
+                                                  txData = JSON.stringify(signedTx);
+                                                // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                                                } catch (_error) {
+                                                  txData = 'Invalid transaction data';
+                                                }
+                                              }
+
+                                              return txData && txData.length > 300 ? txData.slice(0, 300) + '...' : txData;
+                                            })()}
+                                          </div>
+                                        </div>
+                                        
+                                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-2">
+                                          <div className="bg-gray-50 p-3 rounded-lg flex-1">
+                                            <span className="font-medium text-blue-800 block mb-1">ステータス</span>
+                                            <span className="text-blue-700 text-sm">{signedTxData[request.id]?.status || '不明'}</span>
+                                          </div>
+                                          {canSubmit && (
+                                            <div className="sm:flex-shrink-0">
+                                              <button
+                                                onClick={() => handleSubmitTransaction(request.id, signedTxData[request.id])}
+                                                disabled={submittingTx[request.id]}
+                                                className={`w-full sm:w-auto px-6 py-3 text-sm font-medium rounded-lg transition-all duration-200 border-2 ${
+                                                  submittingTx[request.id]
+                                                    ? 'bg-gray-400 text-white border-gray-400 cursor-not-allowed'
+                                                    : 'bg-red-600 text-white border-red-700 hover:bg-red-700 hover:border-red-800 shadow-md hover:shadow-lg transform hover:scale-105'
+                                                }`}
+                                              >
+                                                {submittingTx[request.id] ? '🔄 送信中...' : '🚀 ブロックチェーンに送信'}
+                                              </button>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              </details>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

@@ -68,6 +68,7 @@ export interface OTCRequest {
   amount_or_rule_json: AmountOrRule;
   recipient: string; // bech32 address
   ttl_slot: number;
+  ttl_minutes: number; // TTL in minutes for expiration calculation
   status: RequestStatus;
   created_by: string;
   created_at: string;
