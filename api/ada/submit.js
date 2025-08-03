@@ -298,6 +298,54 @@ export default async function handler(req, res) {
           statusText: response.statusText,
           error: errorText
         });
+        
+        // Analyze error for missing key witness
+        if (errorText.includes('MissingVKeyWitnessesUTXOW')) {
+          console.log('🔍 Analyzing missing witness error...');
+          const keyHashMatch = errorText.match(/unKeyHash = \"([a-f0-9]+)\"/);
+          if (keyHashMatch) {
+            const missingKeyHash = keyHashMatch[1];
+            console.error(`❌ Missing signature for key hash: ${missingKeyHash}`);
+            
+            // Analyze transaction to identify the missing key
+            try {
+              const analyzeTxBody = signedTxData.metadata?.txBody || txBodyHex;
+              if (analyzeTxBody) {
+                const txBodyDecoded = cbor.decode(Buffer.from(analyzeTxBody, 'hex'));
+                console.log('📋 Transaction analysis:', {
+                  inputCount: txBodyDecoded[0] ? txBodyDecoded[0].length : 0,
+                  outputCount: txBodyDecoded[1] ? txBodyDecoded[1].length : 0,
+                  fee: txBodyDecoded[2],
+                  ttl: txBodyDecoded[3]
+                });
+              }
+              
+              // Analyze witness set
+              const analyzeWitnessSet = witnessSetHex || signedTxData.signedTx;
+              if (analyzeWitnessSet && typeof analyzeWitnessSet === 'string') {
+                const witnessSetDecoded = cbor.decode(Buffer.from(analyzeWitnessSet, 'hex'));
+                console.log('🔑 Witness set analysis:', {
+                  hasVkeys: !!witnessSetDecoded[0],
+                  vkeyCount: witnessSetDecoded[0] ? witnessSetDecoded[0].length : 0
+                });
+              }
+            } catch (debugError) {
+              console.error('❌ Debug analysis failed:', debugError.message);
+            }
+          }
+        }
+        
+        // Analyze OutsideValidityIntervalUTxO error
+        if (errorText.includes('OutsideValidityIntervalUTxO')) {
+          console.log('🔍 Analyzing TTL error...');
+          // Extract slot numbers from error message
+          const ttlMatch = errorText.match(/SlotNo 0/);
+          const currentSlotMatch = errorText.match(/SlotNo ([0-9]+)\)/);
+          if (ttlMatch && currentSlotMatch) {
+            console.error('❌ TTL Error: Transaction TTL is 0, current slot is', currentSlotMatch[1]);
+          }
+        }
+        
         throw new Error(`Blockfrost API error (${response.status}): ${errorText}`);
       }
       

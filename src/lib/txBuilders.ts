@@ -26,6 +26,7 @@ interface TxBuilderConfig {
   changeAddress: string;
   destinationAddress: string;
   ttlOffset?: number;
+  ttlSlot?: number; // TTL slot from request
 }
 
 interface UtxoSelection {
@@ -124,10 +125,19 @@ abstract class BaseTxBuilder {
    * Build transaction body
    */
   protected buildTxBody(inputs: any, outputs: any, currentSlot: any, fee?: bigint): any {
-    // Set TTL
-    const ttl = currentSlot.checked_add(
-      CSL.BigNum.from_str((this.config.ttlOffset || DEFAULT_TTL_OFFSET).toString())
-    );
+    // Set TTL - use request TTL slot if available, otherwise calculate from offset
+    let ttl;
+    if (this.config.ttlSlot) {
+      // Use TTL slot from request
+      ttl = CSL.BigNum.from_str(this.config.ttlSlot.toString());
+      console.log('📅 Using TTL from request:', this.config.ttlSlot);
+    } else {
+      // Fallback to calculated TTL
+      ttl = currentSlot.checked_add(
+        CSL.BigNum.from_str((this.config.ttlOffset || DEFAULT_TTL_OFFSET).toString())
+      );
+      console.log('📅 Using calculated TTL with offset:', this.config.ttlOffset || DEFAULT_TTL_OFFSET);
+    }
 
     // Calculate fee if not provided
     let txFee: any;

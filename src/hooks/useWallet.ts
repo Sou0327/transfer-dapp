@@ -100,7 +100,8 @@ export const useWallet = (): UseWalletReturn => {
       const walletApi = window.cardano[state.selectedWallet.toLowerCase()];
       const api = await walletApi.enable();
       
-      const signedTx = await api.signTx(tx, true);
+      // Use complete signing (partialSign = false) to include all required signatures
+      const signedTx = await api.signTx(tx, false);
       
       setState(prev => ({ ...prev, loading: false }));
       return signedTx;

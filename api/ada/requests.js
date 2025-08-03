@@ -66,8 +66,24 @@ export default async function handler(req, res) {
       console.log('🆔 Generated ID:', requestId);
       
       // Calculate TTL
-      const ttlSlot = Math.floor(Date.now() / 1000) + (ttl_minutes * 60);
+      // Cardano Shelley era start time (July 29, 2020, 21:44:51 UTC)
+      const SHELLEY_START_TIME = 1596059091;
+      
+      // Calculate current Cardano slot (1 slot = 1 second since Shelley)
+      const currentTime = Math.floor(Date.now() / 1000);
+      const currentSlot = currentTime - SHELLEY_START_TIME;
+      
+      // Calculate TTL slot based on request TTL minutes
+      const ttlSlot = currentSlot + (ttl_minutes * 60);
       const ttlAbsolute = new Date(Date.now() + (ttl_minutes * 60 * 1000)).toISOString();
+      
+      console.log('⏰ TTL calculation:', {
+        currentTime,
+        currentSlot,
+        ttl_minutes,
+        ttlSlot,
+        ttlAbsolute
+      });
 
       // Create request object
       const otcRequest = {

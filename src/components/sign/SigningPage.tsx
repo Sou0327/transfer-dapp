@@ -328,7 +328,8 @@ export const SigningPage: React.FC = () => {
         api: api,
         changeAddress,
         destinationAddress,
-        ttlOffset: 7200 // 2 hours in slots
+        ttlOffset: 7200, // 2 hours in slots (fallback)
+        ttlSlot: state.request.ttl_slot // Use TTL slot from request if available
       };
 
       // Import transaction builders
