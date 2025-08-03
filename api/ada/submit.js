@@ -160,7 +160,13 @@ export default async function handler(req, res) {
       console.log('🧪 Testing if signedTx is already a complete transaction...');
       console.log('🔍 SignedTx starts with:', signedTxData.signedTx.substring(0, 20));
       
-      // Check if signedTx looks like a complete transaction (usually starts with 84 for 4-element array)
+      // First, try using signedTx as-is (Yoroi might provide complete transaction)
+      console.log('🧪 Trying signedTx as complete transaction first...');
+      signedTxHex = signedTxData.signedTx;
+      console.log('✅ Using signedTx directly (testing approach)');
+      
+      // If this doesn't work, we'll need to check if it's a witness set and construct properly
+      /*
       if (signedTxData.signedTx.startsWith('84') || signedTxData.signedTx.startsWith('83')) {
         // Likely a complete transaction (4 or 3 elements)
         signedTxHex = signedTxData.signedTx;
