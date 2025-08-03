@@ -165,40 +165,7 @@ export default async function handler(req, res) {
       signedTxHex = signedTxData.signedTx;
       console.log('✅ Using signedTx directly (testing approach)');
       
-      // If this doesn't work, we'll need to check if it's a witness set and construct properly
-      /*
-      if (signedTxData.signedTx.startsWith('84') || signedTxData.signedTx.startsWith('83')) {
-        // Likely a complete transaction (4 or 3 elements)
-        signedTxHex = signedTxData.signedTx;
-        console.log('✅ Using signedTx as complete transaction (starts with 84/83)');
-      } else if (signedTxData.metadata?.txBody) {
-        // If not complete transaction and we have txBody, try to construct
-        console.log('🔧 Constructing complete transaction from txBody + witnessSet');
-        
-        try {
-          const txBodyHex = signedTxData.metadata.txBody;
-          const witnessSetHex = signedTxData.signedTx;
-          
-          console.log('📊 Transaction components:', {
-            txBodyLength: txBodyHex.length,
-            witnessSetLength: witnessSetHex.length,
-            txBodyStart: txBodyHex.substring(0, 10),
-            witnessSetStart: witnessSetHex.substring(0, 10)
-          });
-          
-          // Try Conway Era format: [txBody, witnessSet, true, null] (4 elements)
-          // 84 = 4-element array, f5 = true (isValid), f6 = null (auxiliary_data)
-          signedTxHex = `84${txBodyHex}${witnessSetHex}f5f6`;
-          console.log('✅ Complete transaction constructed (Conway Era 4-element format)');
-        } catch (error) {
-          console.error('❌ Failed to construct complete transaction:', error);
-          throw new Error('Failed to construct complete transaction from components');
-        }
-      } else {
-        // No txBody, assume it's already complete
-        signedTxHex = signedTxData.signedTx;
-        console.log('✅ Using signedTx as complete transaction (fallback)');
-      }
+      // For now, just use signedTx directly to test
     } else if (signedTxData.signedTx && typeof signedTxData.signedTx === 'object') {
       // オブジェクトの場合、適切なプロパティを探す
       if (signedTxData.signedTx.cborHex) {
