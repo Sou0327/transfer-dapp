@@ -184,6 +184,15 @@ export default async function handler(req, res) {
           const witnessSet = cbor.decode(witnessSetBuffer);
           
           console.log('✅ Successfully decoded CBOR components');
+          console.log('🔍 TxBody structure:', {
+            isArray: Array.isArray(txBody),
+            length: Array.isArray(txBody) ? txBody.length : 'not array',
+            firstElement: Array.isArray(txBody) ? typeof txBody[0] : 'not array'
+          });
+          console.log('🔍 WitnessSet structure:', {
+            isMap: typeof witnessSet === 'object' && !Array.isArray(witnessSet),
+            keys: typeof witnessSet === 'object' ? Object.keys(witnessSet) : 'not object'
+          });
           
           // Construct Conway Era transaction: [txBody, witnessSet, isValid, auxiliaryData]
           const completeTx = [
