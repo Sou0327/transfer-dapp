@@ -194,17 +194,24 @@ export default async function handler(req, res) {
             keys: typeof witnessSet === 'object' ? Object.keys(witnessSet) : 'not object'
           });
           
-          // Construct Conway Era transaction: [txBody, witnessSet, isValid, auxiliaryData]
-          const completeTx = [
-            txBody,
-            witnessSet, 
-            true,    // isValid flag
-            null     // auxiliaryData
-          ];
-          
-          // Encode complete transaction to CBOR
-          const completeTxBuffer = cbor.encode(completeTx);
-          signedTxHex = completeTxBuffer.toString('hex');
+          // Check if txBody is already a complete transaction (4-element array)
+          if (Array.isArray(txBody) && txBody.length === 4) {
+            console.log('🎯 TxBody is already a complete transaction! Using it directly.');
+            signedTxHex = txBodyHex;  // Use the complete transaction as-is
+          } else {
+            console.log('🔧 Constructing complete transaction from components...');
+            // Construct Conway Era transaction: [txBody, witnessSet, isValid, auxiliaryData]
+            const completeTx = [
+              txBody,
+              witnessSet, 
+              true,    // isValid flag
+              null     // auxiliaryData
+            ];
+            
+            // Encode complete transaction to CBOR
+            const completeTxBuffer = cbor.encode(completeTx);
+            signedTxHex = completeTxBuffer.toString('hex');
+          }
           
           console.log('✅ Complete transaction constructed with CBOR library');
           console.log('📊 Complete transaction length:', signedTxHex.length);
