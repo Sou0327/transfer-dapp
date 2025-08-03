@@ -259,12 +259,7 @@ export default async function handler(req, res) {
         throw new Error(`Blockfrost API error (${response.status}): ${errorText}`);
       }
       
-    } catch (blockfrostError) {
-      console.error('💥 Blockfrost submission error:', blockfrostError);
-      throw blockfrostError;
-      }
-
-      // Redis内のデータを更新
+      // Redis内のデータを更新（成功時のみ）
       const updatedSignedTxData = {
         ...signedTxData,
         status: 'submitted',
