@@ -64,17 +64,27 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
 
   // Fetch signed transaction data
   const fetchSignedTxData = useCallback(async (requestId: string) => {
+    console.log(`🔍 Fetching signed transaction data for: ${requestId}`);
     setLoadingSignedData(prev => ({ ...prev, [requestId]: true }));
     try {
       const response = await fetch(`/api/ada/presigned/${requestId}`);
+      console.log(`📡 API Response status: ${response.status}`);
+      
       if (response.ok) {
         const data = await response.json();
+        console.log(`📋 API Response data:`, data);
+        
         if (data.found) {
+          console.log(`✅ Found signed data for ${requestId}:`, data.data);
           setSignedTxData(prev => ({ ...prev, [requestId]: data.data }));
+        } else {
+          console.log(`❌ No signed data found for ${requestId}`);
         }
+      } else {
+        console.error(`❌ API Error: ${response.status}`);
       }
     } catch (error) {
-      console.error('Failed to fetch signed transaction data:', error);
+      console.error('💥 Failed to fetch signed transaction data:', error);
     } finally {
       setLoadingSignedData(prev => ({ ...prev, [requestId]: false }));
     }
@@ -642,29 +652,14 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
                               期限切れ
                             </button>
                           )}
-                          {request.status === RequestStatus.SIGNED && (
-                            <>
-                              <button
-                                onClick={() => fetchSignedTxData(request.id)}
-                                disabled={loadingSignedData[request.id]}
-                                className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors disabled:opacity-50"
-                              >
-                                {loadingSignedData[request.id] ? '読込中...' : '署名詳細'}
-                              </button>
-                              {signedTxData[request.id] && signedTxData[request.id].signedTx && (
-                                <button
-                                  onClick={() => handleSubmitTransaction(request.id, signedTxData[request.id])}
-                                  disabled={submittingTx[request.id]}
-                                  className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white rounded-lg transition-colors ${
-                                    submittingTx[request.id]
-                                      ? 'bg-gray-400 cursor-not-allowed'
-                                      : 'bg-green-600 hover:bg-green-700'
-                                  }`}
-                                >
-                                  {submittingTx[request.id] ? '送信中...' : '送信'}
-                                </button>
-                              )}
-                            </>
+                          {request.status === RequestStatus.SIGNED && signedTxData[request.id] && signedTxData[request.id].signedTx && (
+                            <button
+                              onClick={() => fetchSignedTxData(request.id)}
+                              disabled={loadingSignedData[request.id]}
+                              className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors disabled:opacity-50"
+                            >
+                              {loadingSignedData[request.id] ? '読込中...' : '署名詳細'}
+                            </button>
                           )}
                           <button
                             onClick={() => handleCopyLink(request.id)}
@@ -672,12 +667,26 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
                           >
                             リンクコピー
                           </button>
+                          {request.status === RequestStatus.SIGNED && signedTxData[request.id] && signedTxData[request.id].signedTx && (
+                            <button
+                              onClick={() => handleSubmitTransaction(request.id, signedTxData[request.id])}
+                              disabled={submittingTx[request.id]}
+                              className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white rounded-lg transition-colors ${
+                                submittingTx[request.id]
+                                  ? 'bg-gray-400 cursor-not-allowed'
+                                  : 'bg-red-600 hover:bg-red-700'
+                              }`}
+                            >
+                              {submittingTx[request.id] ? '送信中...' : '送金実行'}
+                            </button>
+                          )}
                         </div>
 
                         {/* Show signed transaction details if available */}
-                        {signedTxData[request.id] && signedTxData[request.id].signedTx && (
+                        {request.status === RequestStatus.SIGNED && signedTxData[request.id] && (
                           <div className="mt-4 p-3 sm:p-4 bg-blue-50 rounded-lg border border-blue-200">
                             <h4 className="text-sm font-medium text-blue-900 mb-3">署名済みトランザクション詳細</h4>
+                            {console.log(`🔍 Debug - Signed data for ${request.id}:`, signedTxData[request.id])}
                             <div className="grid grid-cols-1 gap-3 text-sm">
                               <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
                                 <span className="font-medium text-blue-800 shrink-0">署名日時:</span>
@@ -700,7 +709,7 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
                                     let txData: string;
 
                                     if (!signedTx) {
-                                      txData = 'No signed transaction data';
+                                      txData = '署名データなし（まだ取得されていません）';
                                     } else if (typeof signedTx === 'string') {
                                       txData = signedTx;
                                     } else {

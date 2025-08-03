@@ -63,10 +63,37 @@ export default async function handler(req, res) {
       });
     }
 
-    const cacheKey = `signed-tx:${id}`;
-    console.log(`🔍 Looking for signed data with key: ${cacheKey}`);
+    // Try multiple key formats
+    const keyFormats = [
+      `signed-tx:${id}`,
+      id,
+      `request:${id}`
+    ];
     
-    const signedDataRaw = await redisClient.get(cacheKey);
+    console.log(`🔍 Trying multiple key formats:`, keyFormats);
+    
+    let signedDataRaw = null;
+    let foundKey = null;
+    
+    for (const cacheKey of keyFormats) {
+      console.log(`🔑 Checking key: ${cacheKey}`);
+      signedDataRaw = await redisClient.get(cacheKey);
+      if (signedDataRaw) {
+        foundKey = cacheKey;
+        console.log(`✅ Found data with key: ${cacheKey}`);
+        break;
+      } else {
+        console.log(`❌ No data found with key: ${cacheKey}`);
+      }
+    }
+    
+    // Also try to list all keys with the request ID
+    try {
+      const allKeys = await redisClient.keys(`*${id}*`);
+      console.log(`🔍 All Redis keys containing "${id}":`, allKeys);
+    } catch (error) {
+      console.log('⚠️ Could not list Redis keys:', error.message);
+    }
     
     if (!signedDataRaw) {
       console.log(`❌ No signed transaction found for: ${id}`);

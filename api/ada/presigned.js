@@ -81,8 +81,23 @@ export default async function handler(req, res) {
 
     // Store in Redis
     const cacheKey = `signed-tx:${requestId}`;
-    await redisClient.set(cacheKey, JSON.stringify(signedTxData));
+    const dataToStore = JSON.stringify(signedTxData);
+    
+    console.log(`💾 About to store data with key: ${cacheKey}`);
+    console.log(`📊 Data size: ${dataToStore.length} characters`);
+    console.log(`📝 Data preview:`, JSON.stringify(signedTxData, null, 2));
+    
+    await redisClient.set(cacheKey, dataToStore);
     console.log(`✅ Signed transaction stored with key: ${cacheKey}`);
+    
+    // Verify storage immediately
+    const verifyData = await redisClient.get(cacheKey);
+    if (verifyData) {
+      console.log(`✅ Storage verification successful - data exists in Redis`);
+      console.log(`📊 Stored data size: ${verifyData.length} characters`);
+    } else {
+      console.error(`❌ Storage verification failed - data not found in Redis!`);
+    }
 
     // Update request status to signed
     console.log(`🔄 Updating request status to SIGNED: ${requestId}`);
