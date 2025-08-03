@@ -1,20 +1,32 @@
 // Vercel Serverless Function: GET /api/ada/requests/:id
-// Vercel Serverless Function: GET /api/ada/requests/:id
 // 個別リクエスト取得 - Vercel KV使用
 
 import { Redis } from '@upstash/redis';
 
-const redis = new Redis({
-  url: process.env.KV_REST_API_URL,
-  token: process.env.KV_REST_API_TOKEN,
-});
+// Redis インスタンスを安全に初期化
+let redis = null;
+
+const initRedis = () => {
+  if (!redis && process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
+    try {
+      redis = new Redis({
+        url: process.env.KV_REST_API_URL,
+        token: process.env.KV_REST_API_TOKEN,
+      });
+      console.log('✅ Redis client initialized');
+    } catch (error) {
+      console.error('❌ Redis initialization failed:', error);
+      redis = null;
+    }
+  }
+  return redis;
+};
 
 export default async function handler(req, res) {
   console.log('=== 🔥 API Request Debug Start ===');
   console.log('Method:', req.method);
   console.log('Query:', req.query);
   console.log('URL:', req.url);
-  console.log('Headers:', req.headers);
   
   // CORS設定
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -22,7 +34,7 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   
   if (req.method === 'OPTIONS') {
-    console.log('OPTIONS request handled');
+    console.log('✅ OPTIONS request handled');
     return res.status(200).end();
   }
 
@@ -54,17 +66,16 @@ export default async function handler(req, res) {
       console.log('KV_REST_API_TOKEN preview:', process.env.KV_REST_API_TOKEN.substring(0, 10) + '...');
     }
     
-    if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
-      console.log('❌ Missing Redis environment variables');
-      return res.status(500).json({ 
-        error: 'Server configuration error - Redis not configured',
-        hasUrl: !!process.env.KV_REST_API_URL,
-        hasToken: !!process.env.KV_REST_API_TOKEN
-      });
-    }
-    
     // Redis接続とデータ取得
     console.log('🔗 Attempting Redis connection...');
+    
+    const redisClient = initRedis();
+    if (!redisClient) {
+      console.error('❌ Redis client not available');
+      return res.status(500).json({
+        error: 'Database connection error'
+      });
+    }
     
     let requestData = null;
     
@@ -73,14 +84,13 @@ export default async function handler(req, res) {
       const keyFormats = [
         id,              // そのまま
         `request:${id}`, // prefixあり
-        `req_${id}`,     // altprefix
       ];
       
       console.log('🔍 Checking key formats:', keyFormats);
       
       for (const key of keyFormats) {
         console.log(`🔎 Trying key: ${key}`);
-        const rawData = await redis.get(key);
+        const rawData = await redisClient.get(key);
         console.log(`Key ${key} result:`, { found: !!rawData, type: typeof rawData });
         
         if (rawData) {
@@ -105,13 +115,13 @@ export default async function handler(req, res) {
       if (!requestData) {
         console.log('🔍 Data not found, checking all keys...');
         try {
-          const allKeys = await redis.keys('*');
+          const allKeys = await redisClient.keys('*');
           console.log('📋 All keys in Redis:', allKeys.slice(0, 20)); // 最初の20個
           console.log('📊 Total keys count:', allKeys.length);
           
           // パターンマッチングも試す
           const pattern = `*${id}*`;
-          const matchingKeys = await redis.keys(pattern);
+          const matchingKeys = await redisClient.keys(pattern);
           console.log(`🔎 Keys matching pattern ${pattern}:`, matchingKeys);
         } catch (keysError) {
           console.log('⚠️ Could not retrieve keys:', keysError.message);
@@ -164,81 +174,6 @@ export default async function handler(req, res) {
       error: 'Internal server error',
       message: error.message,
       stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-    });
-  }
-}
-  if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  try {
-    const { id } = req.query;
-    
-    console.log(`🔍 Looking for request: ${id}`);
-    
-    // 🚨 環境変数とKV設定のデバッグ
-    console.log('🚨 Environment check:', {
-      hasUpstashUrl: !!process.env.UPSTASH_REDIS_REST_URL,
-      hasUpstashToken: !!process.env.UPSTASH_REDIS_REST_TOKEN,
-      nodeEnv: process.env.NODE_ENV,
-      vercelEnv: process.env.VERCEL_ENV
-    });
-    
-    // Direct retrieval from Vercel KV
-    let requestData = null;
-    
-    try {
-      console.log('🚨 Attempting KV connection...');
-      const cacheKey = `request:${id}`;
-      const requestDataRaw = await redis.get(cacheKey);
-      requestData = requestDataRaw ? JSON.parse(requestDataRaw) : null;
-      
-      console.log(`🔍 KV check for ${id}:`, { 
-        found: !!requestData,
-        dataType: typeof requestData,
-        cacheKey: cacheKey
-      });
-      
-      if (requestData) {
-        console.log('🚨 Found data keys:', Object.keys(requestData));
-      }
-    } catch (error) {
-      console.error('🚨 KV get error details:', {
-        message: error.message,
-        name: error.name,
-        stack: error.stack
-      });
-    }
-    
-    if (!requestData) {
-      console.log(`Request not found in KV: ${id}`);
-      return res.status(404).json({
-        error: 'Request not found',
-        statusCode: 404
-      });
-    }
-    
-    console.log(`✅ Found request in KV: ${id}, status: ${requestData.status}`);
-    
-    // デバッグ: レスポンスデータの詳細ログ
-    console.log(`🔍 API レスポンスデバッグ:`, {
-      id: requestData.id,
-      amount_mode: requestData.amount_mode,
-      amount_or_rule_json: requestData.amount_or_rule_json,
-      hasAmountMode: 'amount_mode' in requestData,
-      hasAmountOrRule: 'amount_or_rule_json' in requestData,
-      allKeys: Object.keys(requestData)
-    });
-    
-    return res.status(200).json({
-      request: requestData
-    });
-    
-  } catch (error) {
-    console.error('Failed to get request by ID:', error);
-    return res.status(500).json({
-      error: 'Failed to get request',
-      statusCode: 500
     });
   }
 }
