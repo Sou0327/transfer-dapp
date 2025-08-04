@@ -77,6 +77,15 @@ export default async function handler(req, res) {
     // 5. 送信前バリデーション
     await performPreSubmissionValidation(signedTxHex);
     
+    // 🔍 最終送信前の確認ログ
+    console.log('🎯 Final submission preparation:', {
+      requestId,
+      finalHexLength: signedTxHex.length,
+      finalHexPrefix: signedTxHex.substring(0, 20),
+      hasApiKey: !!process.env.BLOCKFROST_API_KEY,
+      aboutToSubmit: true
+    });
+    
     // 6. Blockfrost APIに送信
     const submissionResult = await submitTransaction(signedTxHex, process.env.BLOCKFROST_API_KEY);
     

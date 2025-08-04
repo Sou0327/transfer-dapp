@@ -93,6 +93,30 @@ const constructCompleteTransaction = async (txBodyHex, witnessSetHex) => {
     // Case 1: metadata.txBodyが既に完全トランザクション（4要素配列）
     if (isConwayEraTx(decodedMeta)) {
       console.log('🎯 metadata.txBody is already a complete Conway Era transaction');
+      
+      // 🔍 完全トランザクションの詳細デバッグ
+      console.log('🔍 Complete Transaction Debug (Case 1):');
+      console.log('Full hex:', txBodyHex);
+      console.log('CBOR breakdown:', {
+        first16bytes: txBodyHex.substring(0, 32),
+        totalLength: txBodyHex.length,
+        totalBytes: txBodyHex.length / 2
+      });
+      
+      // デコードテスト
+      try {
+        const testBuffer = Buffer.from(txBodyHex, 'hex');
+        const testDecoded = cbor.decode(testBuffer);
+        console.log('✅ Complete transaction decode test:', {
+          success: true,
+          arrayLength: Array.isArray(testDecoded) ? testDecoded.length : 'not array',
+          hasValidStructure: Array.isArray(testDecoded) && testDecoded.length === 4,
+          element2IsBoolean: typeof testDecoded[2] === 'boolean'
+        });
+      } catch (e) {
+        console.error('❌ Complete transaction decode failed:', e.message);
+      }
+      
       console.log('✅ Using complete transaction directly');
       return txBodyHex;
     }
@@ -152,6 +176,54 @@ const buildFromComponents = async (txBody, witnessSetHex) => {
   // CBOR エンコード
   const completeTxBuffer = cbor.encode(completeTx);
   const signedTxHex = completeTxBuffer.toString('hex');
+  
+  // 🔍 CBOR詳細デバッグ分析
+  console.log('🔍 CBOR Debug Analysis:');
+  console.log('Full hex:', signedTxHex);
+  console.log('CBOR breakdown:', {
+    first8bytes: signedTxHex.substring(0, 16),
+    first16bytes: signedTxHex.substring(0, 32),
+    first32bytes: signedTxHex.substring(0, 64),
+    totalLength: signedTxHex.length,
+    totalBytes: signedTxHex.length / 2
+  });
+
+  // CBORデコードテスト
+  try {
+    const cborBuffer = Buffer.from(signedTxHex, 'hex');
+    const decoded = cbor.decode(cborBuffer);
+    console.log('✅ CBOR decode test successful:', {
+      arrayLength: Array.isArray(decoded) ? decoded.length : 'not array',
+      elementTypes: Array.isArray(decoded) ? decoded.map(e => typeof e) : 'N/A',
+      element0Type: Array.isArray(decoded) && decoded[0] ? (decoded[0] instanceof Map ? 'Map' : typeof decoded[0]) : 'N/A',
+      element1Type: Array.isArray(decoded) && decoded[1] ? (decoded[1] instanceof Map ? 'Map' : typeof decoded[1]) : 'N/A',
+      element2Value: Array.isArray(decoded) ? decoded[2] : 'N/A',
+      element3Value: Array.isArray(decoded) ? decoded[3] : 'N/A'
+    });
+    
+    // 各要素の詳細分析
+    if (Array.isArray(decoded) && decoded.length === 4) {
+      console.log('🔍 Conway Era elements detail:');
+      
+      // TxBody (要素0)
+      if (decoded[0] instanceof Map) {
+        console.log('📋 TxBody (element 0) keys:', Array.from(decoded[0].keys()));
+      }
+      
+      // WitnessSet (要素1)  
+      if (decoded[1] instanceof Map) {
+        console.log('🔑 WitnessSet (element 1) keys:', Array.from(decoded[1].keys()));
+      } else {
+        console.log('⚠️ WitnessSet (element 1) is not a Map:', typeof decoded[1]);
+      }
+      
+      console.log('✅ is_valid (element 2):', decoded[2]);
+      console.log('📝 auxiliary_data (element 3):', decoded[3]);
+    }
+  } catch (e) {
+    console.error('❌ CBOR decode failed:', e.message);
+    console.error('CBOR decode stack:', e.stack);
+  }
   
   console.log('✅ Conway Era transaction constructed successfully:', {
     hexLength: signedTxHex.length,

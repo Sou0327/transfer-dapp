@@ -1,4 +1,5 @@
 // Blockfrost API クライアント - メインネット統合とエラー解析
+import cbor from 'cbor';
 
 /**
  * 現在のスロット番号を取得
@@ -57,6 +58,38 @@ export const getUtxoInfo = async (txHash, blockfrostApiKey) => {
  */
 export const submitTransaction = async (signedTxHex, blockfrostApiKey) => {
   console.log('🚀 Submitting transaction to Blockfrost...');
+  
+  // 🔍 送信前の詳細CBOR分析
+  console.log('🔍 Blockfrost Submission CBOR Analysis:');
+  console.log('Transaction hex (full):', signedTxHex);
+  console.log('Hex analysis:', {
+    length: signedTxHex.length,
+    byteLength: signedTxHex.length / 2,
+    first16chars: signedTxHex.substring(0, 16),
+    first32chars: signedTxHex.substring(0, 32),
+    first64chars: signedTxHex.substring(0, 64),
+    last16chars: signedTxHex.substring(signedTxHex.length - 16)
+  });
+  
+  // CBORデコード検証
+  try {
+    const cborBuffer = Buffer.from(signedTxHex, 'hex');
+    console.log('Buffer created:', { bufferLength: cborBuffer.length });
+    
+    const decoded = cbor.decode(cborBuffer);
+    console.log('✅ Pre-submission CBOR decode successful:', {
+      isArray: Array.isArray(decoded),
+      length: Array.isArray(decoded) ? decoded.length : 'N/A',
+      conwayStructure: Array.isArray(decoded) && decoded.length === 4,
+      element0: decoded[0] instanceof Map ? 'Map' : typeof decoded[0],
+      element1: decoded[1] instanceof Map ? 'Map' : typeof decoded[1],
+      element2: typeof decoded[2],
+      element3: decoded[3] === null ? 'null' : typeof decoded[3]
+    });
+  } catch (decodeError) {
+    console.error('❌ Pre-submission CBOR decode failed:', decodeError.message);
+    console.error('This will definitely fail at Blockfrost');
+  }
   
   const requestBody = signedTxHex;
   
