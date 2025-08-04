@@ -8,6 +8,21 @@ import fs from 'fs/promises';
 import path from 'path';
 import cbor from 'cbor';
 
+// Import CSL for key hash computation
+const CSL = (() => {
+  try {
+    return require('@emurgo/cardano-serialization-lib-nodejs');
+  } catch (err) {
+    console.warn('⚠️ CSL nodejs not available, trying browser version');
+    try {
+      return require('@emurgo/cardano-serialization-lib-browser');
+    } catch (err2) {
+      console.error('❌ CSL library not available for key hash computation');
+      return null;
+    }
+  }
+})();
+
 // Redis インスタンスを安全に初期化
 let redis = null;
 
@@ -289,111 +304,32 @@ export default async function handler(req, res) {
           if (isCompleteTransaction) {
             console.log('🎯 BREAKTHROUGH: txBodyHex is already a complete Conway Era transaction!');
             
-            // 🔧 CRITICAL: Even for complete transactions, we need to fix TTL
-            if (requestData && requestData.ttl_slot && requestData.ttl_slot > 0) {
-              console.log('🔧 Fixing TTL in complete transaction...');
-              console.log('Original complete transaction TTL in txBody[0][3]:', txBody[0][3] || 'not found');
-              console.log('Request TTL slot:', requestData.ttl_slot);
-              
-              // Check TTL overflow and create safe TTL
-              const TTL_OVERFLOW_THRESHOLD = 100000000; 
-              let safeTtl = requestData.ttl_slot;
-              
-              if (requestData.ttl_slot > TTL_OVERFLOW_THRESHOLD) {
-                const currentSlot = Math.floor(Date.now() / 1000) - 1596059091 + 4492800;
-                safeTtl = currentSlot + 7200; // +2 hours
-                console.log('🚨 EMERGENCY: TTL too large, using safe value:', safeTtl);
-              }
-              
-              // Extract and modify transaction body from complete transaction
-              let modifiedTxBody = txBody[0]; // Extract transaction body
-              
-              if (modifiedTxBody instanceof Map) {
-                modifiedTxBody = new Map(modifiedTxBody);
-                modifiedTxBody.set(3, safeTtl); // Update TTL in map
-                console.log('✅ TTL updated in Map-format transaction body');
-              } else {
-                // Plain object - convert to Map and update TTL
-                const newTxBodyMap = new Map();
-                Object.keys(modifiedTxBody).forEach(key => {
-                  const numKey = parseInt(key, 10);
-                  if (!isNaN(numKey)) {
-                    newTxBodyMap.set(numKey, modifiedTxBody[key]);
-                  }
-                });
-                newTxBodyMap.set(3, safeTtl); // Update TTL
-                modifiedTxBody = newTxBodyMap;
-                console.log('✅ TTL updated in converted Map-format transaction body');
-              }
-              
-              // Reconstruct complete transaction with fixed TTL
-              const fixedCompleteTx = [
-                modifiedTxBody,     // Fixed transaction body with correct TTL
-                txBody[1],          // Original witness set
-                txBody[2],          // Original isValid flag
-                txBody[3]           // Original auxiliary data
-              ];
-              
-              // Encode the fixed complete transaction
-              const fixedTxBuffer = cbor.encode(fixedCompleteTx);
-              signedTxHex = fixedTxBuffer.toString('hex');
-              
-              console.log('✅ Complete transaction TTL fixed and re-encoded');
-              console.log('📊 Fixed transaction:', {
-                source: 'Complete transaction with TTL fix',
-                safeTtl: safeTtl,
-                cborPrefix: signedTxHex.substring(0, 8) + '...'
-              });
-              
-            } else {
-              console.log('✅ Using complete transaction directly (no TTL fix needed)');
+            // 🎯 EXPERT RECOMMENDED: Use complete transaction as-is (TTL already finalized before signing)
+            console.log('✅ Using complete transaction directly (TTL finalized before signing)');
+            signedTxHex = txBodyHex;  // Use the complete transaction as-is
               signedTxHex = txBodyHex;  // Use the complete transaction as-is
             }
           } else {
             console.log('🔧 Constructing complete transaction from components...');
             
-            // Fix TTL in transaction body if needed
+            // 🎯 EXPERT RECOMMENDED: Use transaction body as-is (TTL already finalized before signing)
             let fixedTxBody = txBody;
             
-            // 🚨 EMERGENCY TTL FIX: Prevent CSL BigNum overflow
-            if (requestData && requestData.ttl_slot && requestData.ttl_slot > 0) {
-              console.log('🔧 Checking TTL for potential overflow...');
-              console.log('Original TTL in txBody:', txBody[3]);
-              console.log('Request TTL slot:', requestData.ttl_slot);
+            console.log('✅ Using transaction body as-is (TTL finalized before signing)');
+            console.log('📋 Original transaction body TTL:', Array.isArray(txBody) ? txBody[3] : 'not array');
+            
+            // Convert array format to CBOR map format if needed (no TTL modification)
+            let convertedTxBody;
+            
+            if (Array.isArray(txBody)) {
+              console.log('🔧 Converting Transaction Body from array to CBOR map format (preserving TTL)...');
               
-              // Check if TTL is too large (CSL BigNum overflow threshold ~2^53)
-              const TTL_OVERFLOW_THRESHOLD = 100000000; // ~100M slots (safe threshold)
-              let safeTtl = requestData.ttl_slot;
-              
-              if (requestData.ttl_slot > TTL_OVERFLOW_THRESHOLD) {
-                // Use current slot + 2 hours as safe alternative
-                const currentSlot = Math.floor(Date.now() / 1000) - 1596059091 + 4492800; // Rough current slot
-                safeTtl = currentSlot + 7200; // +2 hours
-                console.log('🚨 EMERGENCY: TTL too large, using safe value:', safeTtl);
-                console.log('🚨 Original request TTL was:', requestData.ttl_slot, '(would cause overflow)');
-              }
-              
-              // 🚨 CRITICAL FIX: Transaction Body MUST be CBOR Map, NOT Array
-              // Research confirms: "transaction body is a CBOR map with specific integer keys"
-              
-              let convertedTxBody;
-              
-              if (Array.isArray(txBody)) {
-                // Convert array format [inputs, outputs, fee, ttl] to CBOR map format
-                console.log('🔧 Converting Transaction Body from array to CBOR map format...');
-                console.log('📋 Original array elements:', {
-                  inputs: txBody[0] ? 'present' : 'missing',
-                  outputs: txBody[1] ? 'present' : 'missing', 
-                  fee: txBody[2] ? 'present' : 'missing',
-                  ttl: txBody[3] ? 'present' : 'missing'
-                });
-                
-                // Create CBOR Map: {0: inputs, 1: outputs, 2: fee, 3: ttl}
-                convertedTxBody = new Map();
-                convertedTxBody.set(0, txBody[0]); // inputs
-                convertedTxBody.set(1, txBody[1]); // outputs
-                convertedTxBody.set(2, txBody[2]); // fee
-                convertedTxBody.set(3, safeTtl);   // safe TTL
+              // Create CBOR Map: {0: inputs, 1: outputs, 2: fee, 3: ttl} - preserve original TTL
+              convertedTxBody = new Map();
+              convertedTxBody.set(0, txBody[0]); // inputs
+              convertedTxBody.set(1, txBody[1]); // outputs
+              convertedTxBody.set(2, txBody[2]); // fee
+              convertedTxBody.set(3, txBody[3]); // preserve original TTL
                 
                 console.log('✅ Transaction Body converted to CBOR Map format');
                 console.log('🗂️ Map keys:', Array.from(convertedTxBody.keys()));
@@ -427,24 +363,27 @@ export default async function handler(req, res) {
                 if (txBody instanceof Map) {
                   convertedTxBody = new Map(txBody);
                   convertedTxBody.set(3, safeTtl);
-                  console.log('✅ TTL updated in existing CBOR Map');
-                } else {
-                  // Plain object - convert to Map for CBOR encoding
-                  convertedTxBody = new Map();
-                  Object.keys(txBody).forEach(key => {
-                    const numKey = parseInt(key, 10);
-                    if (!isNaN(numKey)) {
-                      convertedTxBody.set(numKey, txBody[key]);
-                    }
-                  });
-                  convertedTxBody.set(3, safeTtl); // Update TTL
-                  console.log('✅ Object converted to CBOR Map with TTL fix');
+                  console.log('✅ Using existing CBOR Map (preserving TTL)');
+              } else {
+                // Plain object - convert to Map for CBOR encoding (preserve TTL)
+                convertedTxBody = new Map();
+                Object.keys(txBody).forEach(key => {
+                  const numKey = parseInt(key, 10);
+                  if (!isNaN(numKey)) {
+                    convertedTxBody.set(numKey, txBody[key]);
+                  }
+                });
+                console.log('✅ Object converted to CBOR Map (preserving TTL)');
                 }
               } else {
                 throw new Error(`Invalid Transaction Body type: ${typeof txBody}`);
               }
               
               fixedTxBody = convertedTxBody;
+            } else {
+              // Transaction body already in correct format, use as-is (preserving TTL)
+              console.log('✅ Transaction body already in correct format (preserving TTL)');  
+              fixedTxBody = txBody;
             }
             
             // 🏗️ Construct Conway Era transaction: [transaction_body, transaction_witness_set, is_valid, auxiliary_data]
@@ -664,9 +603,29 @@ export default async function handler(req, res) {
         // Analyze error for missing key witness
         if (errorText.includes('MissingVKeyWitnessesUTXOW')) {
           console.log('🔍 Analyzing missing witness error...');
+          
+          // 🔍 DEBUG: Check actual error text format  
+          console.log('🔍 Error text debugging:', {
+            errorLength: errorText.length,
+            containsUnKeyHash: errorText.includes('unKeyHash'),
+            errorSample: errorText.substring(0, 200) + '...',
+            unKeyHashContext: errorText.match(/unKeyHash[^}]+/)?.[0] || 'not found'
+          });
           const keyHashMatch = errorText.match(/unKeyHash = \"([a-f0-9]+)\"/);
+          // 🎯 FORCE ANALYSIS: Run analysis with known key hash (remove if condition)
+          const knownMissingKeyHash = 'ffe691911fa412e6b2718a290fcc2333d5e12039cd6b0d07f0feed63';
+          let missingKeyHash = knownMissingKeyHash;
+          
           if (keyHashMatch) {
-            const missingKeyHash = keyHashMatch[1];
+            missingKeyHash = keyHashMatch[1];
+            console.log('✅ Extracted key hash from error:', missingKeyHash);
+          } else {
+            console.log('⚠️ Using known key hash for analysis:', missingKeyHash);
+          }
+          
+          // ALWAYS execute analysis regardless of regex match
+          {
+
             console.error(`❌ Missing signature for key hash: ${missingKeyHash}`);
             
             // Analyze transaction to identify the missing key
@@ -714,22 +673,47 @@ export default async function handler(req, res) {
                         pubKeyHex: pubKeyBytes ? pubKeyBytes.toString('hex').substring(0, 16) + '...' : 'missing'
                       });
                       
-                      // Compute Blake2b-224 key hash from public key
+                      // Compute Blake2b-224 key hash from public key using CSL
                       if (pubKeyBytes && pubKeyBytes.length === 32) {
                         try {
-                          const crypto = require('crypto');
-                          const blake2bHash = crypto.createHash('blake2b256').update(pubKeyBytes).digest();
-                          const keyHash = blake2bHash.slice(0, 28).toString('hex'); // First 28 bytes
+                          // 🎯 EXPERT RECOMMENDED: Use CSL library for accurate key hash computation
+                          const pubKeyCSL = CSL.PublicKey.from_bytes(pubKeyBytes);
+                          const keyHashCSL = pubKeyCSL.hash();
+                          const keyHash = Buffer.from(keyHashCSL.to_bytes()).toString('hex');
                           
-                          console.log(`    Computed Key Hash: ${keyHash}`);
-                          console.log(`    Matches Missing: ${keyHash === missingKeyHash ? '✅ YES' : '❌ NO'}`);
+                          console.log('🔍 CSL Key Hash Computation:', {
+                            pubKeyLength: pubKeyBytes.length,
+                            pubKeyHex: pubKeyBytes.toString('hex').substring(0, 16) + '...',
+                            computedKeyHash: keyHash,
+                            missingKeyHash: missingKeyHash,
+                            matches: keyHash === missingKeyHash
+                          });
                           
                           if (keyHash === missingKeyHash) {
                             console.log('🎯 FOUND: This witness matches the missing key hash!');
-                            console.log('🔧 Issue: Signature is present but not being recognized');
+                            console.log('🔧 Issue: Signature is present but not being recognized by Blockfrost');
+                            console.log('📋 Potential causes:');
+                            console.log('  - TTL modification after signing (FIXED)');
+                            console.log('  - Transaction body hash mismatch');
+                            console.log('  - Conway Era signature format requirements');
+                          } else {
+                            console.log('❌ Key hash mismatch - this witness is for a different key');
                           }
                         } catch (hashError) {
-                          console.error('❌ Key hash computation failed:', hashError.message);
+                          console.error('❌ CSL key hash computation failed:', hashError.message);
+                          
+                          // Fallback to Node.js crypto if CSL fails
+                          if (!CSL) {
+                            try {
+                              const crypto = require('crypto');
+                              const blake2bHash = crypto.createHash('blake2b256').update(pubKeyBytes).digest();
+                              const keyHash = blake2bHash.slice(0, 28).toString('hex');
+                              console.log('🔄 Fallback key hash (Node.js crypto):', keyHash);
+                              console.log('⚠️ Using fallback - may not match CSL computation exactly');
+                            } catch (cryptoError) {
+                              console.error('❌ Fallback key hash computation also failed:', cryptoError.message);
+                            }
+                          }
                         }
                       }
                     }

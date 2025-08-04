@@ -139,33 +139,37 @@ abstract class BaseTxBuilder {
       currentSlotType: typeof currentSlot
     });
 
-    // Set TTL - use request TTL slot if available, otherwise calculate from offset
+    // 🎯 EXPERT RECOMMENDED: 署名前TTL確定ロジック
     let ttl;
     if (this.config.ttlSlot && this.config.ttlSlot > 0) {
-      // 🚨 EMERGENCY FIX: Use current slot + safe offset instead of large request TTL
-      const safeOffset = 7200; // 2 hours
-      ttl = currentSlot.checked_add(CSL.BigNum.from_str(safeOffset.toString()));
-      console.log('🚨 EMERGENCY: Using safe TTL (currentSlot + 2h):', ttl.to_str());
-      console.log('🚨 Original request TTL was:', this.config.ttlSlot, '(too large, caused overflow)');
+      console.log('🔧 Request TTL provided:', this.config.ttlSlot);
+      
+      // 🚨 CSL BigNum overflow prevention (2^53 threshold)
+      const TTL_OVERFLOW_THRESHOLD = 100000000; // ~100M slots
+      
+      if (this.config.ttlSlot > TTL_OVERFLOW_THRESHOLD) {
+        console.log('🔧 TTL overflow detected, using safe alternative');
+        const safeOffset = 7200; // 2 hours
+        ttl = currentSlot.checked_add(CSL.BigNum.from_str(safeOffset.toString()));
+        console.log('✅ SAFE TTL (署名前確定):', ttl.to_str());
+        console.log('⚠️ Original TTL was too large:', this.config.ttlSlot);
+      } else {
+        // Request TTL is safe, use as-is
+        ttl = CSL.BigNum.from_str(this.config.ttlSlot.toString());
+        console.log('✅ SAFE TTL (署名前確定):', ttl.to_str());
+      }
     } else {
       // Fallback to calculated TTL
       ttl = currentSlot.checked_add(
         CSL.BigNum.from_str((this.config.ttlOffset || DEFAULT_TTL_OFFSET).toString())
       );
-      console.log('📅 Using calculated TTL with offset:', this.config.ttlOffset || DEFAULT_TTL_OFFSET);
+      console.log('✅ CALCULATED TTL (署名前確定):', ttl.to_str());
     }
 
-    console.log('📅 Final TTL value:', ttl.to_str());
+    console.log('📅 Final TTL (署名前確定完了):', ttl.to_str());
     
-    // 🚨 CRITICAL DEBUG: TTL variable detailed analysis
-    console.log('🚨 TTL Debug Analysis:', {
-      ttlType: typeof ttl,
-      ttlValue: ttl,
-      ttlToString: ttl.to_str(),
-      ttlToBytes: ttl.to_bytes ? Array.from(ttl.to_bytes()) : 'no to_bytes method',
-      configTtlSlot: this.config.ttlSlot,
-      configTtlSlotType: typeof this.config.ttlSlot
-    });
+    // 🚨 CRITICAL: TTL is now FINAL - 署名後は一切変更しない
+    console.log('🎯 TTL確定済み - 署名後の変更は禁止');
 
     // Calculate fee if not provided
     let txFee: any;
