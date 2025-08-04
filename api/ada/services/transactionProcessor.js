@@ -149,7 +149,38 @@ const buildFromComponents = async (txBody, witnessSetHex) => {
   
   // Witness Setのデコードと検証
   const witnessSetBuffer = Buffer.from(witnessSetHex, 'hex');
-  const witnessSet = cbor.decode(witnessSetBuffer);
+  let witnessSet = cbor.decode(witnessSetBuffer);
+  
+  // 🔧 CRITICAL FIX: Witness SetをMapに強制変換
+  console.log('🔍 WitnessSet type analysis before conversion:', {
+    type: typeof witnessSet,
+    isMap: witnessSet instanceof Map,
+    isObject: typeof witnessSet === 'object' && witnessSet !== null,
+    keys: witnessSet instanceof Map ? Array.from(witnessSet.keys()) : Object.keys(witnessSet || {})
+  });
+  
+  if (!(witnessSet instanceof Map)) {
+    console.log('🔧 Converting WitnessSet object to Map...');
+    const witnessSetMap = new Map();
+    
+    if (witnessSet && typeof witnessSet === 'object') {
+      // オブジェクトの全プロパティをMapに変換
+      Object.entries(witnessSet).forEach(([key, value]) => {
+        const numKey = Number(key);
+        witnessSetMap.set(numKey, value);
+        console.log(`✅ Converted witness_set[${key}] -> Map.set(${numKey}, ${typeof value})`);
+      });
+    }
+    
+    witnessSet = witnessSetMap;
+    console.log('✅ WitnessSet successfully converted to Map:', {
+      newType: 'Map',
+      mapSize: witnessSet.size,
+      keys: Array.from(witnessSet.keys())
+    });
+  } else {
+    console.log('✅ WitnessSet is already a Map');
+  }
   
   const witnessValidation = validateWitnessSetStructure(witnessSet);
   if (!witnessValidation.valid) {
@@ -159,13 +190,14 @@ const buildFromComponents = async (txBody, witnessSetHex) => {
   console.log('✅ Component validation passed:', {
     txBodyKeys: Array.from(txBody.keys()),
     witnessSetKeys: Array.from(witnessSet.keys()),
+    witnessSetIsMap: witnessSet instanceof Map,
     vkeyWitnessCount: witnessValidation.vkeyCount
   });
   
   // Conway Era完全トランザクションの構築
   const completeTx = [
     txBody,      // transaction_body (Map)
-    witnessSet,  // transaction_witness_set (Map)  
+    witnessSet,  // transaction_witness_set (Map) - 🔧 FIXED: 確実にMap
     true,        // is_valid (boolean) - REQUIRED for Conway Era
     null         // auxiliary_data - REQUIRED position even if null
   ];
