@@ -7,21 +7,15 @@ import { promisify } from 'util';
 import fs from 'fs/promises';
 import path from 'path';
 import cbor from 'cbor';
+import * as CSL from '@emurgo/cardano-serialization-lib-nodejs';
 
-// Import CSL for key hash computation
-const CSL = (() => {
-  try {
-    return require('@emurgo/cardano-serialization-lib-nodejs');
-  } catch (err) {
-    console.warn('⚠️ CSL nodejs not available, trying browser version');
-    try {
-      return require('@emurgo/cardano-serialization-lib-browser');
-    } catch (err2) {
-      console.error('❌ CSL library not available for key hash computation');
-      return null;
-    }
-  }
-})();
+// 🔧 UTILITY: バイト配列をUint8Arrayに正規化
+const toUint8Array = (bytes) => {
+  if (bytes instanceof Uint8Array) return bytes;
+  if (Buffer.isBuffer(bytes)) return new Uint8Array(bytes);
+  if (Array.isArray(bytes)) return new Uint8Array(bytes);
+  throw new Error(`Cannot convert to Uint8Array: ${typeof bytes}`);
+};
 
 // Redis インスタンスを安全に初期化
 let redis = null;
@@ -197,6 +191,21 @@ export default async function handler(req, res) {
     // 署名済みトランザクションの処理
     let signedTxHex;
     
+    // 🔧 EXPERT FIX: スコープ修正 - デバッグ用変数を外側で宣言
+    let txBodyHex;
+    let witnessSetHex; 
+    let isCompleteTransaction = false;
+    let analyzeTxBody;
+    let analyzeWitnessSet;
+    
+    // 📊 IMPROVED: 事後解析用変数も外側で宣言
+    let currentSlot = 'unknown';
+    let ttlValue = 'unknown';
+    let providedKeyHashes = new Set();
+    let requiredKeyHashes = new Set();
+    let missingKeyHashes = new Set();
+    let witnessSetFromTransaction = null;
+    
     console.log('🔍 Signed transaction data type:', typeof signedTxData.signedTx);
     console.log('🔍 Signed transaction data:', signedTxData.signedTx);
     console.log('🔍 Metadata available:', !!signedTxData.metadata);
@@ -213,8 +222,8 @@ export default async function handler(req, res) {
         console.log('🔧 Constructing complete transaction using CBOR library...');
         
         try {
-          const txBodyHex = signedTxData.metadata.txBody;
-          const witnessSetHex = signedTxData.signedTx;
+          txBodyHex = signedTxData.metadata.txBody;
+          witnessSetHex = signedTxData.signedTx;
           
           console.log('📊 CBOR Construction:', {
             txBodyHex: txBodyHex.substring(0, 20) + '...',
@@ -285,15 +294,38 @@ export default async function handler(req, res) {
             });
           }
           
-          // 🔥 CRITICAL DETECTION: Check if txBodyHex is actually a complete transaction
-          const isCompleteTransaction = (
+          // 🔒 EXPERT RECOMMENDED: 厳密な完全トランザクション判定
+          isCompleteTransaction = (
             Array.isArray(txBody) &&
             txBody.length === 4 &&
-            typeof txBody[0] === 'object' && // transaction body (map)
-            typeof txBody[1] === 'object' && // witness set (map)  
-            typeof txBody[2] === 'boolean' && // isValid flag ← KEY INDICATOR!
-            (txBody[3] === null || typeof txBody[3] === 'object') // auxiliary data
+            // element[0] must be transaction body (Map with integer keys)
+            txBody[0] instanceof Map &&
+            // element[1] must be witness set (Map with key 0 = VKeyWitnesses array)
+            txBody[1] instanceof Map && 
+            // element[2] must be isValid flag (boolean)
+            typeof txBody[2] === 'boolean' &&
+            // element[3] must be auxiliary data (null or Map)
+            (txBody[3] === null || txBody[3] instanceof Map)
           );
+          
+          // 🔍 EXPERT RECOMMENDED: 追加厳密検証
+          if (isCompleteTransaction) {
+            // Verify transaction body has expected integer keys (0,1,2,3)
+            const txBodyKeys = Array.from(txBody[0].keys());
+            const hasRequiredKeys = txBodyKeys.includes(0) && txBodyKeys.includes(1) && 
+                                   txBodyKeys.includes(2) && txBodyKeys.includes(3);
+            
+            // Verify witness set structure
+            const witnessSetHasVKeys = txBody[1].has(0) && Array.isArray(txBody[1].get(0));
+            
+            if (!hasRequiredKeys || !witnessSetHasVKeys) {
+              console.log('⚠️ EXPERT VALIDATION FAILED: Structure check failed');
+              console.log('  TxBody keys:', txBodyKeys);
+              console.log('  Has required keys (0,1,2,3):', hasRequiredKeys);
+              console.log('  WitnessSet has VKeys:', witnessSetHasVKeys);
+              isCompleteTransaction = false; // 誤判定防止
+            }
+          }
           
           console.log('🔍 Complete Transaction Detection:', {
             isCompleteTransaction: isCompleteTransaction,
@@ -304,88 +336,83 @@ export default async function handler(req, res) {
           if (isCompleteTransaction) {
             console.log('🎯 BREAKTHROUGH: txBodyHex is already a complete Conway Era transaction!');
             
-            // 🎯 EXPERT RECOMMENDED: Use complete transaction as-is (TTL already finalized before signing)
+            // 🎯 EXPERT RECOMMENDED: Use complete transaction as-is (TTL finalized before signing)
             console.log('✅ Using complete transaction directly (TTL finalized before signing)');
             signedTxHex = txBodyHex;  // Use the complete transaction as-is
-              signedTxHex = txBodyHex;  // Use the complete transaction as-is
-            }
           } else {
             console.log('🔧 Constructing complete transaction from components...');
             
-            // 🎯 EXPERT RECOMMENDED: Use transaction body as-is (TTL already finalized before signing)
+            // Fix TTL in transaction body if needed
             let fixedTxBody = txBody;
             
+            // 🎯 EXPERT RECOMMENDED: Use transaction body as-is (TTL finalized before signing)
             console.log('✅ Using transaction body as-is (TTL finalized before signing)');
             console.log('📋 Original transaction body TTL:', Array.isArray(txBody) ? txBody[3] : 'not array');
-            
-            // Convert array format to CBOR map format if needed (no TTL modification)
-            let convertedTxBody;
-            
-            if (Array.isArray(txBody)) {
-              console.log('🔧 Converting Transaction Body from array to CBOR map format (preserving TTL)...');
               
-              // Create CBOR Map: {0: inputs, 1: outputs, 2: fee, 3: ttl} - preserve original TTL
-              convertedTxBody = new Map();
-              convertedTxBody.set(0, txBody[0]); // inputs
-              convertedTxBody.set(1, txBody[1]); // outputs
-              convertedTxBody.set(2, txBody[2]); // fee
-              convertedTxBody.set(3, txBody[3]); // preserve original TTL
+              if (Array.isArray(txBody)) {
+                console.log('🔧 Converting Transaction Body from array to CBOR map format (preserving TTL)...');
+                console.log('📋 Original array elements:', {
+                  inputs: txBody[0] ? 'present' : 'missing',
+                  outputs: txBody[1] ? 'present' : 'missing', 
+                  fee: txBody[2] ? 'present' : 'missing',
+                  ttl: txBody[3] ? 'present' : 'missing'
+                });
+                
+                // Create CBOR Map: {0: inputs, 1: outputs, 2: fee, 3: ttl} - preserve original TTL
+                fixedTxBody = new Map();
+                fixedTxBody.set(0, txBody[0]); // inputs
+                fixedTxBody.set(1, txBody[1]); // outputs
+                fixedTxBody.set(2, txBody[2]); // fee
+                fixedTxBody.set(3, txBody[3]); // preserve original TTL
                 
                 console.log('✅ Transaction Body converted to CBOR Map format');
-                console.log('🗂️ Map keys:', Array.from(convertedTxBody.keys()));
+                console.log('🗂️ Map keys:', Array.from(fixedTxBody.keys()));
                 
                 // 🔍 Detailed Transaction Body Map validation
                 console.log('🔍 Transaction Body Map contents validation:');
                 console.log('  [0] inputs:', {
-                  isPresent: !!convertedTxBody.get(0),
-                  type: Array.isArray(convertedTxBody.get(0)) ? 'array' : typeof convertedTxBody.get(0),
-                  length: Array.isArray(convertedTxBody.get(0)) ? convertedTxBody.get(0).length : 'not array',
-                  sample: Array.isArray(convertedTxBody.get(0)) && convertedTxBody.get(0).length > 0 ? 'has items' : 'empty or invalid'
+                  isPresent: !!fixedTxBody.get(0),
+                  type: Array.isArray(fixedTxBody.get(0)) ? 'array' : typeof fixedTxBody.get(0),
+                  length: Array.isArray(fixedTxBody.get(0)) ? fixedTxBody.get(0).length : 'not array',
+                  sample: Array.isArray(fixedTxBody.get(0)) && fixedTxBody.get(0).length > 0 ? 'has items' : 'empty or invalid'
                 });
                 console.log('  [1] outputs:', {
-                  isPresent: !!convertedTxBody.get(1),
-                  type: Array.isArray(convertedTxBody.get(1)) ? 'array' : typeof convertedTxBody.get(1),
-                  length: Array.isArray(convertedTxBody.get(1)) ? convertedTxBody.get(1).length : 'not array'
+                  isPresent: !!fixedTxBody.get(1),
+                  type: Array.isArray(fixedTxBody.get(1)) ? 'array' : typeof fixedTxBody.get(1),
+                  length: Array.isArray(fixedTxBody.get(1)) ? fixedTxBody.get(1).length : 'not array'
                 });
                 console.log('  [2] fee:', {
-                  isPresent: convertedTxBody.get(2) !== undefined,
-                  type: typeof convertedTxBody.get(2),
-                  value: convertedTxBody.get(2)
+                  isPresent: fixedTxBody.get(2) !== undefined,
+                  type: typeof fixedTxBody.get(2),
+                  value: fixedTxBody.get(2)
                 });
                 console.log('  [3] ttl:', {
-                  isPresent: convertedTxBody.get(3) !== undefined,
-                  type: typeof convertedTxBody.get(3), 
-                  value: convertedTxBody.get(3)
+                  isPresent: fixedTxBody.get(3) !== undefined,
+                  type: typeof fixedTxBody.get(3), 
+                  value: fixedTxBody.get(3)
                 });
                 
               } else if (typeof txBody === 'object' && txBody !== null) {
-                // Already in map format, just update TTL
+                // Already in map format, preserve as-is (including TTL)
                 if (txBody instanceof Map) {
-                  convertedTxBody = new Map(txBody);
-                  convertedTxBody.set(3, safeTtl);
+                  fixedTxBody = new Map(txBody);
                   console.log('✅ Using existing CBOR Map (preserving TTL)');
-              } else {
-                // Plain object - convert to Map for CBOR encoding (preserve TTL)
-                convertedTxBody = new Map();
-                Object.keys(txBody).forEach(key => {
-                  const numKey = parseInt(key, 10);
-                  if (!isNaN(numKey)) {
-                    convertedTxBody.set(numKey, txBody[key]);
-                  }
-                });
-                console.log('✅ Object converted to CBOR Map (preserving TTL)');
+                } else {
+                  // Plain object - convert to Map for CBOR encoding (preserve TTL)
+                  fixedTxBody = new Map();
+                  Object.keys(txBody).forEach(key => {
+                    const numKey = parseInt(key, 10);
+                    if (!isNaN(numKey)) {
+                      fixedTxBody.set(numKey, txBody[key]);
+                    }
+                  });
+                  console.log('✅ Object converted to CBOR Map (preserving TTL)');
                 }
               } else {
                 throw new Error(`Invalid Transaction Body type: ${typeof txBody}`);
               }
               
-              fixedTxBody = convertedTxBody;
-            } else {
-              // Transaction body already in correct format, use as-is (preserving TTL)
-              console.log('✅ Transaction body already in correct format (preserving TTL)');  
-              fixedTxBody = txBody;
-            }
-            
+
             // 🏗️ Construct Conway Era transaction: [transaction_body, transaction_witness_set, is_valid, auxiliary_data]
             // Based on research: Conway Era MUST have exactly 4 elements
             
@@ -556,7 +583,317 @@ export default async function handler(req, res) {
       throw new Error('Invalid transaction hex format');
     }
     
-    // Use Blockfrost API instead of cardano-cli for Vercel environment
+    // ⚙️ EXPERT RECOMMENDED: 送信前TTLバリデーション強化
+    console.log('⚙️ Pre-submission validation starting...');
+    
+    const blockfrostApiKey = process.env.BLOCKFROST_API_KEY;
+    if (!blockfrostApiKey) {
+      throw new Error('BLOCKFROST_API_KEY environment variable is not set');
+    }
+    
+    // 🔍 EXPERT RECOMMENDED: Blockfrost APIで現在スロット取得
+    console.log('🔍 Getting current slot from Blockfrost...');
+    const latestBlockResponse = await fetch('https://cardano-mainnet.blockfrost.io/api/v0/blocks/latest', {
+      headers: { 'project_id': blockfrostApiKey }
+    });
+    
+    if (!latestBlockResponse.ok) {
+      console.warn('⚠️ Could not get current slot, proceeding without validation');
+      console.warn('Blockfrost latest block error:', latestBlockResponse.status);
+    } else {
+      const latestBlock = await latestBlockResponse.json();
+      const currentSlot = parseInt(latestBlock.slot);
+      console.log('📊 Current mainnet slot:', currentSlot);
+      
+      // 🔍 EXPERT RECOMMENDED: トランザクションからTTL抽出して検証
+      try {
+        const txDecoded = cbor.decode(Buffer.from(signedTxHex, 'hex'));
+        let ttlValue = null;
+        
+        if (Array.isArray(txDecoded) && txDecoded.length === 4) {
+          // Conway Era完全トランザクション
+          const txBodyFromComplete = txDecoded[0];
+          if (txBodyFromComplete instanceof Map) {
+            ttlValue = txBodyFromComplete.get(3);
+          }
+        }
+        
+        if (ttlValue !== null) {
+          const ttlMargin = ttlValue - currentSlot;
+          const marginHours = Math.floor(ttlMargin / 3600);
+          
+          console.log('📅 TTL Validation:', {
+            currentSlot: currentSlot,
+            ttlSlot: ttlValue,
+            margin: ttlMargin,
+            marginHours: marginHours,
+            status: ttlMargin > 120 ? '✅ Valid' : '❌ Too close/expired'
+          });
+          
+          // ⏰ IMPROVED: TTL余裕しきい値を環境変数で可変化
+          const minTtlMarginSlots = parseInt(process.env.MIN_TTL_MARGIN_SLOTS) || 120; // デフォルト2分
+          const warnTtlMarginSlots = parseInt(process.env.WARN_TTL_MARGIN_SLOTS) || 600; // デフォルト10分
+          
+          // 🚨 EXPERT RECOMMENDED: TTL余裕チェック（実運用では5-10分推奨）
+          if (ttlMargin < minTtlMarginSlots) {
+            throw new Error(`TTL too close to expiry. Margin: ${ttlMargin} slots (${marginHours} hours). Need at least ${minTtlMarginSlots} slots.`);
+          } else if (ttlMargin < warnTtlMarginSlots) {
+            console.warn('⚠️ TTL expires soon:', `${marginHours} hours remaining (${ttlMargin} slots)`);
+          } else {
+            console.log('✅ TTL has sufficient margin:', `${marginHours} hours remaining (${ttlMargin} slots)`);
+          }
+        } else {
+          console.warn('⚠️ Could not extract TTL from transaction for validation');
+        }
+      } catch (ttlError) {
+        console.warn('⚠️ TTL validation failed:', ttlError.message);
+      }
+    }
+    
+    // 🔑 EXPERT RECOMMENDED: MissingVKeyWitnesses事前検出
+    console.log('🔑 Pre-submission key witness validation starting...');
+    
+    try {
+      const txDecoded = cbor.decode(Buffer.from(signedTxHex, 'hex'));
+      let txBodyFromTransaction = null;
+      let witnessSetFromTransaction = null;
+      
+      // Extract transaction body and witness set from complete transaction
+      if (Array.isArray(txDecoded) && txDecoded.length === 4) {
+        // Conway Era complete transaction
+        txBodyFromTransaction = txDecoded[0];
+        witnessSetFromTransaction = txDecoded[1];
+        console.log('✅ Extracted transaction components from Conway Era format');
+      } else {
+        console.warn('⚠️ Unexpected transaction format for key validation');
+      }
+      
+      if (txBodyFromTransaction && witnessSetFromTransaction) {
+        // Extract required key hashes from transaction inputs
+        const requiredKeyHashes = new Set();
+        
+        if (txBodyFromTransaction instanceof Map && txBodyFromTransaction.has(0)) {
+          const inputs = txBodyFromTransaction.get(0);
+          console.log('🔍 Analyzing transaction inputs for required key hashes:', {
+            inputCount: Array.isArray(inputs) ? inputs.length : 0
+          });
+          
+          // 🎯 EXPERT RECOMMENDED: UTxO参照→address→keyhash抽出
+          if (Array.isArray(inputs) && inputs.length > 0) {
+            console.log('🔍 Extracting required key hashes from input UTxOs...');
+            
+            for (let i = 0; i < inputs.length; i++) {
+              const input = inputs[i];
+              
+              if (Array.isArray(input) && input.length >= 2) {
+                const txHashBytes = input[0];
+                const outputIndex = input[1];
+                
+                if (txHashBytes && typeof outputIndex === 'number') {
+                  const txHash = Buffer.from(txHashBytes).toString('hex');
+                  console.log(`🔍 Input ${i}: txHash=${txHash.substring(0, 16)}..., index=${outputIndex}`);
+                  
+                  try {
+                    // Blockfrost API: /txs/{hash}/utxos でUTxO情報を取得
+                    const utxoResponse = await fetch(`https://cardano-mainnet.blockfrost.io/api/v0/txs/${txHash}/utxos`, {
+                      headers: { 'project_id': blockfrostApiKey }
+                    });
+                    
+                    if (utxoResponse.ok) {
+                      const utxoData = await utxoResponse.json();
+                      
+                      if (utxoData.outputs && utxoData.outputs[outputIndex]) {
+                        const output = utxoData.outputs[outputIndex];
+                        const address = output.address;
+                        
+                        console.log(`🏠 Input ${i} address: ${address.substring(0, 20)}...`);
+                        
+                        try {
+                          // CSLでアドレスを解析して支払いkeyhashを抽出
+                          const cslAddress = CSL.Address.from_bech32(address);
+                          const baseAddress = cslAddress.as_base();
+                          
+                          if (baseAddress) {
+                            const paymentCred = baseAddress.payment_cred();
+                            const keyHash = paymentCred.to_keyhash();
+                            
+                            if (keyHash) {
+                              const keyHashHex = Buffer.from(keyHash.to_bytes()).toString('hex');
+                              requiredKeyHashes.add(keyHashHex);
+                              console.log(`✅ Required key hash for input ${i}: ${keyHashHex}`);
+                            } else {
+                              console.warn(`⚠️ Input ${i}: Payment credential is not a key hash (script?)`);
+                            }
+                          } else {
+                            // Enterprise address や Pointer address の処理
+                            const enterpriseAddress = cslAddress.as_enterprise();
+                            if (enterpriseAddress) {
+                              const paymentCred = enterpriseAddress.payment_cred();
+                              const keyHash = paymentCred.to_keyhash();
+                              
+                              if (keyHash) {
+                                const keyHashHex = Buffer.from(keyHash.to_bytes()).toString('hex');
+                                requiredKeyHashes.add(keyHashHex);
+                                console.log(`✅ Required key hash for input ${i} (enterprise): ${keyHashHex}`);
+                              }
+                            } else {
+                              console.warn(`⚠️ Input ${i}: Unsupported address type`);
+                            }
+                          }
+                        } catch (addressParseError) {
+                          console.error(`❌ Failed to parse address for input ${i}:`, addressParseError.message);
+                        }
+                      } else {
+                        console.warn(`⚠️ Input ${i}: Output index ${outputIndex} not found in UTxO data`);
+                      }
+                    } else {
+                      console.warn(`⚠️ Failed to fetch UTxO data for input ${i}: ${utxoResponse.status}`);
+                    }
+                  } catch (utxoFetchError) {
+                    console.error(`❌ UTxO fetch failed for input ${i}:`, utxoFetchError.message);
+                  }
+                } else {
+                  console.warn(`⚠️ Invalid input structure at index ${i}`);
+                }
+              } else {
+                console.warn(`⚠️ Input ${i} is not a valid array structure`);
+              }
+            }
+          }
+        }
+        
+        // Extract provided key hashes from witness set
+        const providedKeyHashes = new Set();
+        
+        if (witnessSetFromTransaction instanceof Map && witnessSetFromTransaction.has(0)) {
+          // 🔧 IMPROVED: より堅牢な完全Tx判定 - witnessSetのキー列ログ
+          const witnessSetKeys = Array.from(witnessSetFromTransaction.keys());
+          console.log('🔍 WitnessSet Map keys:', witnessSetKeys);
+          
+          // Log all witness set components for future script/redeemer support
+          witnessSetKeys.forEach(key => {
+            const keyName = {
+              0: 'VKey witnesses',
+              1: 'Native scripts', 
+              2: 'Bootstrap witnesses',
+              3: 'Plutus v1 scripts',
+              4: 'Plutus data',
+              5: 'Redeemers',
+              6: 'Plutus v2 scripts',
+              7: 'Plutus v3 scripts'
+            }[key] || `Unknown key ${key}`;
+            
+            const value = witnessSetFromTransaction.get(key);
+            console.log(`  [${key}] ${keyName}:`, {
+              isPresent: !!value,
+              type: Array.isArray(value) ? 'array' : typeof value,
+              length: Array.isArray(value) ? value.length : undefined
+            });
+          });
+          
+          const vkeyWitnesses = witnessSetFromTransaction.get(0);
+          
+          if (Array.isArray(vkeyWitnesses)) {
+            console.log('🔑 Analyzing VKey witnesses:', { count: vkeyWitnesses.length });
+            
+            for (let i = 0; i < vkeyWitnesses.length; i++) {
+              const witness = vkeyWitnesses[i];
+              
+              if (Array.isArray(witness) && witness.length >= 2) {
+                const publicKeyBytes = witness[0];
+                const signatureBytes = witness[1];
+                
+                console.log(`🔍 VKey witness ${i}:`, {
+                  pubKeyLength: publicKeyBytes ? publicKeyBytes.length : 0,
+                  sigLength: signatureBytes ? signatureBytes.length : 0,
+                  pubKeyHex: publicKeyBytes ? Buffer.from(publicKeyBytes).toString('hex') : 'missing'
+                });
+                
+                if (publicKeyBytes && publicKeyBytes.length === 32) {
+                  try {
+                    // 🔧 IMPROVED: witness公開鍵バイトの正規化
+                    const normalizedPubKeyBytes = toUint8Array(publicKeyBytes);
+                    
+                    // Use CSL to compute Blake2b-224 key hash from public key
+                    const publicKey = CSL.PublicKey.from_bytes(normalizedPubKeyBytes);
+                    const keyHash = publicKey.hash();
+                    const keyHashHex = Buffer.from(keyHash.to_bytes()).toString('hex');
+                    
+                    providedKeyHashes.add(keyHashHex);
+                    console.log(`✅ Computed key hash for witness ${i}:`, keyHashHex);
+                    
+                    // Log the mapping for debugging
+                    console.log(`🔗 Key mapping ${i}:`, {
+                      publicKey: Buffer.from(publicKeyBytes).toString('hex'),
+                      computedHash: keyHashHex,
+                      signaturePresent: !!signatureBytes,
+                      pubKeyType: typeof publicKeyBytes,
+                      normalizedType: normalizedPubKeyBytes.constructor.name
+                    });
+                    
+                  } catch (cslError) {
+                    console.error(`❌ CSL key hash computation failed for witness ${i}:`, cslError.message);
+                    console.error(`  PublicKey type: ${typeof publicKeyBytes}, length: ${publicKeyBytes ? publicKeyBytes.length : 'null'}`);
+                  }
+                } else {
+                  console.warn(`⚠️ Invalid public key length for witness ${i}:`, publicKeyBytes ? publicKeyBytes.length : 'missing');
+                }
+              } else {
+                console.warn(`⚠️ Invalid witness structure at index ${i}`);
+              }
+            }
+          } else {
+            console.warn('⚠️ VKey witnesses is not an array');
+          }
+        } else {
+          console.warn('⚠️ No VKey witnesses found in witness set');
+        }
+        
+        // 🎯 EXPERT RECOMMENDED: required ↔ provided 照合
+        const missingKeyHashes = new Set([...requiredKeyHashes].filter(hash => !providedKeyHashes.has(hash)));
+        const extraKeyHashes = new Set([...providedKeyHashes].filter(hash => !requiredKeyHashes.has(hash)));
+        
+        console.log('📊 Key witness validation summary:', {
+          requiredKeyHashes: Array.from(requiredKeyHashes),
+          providedKeyHashes: Array.from(providedKeyHashes),
+          missingKeyHashes: Array.from(missingKeyHashes),
+          extraKeyHashes: Array.from(extraKeyHashes),
+          validationResult: missingKeyHashes.size === 0 ? '✅ All required signatures present' : '❌ Missing signatures detected'
+        });
+        
+        // 🚨 事前検証: MissingVKeyWitnesses の確実な検出
+        if (missingKeyHashes.size > 0) {
+          const missingHashList = Array.from(missingKeyHashes);
+          console.error('❌ Pre-validation FAILED: Missing signatures for key hashes:', missingHashList);
+          
+          // Optional: 事前にエラーを投げてBlockfrost送信を防ぐ
+          // throw new Error(`Pre-validation failed: Missing signatures for key hashes: ${missingHashList.join(', ')}`);
+          
+          console.warn('⚠️ Proceeding to Blockfrost submission despite missing signatures (will likely fail)');
+        } else if (requiredKeyHashes.size > 0) {
+          console.log('✅ All required key hashes have corresponding signatures');
+        }
+        
+        // 🧹 IMPROVED: 既知のmissing key hashはログのみ（ハードコード除去）
+        const knownProblematicKeyHash = 'ffe691911fa412e6b2718a290fcc2333d5e12039cd6b0d07f0feed63';
+        if (providedKeyHashes.has(knownProblematicKeyHash)) {
+          console.log('🔍 DEBUG: Previously problematic key hash is now present:', knownProblematicKeyHash);
+        } else if (requiredKeyHashes.has(knownProblematicKeyHash)) {
+          console.log('🔍 DEBUG: Previously problematic key hash is required but missing:', knownProblematicKeyHash);
+        } else {
+          console.log('🔍 DEBUG: Previously problematic key hash is not involved in this transaction:', knownProblematicKeyHash);
+        }
+        
+      } else {
+        console.warn('⚠️ Could not extract transaction components for key validation');
+      }
+      
+    } catch (keyValidationError) {
+      console.warn('⚠️ Key witness pre-validation failed:', keyValidationError.message);
+      // Don't throw - let Blockfrost handle the validation
+    }
+    
+    // Use Blockfrost API instead of cardano-cli for Vercel environment  
     console.log('🚀 Submitting transaction to Cardano network via Blockfrost API...');
     
     let txHash = null;
@@ -565,11 +902,6 @@ export default async function handler(req, res) {
     try {
       // Submit transaction using Blockfrost API
       const blockfrostUrl = 'https://cardano-mainnet.blockfrost.io/api/v0/tx/submit';
-      const blockfrostApiKey = process.env.BLOCKFROST_API_KEY;
-      
-      if (!blockfrostApiKey) {
-        throw new Error('BLOCKFROST_API_KEY environment variable is not set');
-      }
       
       console.log('📡 Sending transaction to Blockfrost:', {
         url: blockfrostUrl,
@@ -603,34 +935,14 @@ export default async function handler(req, res) {
         // Analyze error for missing key witness
         if (errorText.includes('MissingVKeyWitnessesUTXOW')) {
           console.log('🔍 Analyzing missing witness error...');
-          
-          // 🔍 DEBUG: Check actual error text format  
-          console.log('🔍 Error text debugging:', {
-            errorLength: errorText.length,
-            containsUnKeyHash: errorText.includes('unKeyHash'),
-            errorSample: errorText.substring(0, 200) + '...',
-            unKeyHashContext: errorText.match(/unKeyHash[^}]+/)?.[0] || 'not found'
-          });
           const keyHashMatch = errorText.match(/unKeyHash = \"([a-f0-9]+)\"/);
-          // 🎯 FORCE ANALYSIS: Run analysis with known key hash (remove if condition)
-          const knownMissingKeyHash = 'ffe691911fa412e6b2718a290fcc2333d5e12039cd6b0d07f0feed63';
-          let missingKeyHash = knownMissingKeyHash;
-          
           if (keyHashMatch) {
-            missingKeyHash = keyHashMatch[1];
-            console.log('✅ Extracted key hash from error:', missingKeyHash);
-          } else {
-            console.log('⚠️ Using known key hash for analysis:', missingKeyHash);
-          }
-          
-          // ALWAYS execute analysis regardless of regex match
-          {
-
+            const missingKeyHash = keyHashMatch[1];
             console.error(`❌ Missing signature for key hash: ${missingKeyHash}`);
             
             // Analyze transaction to identify the missing key
             try {
-              const analyzeTxBody = signedTxData.metadata?.txBody || txBodyHex;
+              analyzeTxBody = signedTxData.metadata?.txBody || txBodyHex;
               if (analyzeTxBody) {
                 const txBodyDecoded = cbor.decode(Buffer.from(analyzeTxBody, 'hex'));
                 console.log('📋 Transaction analysis:', {
@@ -641,91 +953,14 @@ export default async function handler(req, res) {
                 });
               }
               
-              // 🔍 DEEP WITNESS ANALYSIS
-              const analyzeWitnessSet = witnessSetHex || signedTxData.signedTx;
+              // Analyze witness set
+              analyzeWitnessSet = witnessSetHex || signedTxData.signedTx;
               if (analyzeWitnessSet && typeof analyzeWitnessSet === 'string') {
                 const witnessSetDecoded = cbor.decode(Buffer.from(analyzeWitnessSet, 'hex'));
-                console.log('🔑 Deep witness set analysis:', {
+                console.log('🔑 Witness set analysis:', {
                   hasVkeys: !!witnessSetDecoded[0],
-                  vkeyCount: witnessSetDecoded[0] ? witnessSetDecoded[0].length : 0,
-                  isMap: witnessSetDecoded instanceof Map,
-                  mapKeys: witnessSetDecoded instanceof Map ? Array.from(witnessSetDecoded.keys()) : 'not a map'
+                  vkeyCount: witnessSetDecoded[0] ? witnessSetDecoded[0].length : 0
                 });
-                
-                // Detailed VKey witness analysis
-                let vkeyWitnesses = null;
-                if (witnessSetDecoded instanceof Map && witnessSetDecoded.has(0)) {
-                  vkeyWitnesses = witnessSetDecoded.get(0);
-                } else if (witnessSetDecoded[0]) {
-                  vkeyWitnesses = witnessSetDecoded[0];
-                }
-                
-                if (vkeyWitnesses && Array.isArray(vkeyWitnesses)) {
-                  console.log('🔍 VKey Witnesses detailed analysis:');
-                  vkeyWitnesses.forEach((witness, idx) => {
-                    if (Array.isArray(witness) && witness.length >= 2) {
-                      const pubKeyBytes = witness[0];
-                      const signatureBytes = witness[1];
-                      
-                      console.log(`  Witness ${idx}:`, {
-                        pubKeyLength: pubKeyBytes ? pubKeyBytes.length : 'missing',
-                        signatureLength: signatureBytes ? signatureBytes.length : 'missing',
-                        pubKeyHex: pubKeyBytes ? pubKeyBytes.toString('hex').substring(0, 16) + '...' : 'missing'
-                      });
-                      
-                      // Compute Blake2b-224 key hash from public key using CSL
-                      if (pubKeyBytes && pubKeyBytes.length === 32) {
-                        try {
-                          // 🎯 EXPERT RECOMMENDED: Use CSL library for accurate key hash computation
-                          const pubKeyCSL = CSL.PublicKey.from_bytes(pubKeyBytes);
-                          const keyHashCSL = pubKeyCSL.hash();
-                          const keyHash = Buffer.from(keyHashCSL.to_bytes()).toString('hex');
-                          
-                          console.log('🔍 CSL Key Hash Computation:', {
-                            pubKeyLength: pubKeyBytes.length,
-                            pubKeyHex: pubKeyBytes.toString('hex').substring(0, 16) + '...',
-                            computedKeyHash: keyHash,
-                            missingKeyHash: missingKeyHash,
-                            matches: keyHash === missingKeyHash
-                          });
-                          
-                          if (keyHash === missingKeyHash) {
-                            console.log('🎯 FOUND: This witness matches the missing key hash!');
-                            console.log('🔧 Issue: Signature is present but not being recognized by Blockfrost');
-                            console.log('📋 Potential causes:');
-                            console.log('  - TTL modification after signing (FIXED)');
-                            console.log('  - Transaction body hash mismatch');
-                            console.log('  - Conway Era signature format requirements');
-                          } else {
-                            console.log('❌ Key hash mismatch - this witness is for a different key');
-                          }
-                        } catch (hashError) {
-                          console.error('❌ CSL key hash computation failed:', hashError.message);
-                          
-                          // Fallback to Node.js crypto if CSL fails
-                          if (!CSL) {
-                            try {
-                              const crypto = require('crypto');
-                              const blake2bHash = crypto.createHash('blake2b256').update(pubKeyBytes).digest();
-                              const keyHash = blake2bHash.slice(0, 28).toString('hex');
-                              console.log('🔄 Fallback key hash (Node.js crypto):', keyHash);
-                              console.log('⚠️ Using fallback - may not match CSL computation exactly');
-                            } catch (cryptoError) {
-                              console.error('❌ Fallback key hash computation also failed:', cryptoError.message);
-                            }
-                          }
-                        }
-                      }
-                    }
-                  });
-                  
-                  console.log('🎯 Signature Analysis Summary:');
-                  console.log(`  Required Key Hash: ${missingKeyHash}`);
-                  console.log(`  Provided Witnesses: ${vkeyWitnesses.length}`);
-                  console.log('  Issue Analysis: Check if signature corresponds to correct key or if CIP-30 partialSign is needed');
-                } else {
-                  console.log('❌ No VKey witnesses found or invalid structure');
-                }
               }
             } catch (debugError) {
               console.error('❌ Debug analysis failed:', debugError.message);
@@ -796,12 +1031,25 @@ export default async function handler(req, res) {
     } catch (submitError) {
       console.error('💥 Transaction submission failed:', submitError);
       
-      // エラー情報をRedisに保存
+      // 📊 IMPROVED: エラー情報を詳細ログ付きでRedisに保存
       const errorSignedTxData = {
         ...signedTxData,
-        status: 'submit_failed',
+        status: 'submit_failed',  
         submitError: submitError.message,
-        failedAt: new Date().toISOString()
+        failedAt: new Date().toISOString(),
+        // 🔍 事後解析用の追加データ
+        debugInfo: {
+          latestSlotAtSubmit: currentSlot || 'unknown',
+          decodedTtl: ttlValue || 'unknown', 
+          ttlMargin: ttlValue && currentSlot ? (ttlValue - currentSlot) : 'unknown',
+          providedKeyHashes: Array.from(providedKeyHashes || []),
+          requiredKeyHashes: Array.from(requiredKeyHashes || []),
+          missingKeyHashes: Array.from(missingKeyHashes || []),
+          txCborPrefix: signedTxHex ? signedTxHex.substring(0, 16) : 'unknown',
+          txCborLength: signedTxHex ? signedTxHex.length : 0,
+          isCompleteTransaction: isCompleteTransaction || false,
+          witnessSetKeys: witnessSetFromTransaction instanceof Map ? Array.from(witnessSetFromTransaction.keys()) : []
+        }
       };
 
       await redisClient.set(signedTxKey, JSON.stringify(errorSignedTxData));
