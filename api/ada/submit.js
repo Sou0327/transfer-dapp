@@ -248,206 +248,183 @@ export default async function handler(req, res) {
             witnessSetLength: witnessSetHex.length
           });
           
-          // Decode CBOR components
+          // 🔍 CRITICAL FIX: metadata.txBodyが完全トランザクションかtx_bodyかを正しく判定
           const txBodyBuffer = Buffer.from(txBodyHex, 'hex');
-          const witnessSetBuffer = Buffer.from(witnessSetHex, 'hex');
+          const decodedMeta = cbor.decode(txBodyBuffer);
           
-          const txBody = cbor.decode(txBodyBuffer);
-          const witnessSet = cbor.decode(witnessSetBuffer);
-          
-          console.log('✅ Successfully decoded CBOR components');
-          console.log('🔍 TxBody structure:', {
-            isArray: Array.isArray(txBody),
-            length: Array.isArray(txBody) ? txBody.length : 'not array',
-            firstElement: Array.isArray(txBody) ? typeof txBody[0] : 'not array'
-          });
-          console.log('🔍 WitnessSet structure:', {
-            isMap: typeof witnessSet === 'object' && !Array.isArray(witnessSet),
-            keys: typeof witnessSet === 'object' ? Object.keys(witnessSet) : 'not object'
+          console.log('🔍 Decoded metadata.txBody analysis:', {
+            isArray: Array.isArray(decodedMeta),
+            isMap: decodedMeta instanceof Map,
+            length: Array.isArray(decodedMeta) ? decodedMeta.length : undefined,
+            mapKeys: decodedMeta instanceof Map ? Array.from(decodedMeta.keys()) : undefined,
+            element2Type: Array.isArray(decodedMeta) && decodedMeta.length > 2 ? typeof decodedMeta[2] : undefined,
+            element2Value: Array.isArray(decodedMeta) && decodedMeta.length > 2 ? decodedMeta[2] : undefined
           });
           
-          // Detailed witnessSet analysis  
-          if (witnessSet && typeof witnessSet === 'object') {
-            console.log('🔑 WitnessSet detailed analysis:');
-            if (Array.isArray(witnessSet)) {
-              console.log('  WitnessSet is array format');
-            } else if (witnessSet instanceof Map) {
-              console.log('  WitnessSet is a Map with keys:', Array.from(witnessSet.keys()));
-            } else {
-              console.log('  WitnessSet is object with keys:', Object.keys(witnessSet));
-              // Check for numbered keys (0, 1, 2, etc.)
-              if (witnessSet[0] !== undefined) {
-                console.log('  Has key 0 (vkey witnesses):', {
-                  type: typeof witnessSet[0],
-                  isArray: Array.isArray(witnessSet[0]),
-                  length: Array.isArray(witnessSet[0]) ? witnessSet[0].length : 'not array'
-                });
-                if (Array.isArray(witnessSet[0])) {
-                  witnessSet[0].forEach((witness, idx) => {
-                    console.log(`    VKey witness ${idx}:`, {
-                      hasVkey: !!witness[0],
-                      hasSig: !!witness[1],
-                      vkeyLength: witness[0] ? witness[0].length : 0,
-                      sigLength: witness[1] ? witness[1].length : 0
-                    });
-                  });
-                }
-              }
-            }
+          // 🎯 EXPERT RECOMMENDED: 完全トランザクションとtx_bodyを正しく分別
+          let txBody, witnessSet;
+          let isMetaCompleteTransaction = false;
+          
+          // 🔍 DEBUG: 判定条件を詳細チェック
+          console.log('🔍 Judgment conditions check:', {
+            isMap: decodedMeta instanceof Map,
+            isArray: Array.isArray(decodedMeta),
+            arrayLength: Array.isArray(decodedMeta) ? decodedMeta.length : 'not array',
+            element2Type: Array.isArray(decodedMeta) && decodedMeta.length > 2 ? typeof decodedMeta[2] : 'not accessible',
+            element2Boolean: Array.isArray(decodedMeta) && decodedMeta.length > 2 ? typeof decodedMeta[2] === 'boolean' : false,
+            completeCondition: Array.isArray(decodedMeta) && decodedMeta.length === 4 && typeof decodedMeta[2] === 'boolean'
+          });
+          
+          if (decodedMeta instanceof Map) {
+            // Case 1: metadata.txBody is actually a transaction body (Map with integer keys)
+            console.log('✅ metadata.txBody is a proper transaction body (Map)');
+            txBody = decodedMeta;
+            
+            // Decode witness set separately
+            const witnessSetBuffer = Buffer.from(witnessSetHex, 'hex');
+            witnessSet = cbor.decode(witnessSetBuffer);
+            
+          } else if (Array.isArray(decodedMeta) && decodedMeta.length === 4 && typeof decodedMeta[2] === 'boolean') {
+            // Case 2: metadata.txBody is actually a complete transaction (4-element array)
+            console.log('🎯 BREAKTHROUGH: metadata.txBody is actually a COMPLETE TRANSACTION (4-element array)!');
+            console.log('  Element [0] (tx_body):', typeof decodedMeta[0], decodedMeta[0] instanceof Map ? 'Map' : 'not Map');
+            console.log('  Element [1] (witness_set):', typeof decodedMeta[1], decodedMeta[1] instanceof Map ? 'Map' : 'not Map'); 
+            console.log('  Element [2] (is_valid):', typeof decodedMeta[2], decodedMeta[2]);
+            console.log('  Element [3] (auxiliary_data):', typeof decodedMeta[3], decodedMeta[3]);
+            
+            isMetaCompleteTransaction = true;
+            
+            // Extract components from complete transaction
+            txBody = decodedMeta[0];
+            witnessSet = decodedMeta[1];
+            
+            console.log('✅ Using complete transaction directly - no reconstruction needed');
+            signedTxHex = txBodyHex;  // Use the complete transaction as-is
+            
+          } else {
+            throw new Error(`Invalid metadata.txBody structure: ${Array.isArray(decodedMeta) ? 'array length ' + decodedMeta.length : typeof decodedMeta}`);
           }
+          
+          console.log('✅ New logic: CBOR components processed');
+          console.log('🔍 Final TxBody structure (new logic):', {
+            isMap: txBody instanceof Map,
+            mapKeys: txBody instanceof Map ? Array.from(txBody.keys()) : 'not a map',
+            source: isMetaCompleteTransaction ? 'extracted from complete tx' : 'separate decode'
+          });
+          console.log('🔍 Final WitnessSet structure (new logic):', {
+            isMap: witnessSet instanceof Map,
+            mapKeys: witnessSet instanceof Map ? Array.from(witnessSet.keys()) : 'not a map',
+            source: isMetaCompleteTransaction ? 'extracted from complete tx' : 'separate decode'
+          });
           
           // Check if txBody is already a complete transaction (4-element array)
-          // Additional debugging for txBody
-          if (Array.isArray(txBody)) {
-            console.log('📋 TxBody elements:');
-            txBody.forEach((element, index) => {
-              console.log(`  [${index}]:`, {
-                type: typeof element,
-                isArray: Array.isArray(element),
-                length: Array.isArray(element) ? element.length : undefined,
-                value: index === 3 ? element : undefined // Show TTL value (index 3)
-              });
-            });
-          }
+          // 🔍 EXPERT RECOMMENDED: 最終判定ロジック統一
+          isCompleteTransaction = isMetaCompleteTransaction;
           
-          // 🔒 EXPERT RECOMMENDED: 厳密な完全トランザクション判定
-          isCompleteTransaction = (
-            Array.isArray(txBody) &&
-            txBody.length === 4 &&
-            // element[0] must be transaction body (Map with integer keys)
-            txBody[0] instanceof Map &&
-            // element[1] must be witness set (Map with key 0 = VKeyWitnesses array)
-            txBody[1] instanceof Map && 
-            // element[2] must be isValid flag (boolean)
-            typeof txBody[2] === 'boolean' &&
-            // element[3] must be auxiliary data (null or Map)
-            (txBody[3] === null || txBody[3] instanceof Map)
-          );
-          
-          // 🔍 EXPERT RECOMMENDED: 追加厳密検証
-          if (isCompleteTransaction) {
-            // Verify transaction body has expected integer keys (0,1,2,3)
-            const txBodyKeys = Array.from(txBody[0].keys());
-            const hasRequiredKeys = txBodyKeys.includes(0) && txBodyKeys.includes(1) && 
-                                   txBodyKeys.includes(2) && txBodyKeys.includes(3);
-            
-            // Verify witness set structure
-            const witnessSetHasVKeys = txBody[1].has(0) && Array.isArray(txBody[1].get(0));
-            
-            if (!hasRequiredKeys || !witnessSetHasVKeys) {
-              console.log('⚠️ EXPERT VALIDATION FAILED: Structure check failed');
-              console.log('  TxBody keys:', txBodyKeys);
-              console.log('  Has required keys (0,1,2,3):', hasRequiredKeys);
-              console.log('  WitnessSet has VKeys:', witnessSetHasVKeys);
-              isCompleteTransaction = false; // 誤判定防止
-            }
-          }
-          
-          console.log('🔍 Complete Transaction Detection:', {
+          console.log('🔍 Complete Transaction Detection (FINAL):', {
             isCompleteTransaction: isCompleteTransaction,
-            evidence: typeof txBody[2] === 'boolean' ? 'Element[2] is boolean (isValid flag)' : 'Element[2] is not boolean',
-            decision: isCompleteTransaction ? 'USE txBodyHex DIRECTLY' : 'RECONSTRUCT transaction'
+            source: isMetaCompleteTransaction ? 'metadata.txBody analysis' : 'components analysis',
+            decision: isCompleteTransaction ? 'USE COMPLETE TX DIRECTLY' : 'RECONSTRUCT from components'
           });
           
           if (isCompleteTransaction) {
-            console.log('🎯 BREAKTHROUGH: txBodyHex is already a complete Conway Era transaction!');
+            console.log('🎯 VERIFIED: Using complete transaction directly (no reconstruction needed)');
+            console.log('✅ Complete transaction ready for submission');
             
-            // 🎯 EXPERT RECOMMENDED: Use complete transaction as-is (TTL finalized before signing)
-            console.log('✅ Using complete transaction directly (TTL finalized before signing)');
-            signedTxHex = txBodyHex;  // Use the complete transaction as-is
           } else {
             console.log('🔧 Constructing complete transaction from components...');
             
-            // Fix TTL in transaction body if needed
+            // 🔧 CRITICAL FIX: tx_body構造の型バリデーション強化
             let fixedTxBody = txBody;
             
-            // 🎯 EXPERT RECOMMENDED: Use transaction body as-is (TTL finalized before signing)
-            console.log('✅ Using transaction body as-is (TTL finalized before signing)');
-            console.log('📋 Original transaction body TTL:', Array.isArray(txBody) ? txBody[3] : 'not array');
-              
-              if (Array.isArray(txBody)) {
-                console.log('🔧 Converting Transaction Body from array to CBOR map format (preserving TTL)...');
-                console.log('📋 Original array elements:', {
-                  inputs: txBody[0] ? 'present' : 'missing',
-                  outputs: txBody[1] ? 'present' : 'missing', 
-                  fee: txBody[2] ? 'present' : 'missing',
-                  ttl: txBody[3] ? 'present' : 'missing'
-                });
-                
-                // Create CBOR Map: {0: inputs, 1: outputs, 2: fee, 3: ttl} - preserve original TTL
-                fixedTxBody = new Map();
-                fixedTxBody.set(0, txBody[0]); // inputs
-                fixedTxBody.set(1, txBody[1]); // outputs
-                fixedTxBody.set(2, txBody[2]); // fee
-                fixedTxBody.set(3, txBody[3]); // preserve original TTL
-                
-                console.log('✅ Transaction Body converted to CBOR Map format');
-                console.log('🗂️ Map keys:', Array.from(fixedTxBody.keys()));
-                
-                // 🔍 Detailed Transaction Body Map validation
-                console.log('🔍 Transaction Body Map contents validation:');
-                console.log('  [0] inputs:', {
-                  isPresent: !!fixedTxBody.get(0),
-                  type: Array.isArray(fixedTxBody.get(0)) ? 'array' : typeof fixedTxBody.get(0),
-                  length: Array.isArray(fixedTxBody.get(0)) ? fixedTxBody.get(0).length : 'not array',
-                  sample: Array.isArray(fixedTxBody.get(0)) && fixedTxBody.get(0).length > 0 ? 'has items' : 'empty or invalid'
-                });
-                console.log('  [1] outputs:', {
-                  isPresent: !!fixedTxBody.get(1),
-                  type: Array.isArray(fixedTxBody.get(1)) ? 'array' : typeof fixedTxBody.get(1),
-                  length: Array.isArray(fixedTxBody.get(1)) ? fixedTxBody.get(1).length : 'not array'
-                });
-                console.log('  [2] fee:', {
-                  isPresent: fixedTxBody.get(2) !== undefined,
-                  type: typeof fixedTxBody.get(2),
-                  value: fixedTxBody.get(2)
-                });
-                console.log('  [3] ttl:', {
-                  isPresent: fixedTxBody.get(3) !== undefined,
-                  type: typeof fixedTxBody.get(3), 
-                  value: fixedTxBody.get(3)
-                });
-                
-              } else if (typeof txBody === 'object' && txBody !== null) {
-                // Already in map format, preserve as-is (including TTL)
-                if (txBody instanceof Map) {
-                  fixedTxBody = new Map(txBody);
-                  console.log('✅ Using existing CBOR Map (preserving TTL)');
-                } else {
-                  // Plain object - convert to Map for CBOR encoding (preserve TTL)
-                  fixedTxBody = new Map();
-                  Object.keys(txBody).forEach(key => {
-                    const numKey = parseInt(key, 10);
-                    if (!isNaN(numKey)) {
-                      fixedTxBody.set(numKey, txBody[key]);
-                    }
-                  });
-                  console.log('✅ Object converted to CBOR Map (preserving TTL)');
-                }
-              } else {
-                throw new Error(`Invalid Transaction Body type: ${typeof txBody}`);
-              }
-              
-
-            // 🏗️ Construct Conway Era transaction: [transaction_body, transaction_witness_set, is_valid, auxiliary_data]
-            // Based on research: Conway Era MUST have exactly 4 elements
-            
-            // Ensure witness set is properly structured as CBOR map
-            let processedWitnessSet = witnessSet;
-            if (witnessSet && typeof witnessSet === 'object') {
-              // Convert plain object to Map if needed for CBOR encoding
-              if (!(witnessSet instanceof Map) && !Array.isArray(witnessSet)) {
-                console.log('🔧 Converting witness set object to Map for CBOR compatibility');
-                processedWitnessSet = new Map();
-                Object.keys(witnessSet).forEach(key => {
-                  const numKey = parseInt(key, 10);
-                  if (!isNaN(numKey)) {
-                    processedWitnessSet.set(numKey, witnessSet[key]);
-                  }
-                });
-              }
-              console.log('✅ Witness set processed for Conway Era format');
+            // 🎯 EXPERT RECOMMENDED: tx_bodyは必ずMapでなければならない
+            if (!(txBody instanceof Map)) {
+              console.error('❌ CRITICAL ERROR: tx_body is not a Map!', {
+                actualType: typeof txBody,
+                isArray: Array.isArray(txBody),
+                constructor: txBody ? txBody.constructor.name : 'null'
+              });
+              throw new Error('Invalid transaction body: must be a Map with integer keys');
             }
+            
+            // 🔍 tx_body Map構造の厳密バリデーション
+            console.log('🔍 Validating tx_body Map structure:');
+            const requiredKeys = [0, 1, 2]; // inputs, outputs, fee (TTL is optional in Conway)
+            const txBodyKeys = Array.from(txBody.keys());
+            
+            for (const key of requiredKeys) {
+              const value = txBody.get(key);
+              const keyName = {0: 'inputs', 1: 'outputs', 2: 'fee'}[key];
+              
+              console.log(`  [${key}] ${keyName}:`, {
+                present: txBody.has(key),
+                type: value ? (Array.isArray(value) ? 'array' : typeof value) : 'missing',
+                length: Array.isArray(value) ? value.length : undefined,
+                isValid: key === 2 ? typeof value === 'number' : Array.isArray(value)
+              });
+              
+              // 型チェック
+              if (key <= 1 && !Array.isArray(value)) {
+                throw new Error(`Invalid tx_body: key ${key} (${keyName}) must be an array, got ${typeof value}`);
+              }
+              if (key === 2 && typeof value !== 'number') {
+                throw new Error(`Invalid tx_body: key 2 (fee) must be a number, got ${typeof value}`);
+              }
+            }
+            
+            // TTL検証（オプショナル）
+            if (txBody.has(3)) {
+              const ttlValue = txBody.get(3);
+              console.log('  [3] ttl:', {
+                present: true,
+                type: typeof ttlValue,
+                value: ttlValue,
+                isValid: typeof ttlValue === 'number'
+              });
+              
+              if (typeof ttlValue !== 'number') {
+                throw new Error(`Invalid tx_body: key 3 (ttl) must be a number, got ${typeof ttlValue}`);
+              }
+            }
+            
+            console.log('✅ tx_body structure validation passed');
+            fixedTxBody = new Map(txBody); // 安全なコピー
+            
+            // 🔍 witness_set構造の厳密バリデーション
+            let processedWitnessSet = witnessSet;
+            
+            if (!(witnessSet instanceof Map)) {
+              console.error('❌ CRITICAL ERROR: witness_set is not a Map!', {
+                actualType: typeof witnessSet,
+                isArray: Array.isArray(witnessSet),
+                constructor: witnessSet ? witnessSet.constructor.name : 'null'
+              });
+              throw new Error('Invalid witness set: must be a Map with integer keys');
+            }
+            
+            // witness_set Map構造の検証
+            console.log('🔍 Validating witness_set Map structure:');
+            const witnessKeys = Array.from(witnessSet.keys());
+            console.log('  Witness set keys:', witnessKeys);
+            
+            if (witnessSet.has(0)) {
+              const vkeyWitnesses = witnessSet.get(0);
+              console.log('  [0] vkey_witnesses:', {
+                present: true,
+                type: Array.isArray(vkeyWitnesses) ? 'array' : typeof vkeyWitnesses,
+                length: Array.isArray(vkeyWitnesses) ? vkeyWitnesses.length : undefined,
+                isValid: Array.isArray(vkeyWitnesses)
+              });
+              
+              if (!Array.isArray(vkeyWitnesses)) {
+                throw new Error('Invalid witness_set: key 0 (vkey_witnesses) must be an array');
+              }
+            } else {
+              console.warn('⚠️ No VKey witnesses found in witness set');
+            }
+            
+            console.log('✅ witness_set structure validation passed');
+            processedWitnessSet = new Map(witnessSet); // 安全なコピー
             
             // Construct the complete Conway Era transaction
             const completeTx = [
@@ -520,13 +497,95 @@ export default async function handler(req, res) {
                 expectedPrefix: '84A4' // CBOR: 84=4-element array, A4=4-element map (txBody)
               });
               
-              // Verify CBOR starts with correct Conway Era structure
+              // 📊 EXPERT RECOMMENDED: 送信前自己検証強化（破損検知）
+              console.log('🔍 Performing comprehensive self-validation before submission...');
+              
+              try {
+                const selfValidationTx = cbor.decode(Buffer.from(signedTxHex, 'hex'));
+                
+                // 最上位が配列4要素
+                if (!Array.isArray(selfValidationTx) || selfValidationTx.length !== 4) {
+                  throw new Error(`Self-validation FAILED: Expected 4-element array, got ${Array.isArray(selfValidationTx) ? selfValidationTx.length + '-element array' : typeof selfValidationTx}`);
+                }
+                
+                // [0]がMap、[1]がMap、[2]がboolean、[3]がnult or Map
+                const txBodySelf = selfValidationTx[0];
+                const witnessSetSelf = selfValidationTx[1]; 
+                const isValidSelf = selfValidationTx[2];
+                const auxDataSelf = selfValidationTx[3];
+                
+                if (!(txBodySelf instanceof Map)) {
+                  throw new Error(`Self-validation FAILED: tx_body must be Map, got ${typeof txBodySelf}`);
+                }
+                if (!(witnessSetSelf instanceof Map)) {
+                  throw new Error(`Self-validation FAILED: witness_set must be Map, got ${typeof witnessSetSelf}`);
+                }
+                if (typeof isValidSelf !== 'boolean') {
+                  throw new Error(`Self-validation FAILED: is_valid must be boolean, got ${typeof isValidSelf}`);
+                }
+                if (auxDataSelf !== null && !(auxDataSelf instanceof Map)) {
+                  throw new Error(`Self-validation FAILED: auxiliary_data must be null or Map, got ${typeof auxDataSelf}`);
+                }
+                
+                // tx_body Map内部構造検証
+                if (!txBodySelf.has(0) || !Array.isArray(txBodySelf.get(0))) {
+                  throw new Error('Self-validation FAILED: tx_body[0] (inputs) must be array');
+                }
+                if (!txBodySelf.has(1) || !Array.isArray(txBodySelf.get(1))) {
+                  throw new Error('Self-validation FAILED: tx_body[1] (outputs) must be array');
+                }
+                if (!txBodySelf.has(2) || typeof txBodySelf.get(2) !== 'number') {
+                  throw new Error('Self-validation FAILED: tx_body[2] (fee) must be number');
+                }
+                
+                // witness_set VKey検証
+                if (witnessSetSelf.has(0)) {
+                  const vkeyWitnessesSelf = witnessSetSelf.get(0);
+                  if (!Array.isArray(vkeyWitnessesSelf)) {
+                    throw new Error('Self-validation FAILED: witness_set[0] (vkey_witnesses) must be array');
+                  }
+                  
+                  // 各witnessが [vkey 32B, sig 64B] 構造かチェック
+                  for (let i = 0; i < vkeyWitnessesSelf.length; i++) {
+                    const witness = vkeyWitnessesSelf[i];
+                    if (!Array.isArray(witness) || witness.length !== 2) {
+                      throw new Error(`Self-validation FAILED: witness[${i}] must be 2-element array [vkey, sig]`);
+                    }
+                    if (!witness[0] || witness[0].length !== 32) {
+                      throw new Error(`Self-validation FAILED: witness[${i}] vkey must be 32 bytes`);
+                    }
+                    if (!witness[1] || witness[1].length !== 64) {
+                      throw new Error(`Self-validation FAILED: witness[${i}] signature must be 64 bytes`);
+                    }
+                  }
+                }
+                
+                console.log('✅ Self-validation PASSED: Transaction structure is valid');
+                console.log('📊 Self-validation results:', {
+                  topLevel: '4-element array ✓',
+                  txBodyType: 'Map ✓',
+                  witnessSetType: 'Map ✓',
+                  isValidType: 'boolean ✓',
+                  auxDataType: auxDataSelf === null ? 'null ✓' : 'Map ✓',
+                  inputsCount: txBodySelf.get(0).length,
+                  outputsCount: txBodySelf.get(1).length,
+                  feeValue: txBodySelf.get(2),
+                  vkeyWitnessCount: witnessSetSelf.has(0) ? witnessSetSelf.get(0).length : 0
+                });
+                
+              } catch (selfValidationError) {
+                console.error('❌ SELF-VALIDATION FAILED:', selfValidationError.message);
+                console.error('🚫 Aborting Blockfrost submission to prevent 400 error');
+                throw new Error(`Pre-submission validation failed: ${selfValidationError.message}`);
+              }
+              
+              // CBOR prefix verification
               if (!signedTxHex.startsWith('84')) {
-                console.warn('⚠️ CBOR does not start with 84 (4-element array), got:', signedTxHex.substring(0, 2));
+                throw new Error(`Invalid CBOR: Expected 4-element array (84), got: ${signedTxHex.substring(0, 2)}`);
               }
               if (signedTxHex.length >= 4 && !signedTxHex.startsWith('84A4')) {
-                console.warn('⚠️ CBOR does not start with 84A4 (4-array + 4-map), got:', signedTxHex.substring(0, 4));
-              } else if (signedTxHex.startsWith('84A4')) {
+                console.warn('⚠️ CBOR prefix unexpected:', signedTxHex.substring(0, 4), '(expected 84A4)');
+              } else {
                 console.log('✅ Perfect! CBOR starts with 84A4 (Conway Era format)');
               }
               
