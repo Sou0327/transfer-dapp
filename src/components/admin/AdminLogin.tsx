@@ -90,7 +90,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
     } catch (error) {
       console.error('Login submission error:', error);
     }
-  }, [formData, validateForm, onLogin]);
+  }, [formData, validateForm, onLogin, formErrors]);
 
 
 

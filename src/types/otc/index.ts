@@ -74,6 +74,10 @@ export interface OTCRequest {
   created_at: string;
   updated_at: string;
   
+  // Archive functionality
+  archived?: boolean;
+  archived_at?: string;
+  
   // Additional properties for compatibility
   ttl_absolute?: Date | string; // Can be Date or ISO string
   destination_address?: string; // alias for recipient
@@ -268,6 +272,28 @@ export interface AdminSession {
   createdAt?: string;
   expiresAt?: string;
   isActive?: boolean;
+}
+
+// Session Management Types
+export interface SocketSession {
+  sessionId: string;
+  isAdmin: boolean;
+  connectedAt: string;
+  subscribedRequests: string[];
+  subscribedAdmins: string[];
+  connected: boolean;
+  lastActivity?: string;
+}
+
+export interface SessionListResponse {
+  sessions: SocketSession[];
+  totalCount: number;
+  adminCount: number;
+  publicCount: number;
+}
+
+export interface ArchiveRequestBody {
+  archived?: boolean;
 }
 
 // WebSocket Event Types

@@ -22,12 +22,16 @@ fastify.log.info(`🔍 requestsList check for ${id}:`, {
 });
 
 // レスポンス部分も修正
+/*
 return {
   request: requestData || {}  // 元のコード
 };
+*/
 
 // これを以下に変更
+/* 
 console.log('🚨 RESPONSE DEBUG: About to return:', JSON.stringify(requestData, null, 2));
 return {
   request: requestData
 };
+*/

@@ -4,6 +4,19 @@
  */
 import { createHash, randomBytes, createCipheriv, createDecipheriv, pbkdf2Sync } from 'crypto';
 
+// AES-GCMモード用の拡張型定義
+interface GCMCipher {
+  update(data: string, inputEncoding: BufferEncoding, outputEncoding: BufferEncoding): string;
+  final(outputEncoding: BufferEncoding): string;
+  getAuthTag(): Buffer;
+}
+
+interface GCMDecipher {
+  update(data: string, inputEncoding: BufferEncoding, outputEncoding: BufferEncoding): string;
+  final(outputEncoding: BufferEncoding): string;
+  setAuthTag(buffer: Buffer): this;
+}
+
 interface EncryptedData {
   encrypted: string;
   iv: string;
@@ -75,7 +88,7 @@ export function encryptSensitiveData(
     
     if (opts.algorithm === 'aes-256-gcm') {
       // GCMモードで認証付き暗号化
-      const cipher = createCipheriv(opts.algorithm, key, iv) as any;
+      const cipher = createCipheriv(opts.algorithm, key, iv) as GCMCipher;
       encrypted = cipher.update(data, 'utf8', 'hex');
       encrypted += cipher.final('hex');
       authTag = cipher.getAuthTag().toString('hex');
@@ -130,7 +143,7 @@ export function decryptSensitiveData(
     
     if (algorithm === 'aes-256-gcm' && authTag) {
       // GCMモードで認証タグを検証
-      const decipher = createDecipheriv(algorithm, key, ivBuffer) as any;
+      const decipher = createDecipheriv(algorithm, key, ivBuffer) as GCMDecipher;
       decipher.setAuthTag(Buffer.from(authTag, 'hex'));
       decrypted = decipher.update(encrypted, 'hex', 'utf8');
       decrypted += decipher.final('utf8');

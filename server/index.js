@@ -97,6 +97,254 @@ async function registerRoutes() {
     };
   });
 
+  // Dashboard statistics API
+  fastify.get('/api/dashboard/stats', async (request, reply) => {
+    try {
+      // Get today's date range
+      const today = new Date();
+      const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+
+      // Get session statistics from Socket.IO
+      const activeConnections = connectedClients.size;
+      const activeRequestSessions = requestSubscriptions.size;
+      const activeAdminSessions = adminSubscriptions.size;
+      const totalSocketConnections = io.engine.clientsCount;
+
+      // Try to get statistics from database
+      let stats = {
+        todayRequests: 0,
+        pendingRequests: 0,
+        totalRequests: 0,
+        activeConnections: activeConnections,
+        activeRequestSessions: activeRequestSessions,
+        activeAdminSessions: activeAdminSessions,
+        totalSocketConnections: totalSocketConnections,
+        systemStatus: 'online',
+        lastUpdate: new Date().toISOString()
+      };
+
+      try {
+        const { RequestDAO } = await import('../src/lib/database.ts');
+        
+        // Get today's requests count
+        const todayRequestsCount = await RequestDAO.countByDateRange?.(todayStart, todayEnd) || 0;
+        
+        // Get pending requests count
+        const pendingCount = await RequestDAO.countByStatus?.('REQUESTED') || 0;
+        
+        // Get total requests count  
+        const totalCount = await RequestDAO.countAll?.() || 0;
+
+        stats = {
+          todayRequests: todayRequestsCount,
+          pendingRequests: pendingCount,
+          totalRequests: totalCount,
+          activeConnections: activeConnections,
+          activeRequestSessions: activeRequestSessions,
+          activeAdminSessions: activeAdminSessions,
+          totalSocketConnections: totalSocketConnections,
+          systemStatus: 'online',
+          lastUpdate: new Date().toISOString()
+        };
+
+      } catch (dbError) {
+        // If database is not available, return mock data for development
+        fastify.log.warn('Database not available for dashboard stats, using mock data:', dbError.message);
+        
+        // Use in-memory request storage as fallback
+        const requests = Array.from(requestStorage.values());
+        const todayRequests = requests.filter(r => {
+          const createdAt = new Date(r.created_at);
+          return createdAt >= todayStart && createdAt < todayEnd;
+        });
+
+        stats = {
+          todayRequests: todayRequests.length,
+          pendingRequests: requests.filter(r => r.status === 'REQUESTED').length,
+          totalRequests: requests.length,
+          activeConnections: activeConnections,
+          activeRequestSessions: activeRequestSessions,
+          activeAdminSessions: activeAdminSessions,
+          totalSocketConnections: totalSocketConnections,
+          systemStatus: 'online',
+          lastUpdate: new Date().toISOString()
+        };
+      }
+
+      return stats;
+
+    } catch (error) {
+      fastify.log.error('Failed to get dashboard stats:', error);
+      return reply.code(500).send({
+        error: 'Failed to get dashboard statistics'
+      });
+    }
+  });
+
+  // Session management API
+  fastify.delete('/api/sessions/:sessionId', async (request, reply) => {
+    try {
+      const { sessionId } = request.params;
+      
+      // Find and disconnect the session
+      const client = connectedClients.get(sessionId);
+      if (client) {
+        // Force disconnect the socket
+        client.socket.disconnect(true);
+        
+        // Clean up subscriptions
+        client.subscribedRequests.forEach(requestId => {
+          requestSubscriptions.get(requestId)?.delete(sessionId);
+          if (requestSubscriptions.get(requestId)?.size === 0) {
+            requestSubscriptions.delete(requestId);
+          }
+        });
+
+        client.subscribedAdmins.forEach(adminId => {
+          adminSubscriptions.get(adminId)?.delete(sessionId);
+          if (adminSubscriptions.get(adminId)?.size === 0) {
+            adminSubscriptions.delete(adminId);
+          }
+        });
+
+        // Remove from connected clients
+        connectedClients.delete(sessionId);
+        
+        fastify.log.info(`Admin force-disconnected session: ${sessionId}`);
+        
+        return {
+          success: true,
+          message: 'セッションを正常に削除しました',
+          sessionId: sessionId
+        };
+      } else {
+        return reply.code(404).send({
+          error: 'セッションが見つかりません',
+          sessionId: sessionId
+        });
+      }
+    } catch (error) {
+      fastify.log.error('Failed to delete session:', error);
+      return reply.code(500).send({
+        error: 'セッション削除に失敗しました'
+      });
+    }
+  });
+
+  // Get active sessions API
+  fastify.get('/api/sessions', async (request, reply) => {
+    try {
+      const sessions = Array.from(connectedClients.entries()).map(([sessionId, client]) => ({
+        sessionId,
+        isAdmin: client.isAdmin,
+        connectedAt: client.connectedAt,
+        subscribedRequests: Array.from(client.subscribedRequests),
+        subscribedAdmins: Array.from(client.subscribedAdmins),
+        connected: client.socket.connected,
+        lastActivity: client.lastActivity || client.connectedAt
+      }));
+
+      return {
+        sessions,
+        totalCount: sessions.length,
+        adminCount: sessions.filter(s => s.isAdmin).length,
+        publicCount: sessions.filter(s => !s.isAdmin).length
+      };
+    } catch (error) {
+      fastify.log.error('Failed to get sessions:', error);
+      return reply.code(500).send({
+        error: 'セッション一覧の取得に失敗しました'
+      });
+    }
+  });
+
+  // Archive request API
+  fastify.patch('/api/ada/requests/:id/archive', async (request, reply) => {
+    try {
+      const { id } = request.params;
+      const { archived = true } = request.body || {};
+      
+      // Find request in storage
+      const existingRequest = requestStorage.get(id);
+      if (!existingRequest) {
+        return reply.code(404).send({
+          error: 'リクエストが見つかりません'
+        });
+      }
+
+      // Update archived status
+      const updatedRequest = {
+        ...existingRequest,
+        archived: archived,
+        archived_at: archived ? new Date().toISOString() : null,
+        updated_at: new Date().toISOString()
+      };
+
+      requestStorage.set(id, updatedRequest);
+      
+      fastify.log.info(`Request ${archived ? 'archived' : 'unarchived'}: ${id}`);
+      
+      // Broadcast update to admin clients
+      io.to('admin-dashboard').emit('request_archived', {
+        request_id: id,
+        archived: archived,
+        timestamp: new Date().toISOString()
+      });
+
+      return {
+        success: true,
+        message: archived ? 'リクエストをアーカイブしました' : 'アーカイブを解除しました',
+        request: updatedRequest
+      };
+      
+    } catch (error) {
+      fastify.log.error('Failed to archive request:', error);
+      return reply.code(500).send({
+        error: 'アーカイブ処理に失敗しました'
+      });
+    }
+  });
+
+  // Delete request endpoint
+  fastify.delete('/api/ada/requests/:id', async (request, reply) => {
+    try {
+      const { id } = request.params;
+      
+      // Find request in storage
+      const existingRequest = requestStorage.get(id);
+      if (!existingRequest) {
+        return reply.code(404).send({
+          error: 'リクエストが見つかりません'
+        });
+      }
+
+      // Delete from storage
+      requestStorage.delete(id);
+      
+      fastify.log.info(`Request deleted: ${id}`);
+      
+      // Broadcast update to admin clients
+      io.to('admin-dashboard').emit('request_deleted', {
+        request_id: id,
+        timestamp: new Date().toISOString()
+      });
+
+      return {
+        success: true,
+        message: 'リクエストを削除しました',
+        request_id: id
+      };
+      
+    } catch (error) {
+      fastify.log.error('Failed to delete request:', error);
+      return reply.code(500).send({
+        error: 'リクエスト削除に失敗しました',
+        details: error.message
+      });
+    }
+  });
+
   // API routes
   await fastify.register(async function(fastify) {
     // Register protocol routes

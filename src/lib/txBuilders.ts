@@ -129,7 +129,12 @@ abstract class BaseTxBuilder {
   /**
    * Build transaction body
    */
-  protected buildTxBody(inputs: any, outputs: any, currentSlot: any, fee?: bigint): any {
+  protected buildTxBody(
+    inputs: CSL.TransactionInputs, 
+    outputs: CSL.TransactionOutputs, 
+    currentSlot: CSL.BigNum, 
+    fee?: bigint
+  ): CSL.TransactionBody {
     // Debug current slot
     console.log('🔍 buildTxBody debug:', {
       currentSlotValue: currentSlot?.to_str?.() || 'undefined',
@@ -172,7 +177,7 @@ abstract class BaseTxBuilder {
     console.log('🎯 TTL確定済み - 署名後の変更は禁止');
 
     // Calculate fee if not provided
-    let txFee: any;
+    let txFee: CSL.BigNum;
     if (fee) {
       txFee = CSL.BigNum.from_str(fee.toString());
     } else {
@@ -196,7 +201,11 @@ abstract class BaseTxBuilder {
   /**
    * Create transaction output
    */
-  protected createOutput(address: string, adaAmount: bigint, assets?: { policy_id: string; asset_name: string; amount: string }[]): any {
+  protected createOutput(
+    address: string, 
+    adaAmount: bigint, 
+    assets?: { policy_id: string; asset_name: string; amount: string }[]
+  ): CSL.TransactionOutput {
     // Parse address
     const addr = CSL.Address.from_bech32(address);
 

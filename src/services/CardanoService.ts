@@ -19,18 +19,6 @@ interface BlockfrostProtocolParams {
   price_step?: string;
 }
 
-interface BlockfrostEpoch {
-  epoch: number;
-  start_time: number;
-  end_time: number;
-  first_block_time: number;
-  last_block_time: number;
-  block_count: number;
-  tx_count: number;
-  output: string;
-  fees: string;
-  active_stake?: string;
-}
 
 interface BlockfrostUtxo {
   tx_hash: string;
@@ -130,9 +118,8 @@ export class CardanoService {
     }
 
     try {
-      const [params, latestEpoch] = await Promise.all([
-        this.request<BlockfrostProtocolParams>('/epochs/latest/parameters'),
-        this.request<BlockfrostEpoch>('/epochs/latest')
+      const [params] = await Promise.all([
+        this.request<BlockfrostProtocolParams>('/epochs/latest/parameters')
       ]);
       
       this.protocolParamsCache = {

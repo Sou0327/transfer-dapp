@@ -20,6 +20,8 @@ interface RequestsManagementProps {
   onCreateRequest: (request: CreateRequestRequest) => Promise<CreateRequestResponse>;
   onUpdateStatus: (id: string, status: RequestStatus) => Promise<void>;
   onGenerateLink: (id: string) => Promise<string>;
+  onArchiveRequest?: (id: string, archived?: boolean) => Promise<void>;
+  onDeleteRequest?: (id: string) => Promise<void>;
   className?: string;
 }
 
@@ -55,7 +57,17 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
   onUpdateStatus,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   onGenerateLink: _onGenerateLink,
+
+  onArchiveRequest,
+  onDeleteRequest,
 }) => {
+  // 🔍 デバッグ: 受け取ったpropsをログ出力
+  useEffect(() => {
+    console.log('🔍 RequestsManagement - Props update:', {
+      requestsLength: requests.length,
+      requests: requests.map(r => ({ id: r.id, status: r.status, name: r.id.substring(0, 8) }))
+    });
+  }, [requests]);
   // const { } = useAdminAuth(); // 現在未使用
   const [activeTab, setActiveTab] = useState<'list' | 'create'>('list');
   const [isCreating, setIsCreating] = useState(false);
@@ -66,15 +78,17 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
   const [loadingSignedData, setLoadingSignedData] = useState<{ [requestId: string]: boolean }>({});
   const [submittingTx, setSubmittingTx] = useState<{ [requestId: string]: boolean }>({});
 
+
+
   // Fetch signed transaction data
   const fetchSignedTxData = useCallback(async (requestId: string) => {
     console.log(`🔍 Fetching signed transaction data for: ${requestId}`);
     setLoadingSignedData(prev => ({ ...prev, [requestId]: true }));
-    
+
     try {
       const url = `/api/ada/presigned/${requestId}`;
       console.log(`📡 Attempting to fetch from: ${url}`);
-      
+
       const response = await fetch(url);
       console.log(`📡 API Response:`, {
         status: response.status,
@@ -82,12 +96,12 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
         headers: Object.fromEntries(response.headers.entries()),
         url: response.url
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         console.log(`📋 API Response data:`, data);
         console.log(`📊 Response data keys:`, Object.keys(data));
-        
+
         if (data.found && data.data) {
           console.log(`✅ Found signed data for ${requestId}:`, data.data);
           console.log(`📊 Signed data keys:`, Object.keys(data.data));
@@ -98,10 +112,10 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
             hasData: !!data.data,
             dataKeys: data.data ? Object.keys(data.data) : 'no data'
           });
-          
+
           // デバッグ用：エラー情報を詳細表示
-          setSignedTxData(prev => ({ 
-            ...prev, 
+          setSignedTxData(prev => ({
+            ...prev,
             [requestId]: {
               error: true,
               message: `署名データが見つかりません (found: ${data.found})`,
@@ -116,10 +130,10 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
         console.error(`❌ API Error: ${response.status} ${response.statusText}`);
         const responseText = await response.text();
         console.error(`❌ Response body:`, responseText);
-        
+
         // エラー情報を表示用に保存
-        setSignedTxData(prev => ({ 
-          ...prev, 
+        setSignedTxData(prev => ({
+          ...prev,
           [requestId]: {
             error: true,
             message: `API エラー: ${response.status} ${response.statusText}`,
@@ -132,11 +146,11 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
       }
     } catch (error) {
       console.error('💥 Failed to fetch signed transaction data:', error);
-      
+
       // ネットワークエラーなどの情報を表示用に保存
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      setSignedTxData(prev => ({ 
-        ...prev, 
+      setSignedTxData(prev => ({
+        ...prev,
         [requestId]: {
           error: true,
           message: `取得エラー: ${errorMessage}`,
@@ -342,19 +356,19 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
       // リクエストURLを構築
       const baseUrl = window.location.origin;
       const signUrl = `${baseUrl}/sign/${requestId}`;
-      
+
       // クリップボードにコピー
       await navigator.clipboard.writeText(signUrl);
-      
+
       // 成功の視覚的フィードバック
       console.log('Link copied to clipboard:', signUrl);
-      
+
       // TODO: トーストメッセージやアニメーションでユーザーに通知
       alert('リンクをクリップボードにコピーしました！');
-      
+
     } catch (error) {
       console.error('Link copy failed:', error);
-      
+
       // フォールバック: プロンプトでURLを表示
       const baseUrl = window.location.origin;
       const signUrl = `${baseUrl}/sign/${requestId}`;
@@ -367,7 +381,7 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
   const handleSubmitTransaction = useCallback(async (requestId: string, _transactionData: SignedTransactionData) => {
     try {
       console.log('🚀 Submitting transaction for request:', requestId);
-      
+
       // 確認ダイアログを表示
       const confirmed = window.confirm(
         `リクエスト ${requestId.slice(0, 8)}... のトランザクションをCardanoネットワークに送信しますか？
@@ -375,7 +389,7 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
 ` +
         `この操作は取り消せません。`
       );
-      
+
       if (!confirmed) {
         console.log('❌ Transaction submission cancelled by user');
         return;
@@ -399,7 +413,7 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
 
       if (response.ok && result.success) {
         console.log('✅ Transaction submitted successfully:', result);
-        
+
         // 成功メッセージを表示
         alert(
           `トランザクションが正常に送信されました！
@@ -415,7 +429,7 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
 
         // 署名データを再取得して表示を更新
         await fetchSignedTxData(requestId);
-        
+
       } else {
         console.error('❌ Transaction submission failed:', result);
         alert(
@@ -445,6 +459,39 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
       setSubmittingTx(prev => ({ ...prev, [requestId]: false }));
     }
   }, [fetchSignedTxData]);
+
+
+
+  // Handle archive with confirmation
+  const handleArchiveWithConfirm = useCallback(async (requestId: string, isArchived: boolean) => {
+    if (!onArchiveRequest) return;
+
+    const action = isArchived ? 'アーカイブを解除' : 'アーカイブ';
+    const confirmed = window.confirm(`リクエスト ${requestId.slice(0, 8)}... を${action}しますか？`);
+    if (!confirmed) return;
+
+    try {
+      await onArchiveRequest(requestId, !isArchived);
+    } catch (error) {
+      alert(`${action}に失敗しました`);
+      console.error('アーカイブエラー:', error);
+    }
+  }, [onArchiveRequest]);
+  // Handle delete with confirmation
+  const handleDeleteWithConfirm = useCallback(async (requestId: string) => {
+    if (!onDeleteRequest) return;
+
+    const confirmed = window.confirm(`リクエスト ${requestId.slice(0, 8)}... を完全に削除しますか？\n\nこの操作は取り消せません。`);
+    if (!confirmed) return;
+
+    try {
+      await onDeleteRequest(requestId);
+    } catch (error) {
+      alert('リクエスト削除に失敗しました');
+      console.error('リクエスト削除エラー:', error);
+    }
+  }, [onDeleteRequest]);
+
 
   // Calculate remaining time for request
   const calculateRemainingTime = useCallback((request: OTCRequest): {
@@ -499,14 +546,14 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
   useEffect(() => {
     const signedRequests = requests.filter(r => r.status === RequestStatus.SIGNED);
     console.log(`🔍 署名済みリクエスト検出: ${signedRequests.length}件`);
-    
+
     signedRequests.forEach(request => {
       console.log(`🔍 Request ${request.id} - 署名データ確認:`, {
         hasSignedData: !!signedTxData[request.id],
         isLoading: !!loadingSignedData[request.id],
         status: request.status
       });
-      
+
       if (!signedTxData[request.id] && !loadingSignedData[request.id]) {
         console.log(`📋 自動取得開始: ${request.id}`);
         fetchSignedTxData(request.id);
@@ -526,10 +573,10 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
 
   // Check for expired requests and update status
   useEffect(() => {
-    const activeRequests = requests.filter(r => 
+    const activeRequests = requests.filter(r =>
       r.status === RequestStatus.REQUESTED || r.status === RequestStatus.SIGNED
     );
-    
+
     activeRequests.forEach(request => {
       const timeInfo = calculateRemainingTime(request);
       if (timeInfo.isExpired && request.status !== RequestStatus.EXPIRED) {
@@ -589,8 +636,8 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
               <button
                 onClick={() => setActiveTab('list')}
                 className={`flex-1 sm:flex-none px-4 sm:px-6 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${activeTab === 'list'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'bg-transparent text-gray-600 hover:bg-gray-50'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'bg-transparent text-gray-600 hover:bg-gray-50'
                   }`}
               >
                 リクエスト一覧
@@ -598,12 +645,13 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
               <button
                 onClick={() => setActiveTab('create')}
                 className={`flex-1 sm:flex-none px-4 sm:px-6 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${activeTab === 'create'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'bg-transparent text-gray-600 hover:bg-gray-50'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'bg-transparent text-gray-600 hover:bg-gray-50'
                   }`}
               >
                 新規作成
               </button>
+
             </div>
           </div>
         </div>
@@ -683,11 +731,12 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
                   </div>
                 </div>
               ) : (
-                <div className="space-y-4">                  {requests.map((request) => {
+                <div className="space-y-4">
+                  {requests.map((request) => {
                     const timeInfo = calculateRemainingTime(request);
                     const hasSignedData = signedTxData[request.id] && !signedTxData[request.id]?.error;
                     const canSubmit = request.status === RequestStatus.SIGNED && hasSignedData && signedTxData[request.id]?.signedTx;
-                    
+
                     return (
                       <div key={request.id} className="bg-gray-50 rounded-xl p-4 sm:p-6 hover:bg-gray-100 transition-colors">
                         <div className="flex flex-col gap-4">
@@ -707,32 +756,31 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
                                 <span className="hidden sm:inline text-gray-300">•</span>
                                 <span>{new Date(request.created_at).toLocaleDateString('ja-JP')}</span>
                                 <span className="hidden sm:inline text-gray-300">•</span>
-                                <span className={`font-medium ${
-                                  timeInfo.isExpired 
-                                    ? 'text-red-600' 
-                                    : timeInfo.timeLeftMs < 300000 // 5分未満
-                                      ? 'text-orange-600'
-                                      : 'text-gray-600'
-                                }`}>
+                                <span className={`font-medium ${timeInfo.isExpired
+                                  ? 'text-red-600'
+                                  : timeInfo.timeLeftMs < 300000 // 5分未満
+                                    ? 'text-orange-600'
+                                    : 'text-gray-600'
+                                  }`}>
                                   残り: {timeInfo.timeLeft}
                                 </span>
                               </div>
                             </div>
-                            
+
                             {/* アクションボタン */}
                             <div className="flex flex-wrap gap-2 sm:gap-3">
                               {request.status === RequestStatus.REQUESTED && (
                                 <button
                                   onClick={() => handleStatusUpdate(request.id, RequestStatus.EXPIRED)}
-                                  className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                                  className="px-4 py-2 text-sm font-normal rounded-xl transition-all duration-200 bg-gray-100 text-gray-700 hover:bg-gray-200 focus:bg-gray-200 border border-gray-200 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-300 shadow-sm hover:shadow-md"
                                 >
                                   期限切れ
                                 </button>
                               )}
-                              
+
                               <button
                                 onClick={() => handleCopyLink(request.id)}
-                                className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-gray-900 rounded-lg hover:bg-gray-800 transition-colors"
+                                className="px-4 py-2 text-sm font-normal rounded-xl transition-all duration-200 bg-blue-100 text-blue-700 hover:bg-blue-200 focus:bg-blue-200 border border-blue-200 hover:border-blue-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-300 shadow-sm hover:shadow-md"
                               >
                                 リンクコピー
                               </button>
@@ -740,13 +788,42 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
                                 <button
                                   onClick={() => handleSubmitTransaction(request.id, signedTxData[request.id])}
                                   disabled={submittingTx[request.id]}
-                                  className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors border-2 ${
-                                    submittingTx[request.id]
-                                      ? 'bg-gray-400 text-gray-700 border-gray-400 cursor-not-allowed'
-                                      : 'bg-red-600 text-white border-red-700 hover:bg-red-700 hover:border-red-800 shadow-md hover:shadow-lg'
-                                  }`}
+                                  className={`px-4 py-2 text-sm font-normal rounded-xl transition-all duration-200 ${submittingTx[request.id]
+                                    ? 'bg-gray-100 text-gray-500 border border-gray-200 cursor-not-allowed'
+                                    : 'bg-red-100 text-red-700 hover:bg-red-200 focus:bg-red-200 border border-red-200 hover:border-red-300'
+                                    } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-300 shadow-sm hover:shadow-md`}
                                 >
-                                  {submittingTx[request.id] ? '送信中...' : '🚀 送金実行'}
+                                  {submittingTx[request.id] ? '送信中...' : '送金実行'}
+                                </button>
+                              )}
+
+                              {/* アーカイブボタン */}
+                              {onArchiveRequest && (
+                                <button
+                                  onClick={() => handleArchiveWithConfirm(request.id, request.archived || false)}
+                                  className={`px-4 py-2 text-sm font-normal rounded-xl transition-all duration-200 ${request.archived
+                                    ? 'bg-green-100 text-green-700 hover:bg-green-200 focus:bg-green-200 border border-green-200 hover:border-green-300'
+                                    : 'bg-orange-100 text-orange-700 hover:bg-orange-200 focus:bg-orange-200 border border-orange-200 hover:border-orange-300'
+                                    } focus:outline-none focus:ring-2 focus:ring-offset-2 ${request.archived ? 'focus:ring-green-300' : 'focus:ring-orange-300'
+                                    } shadow-sm hover:shadow-md`}
+                                >
+                                  {request.archived ? '復元' : 'アーカイブ'}
+                                </button>
+                              )}
+
+                              {/* 削除ボタン */}
+                              {onDeleteRequest && (
+                                <button
+                                  onClick={() => handleDeleteWithConfirm(request.id)}
+                                  className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-red-600 border-2 border-red-700 rounded-lg hover:bg-red-700 hover:border-red-800 transition-colors"
+                                  style={{
+                                    backgroundColor: '#dc2626',
+                                    borderColor: '#b91c1c',
+                                    color: '#ffffff',
+                                    fontWeight: '500'
+                                  }}
+                                >
+                                  削除
                                 </button>
                               )}
                             </div>
@@ -758,14 +835,14 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
                               <details className="bg-blue-50 rounded-lg border border-blue-200 overflow-hidden">
                                 <summary className="p-3 cursor-pointer hover:bg-blue-100 text-sm font-medium text-blue-900 flex items-center justify-between">
                                   <span className="flex items-center">
-                                    📋 署名済みトランザクション詳細
+                                    署名済みトランザクション詳細
                                     <span className="text-xs text-blue-600 ml-2 bg-blue-200 px-2 py-1 rounded-full">
                                       {signedTxData[request.id]?.error ? 'エラーあり' : 'データ取得済み'}
                                     </span>
                                   </span>
                                   <span className="text-blue-400 text-xs">クリックで展開 ▼</span>
                                 </summary>
-                                
+
                                 <div className="p-4 border-t border-blue-200 bg-white">
                                   <div className="space-y-4 text-sm">
                                     {signedTxData[request.id]?.error ? (
@@ -795,8 +872,8 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
                                           <div className="bg-gray-50 p-3 rounded-lg">
                                             <span className="font-medium text-blue-800 block mb-1">署名日時</span>
                                             <span className="text-blue-700 text-sm">
-                                              {signedTxData[request.id]?.signedAt ? 
-                                                new Date(signedTxData[request.id].signedAt!).toLocaleString('ja-JP') : 
+                                              {signedTxData[request.id]?.signedAt ?
+                                                new Date(signedTxData[request.id].signedAt!).toLocaleString('ja-JP') :
                                                 '不明'
                                               }
                                             </span>
@@ -806,7 +883,7 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
                                             <span className="text-blue-700 text-sm">{signedTxData[request.id]?.metadata?.walletUsed || 'Unknown'}</span>
                                           </div>
                                         </div>
-                                        
+
                                         <div className="bg-gray-50 p-3 rounded-lg">
                                           <span className="font-medium text-blue-800 block mb-2">署名データ</span>
                                           <div className="p-3 bg-white rounded border font-mono text-xs break-all max-h-40 overflow-y-auto border-gray-300">
@@ -821,7 +898,7 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
                                               } else {
                                                 try {
                                                   txData = JSON.stringify(signedTx);
-                                                // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                                                  // eslint-disable-next-line @typescript-eslint/no-unused-vars
                                                 } catch (_error) {
                                                   txData = 'Invalid transaction data';
                                                 }
@@ -831,10 +908,10 @@ export const RequestsManagement: React.FC<RequestsManagementProps> = ({
                                             })()}
                                           </div>
                                         </div>
-                                        
+
                                         <div className="bg-gray-50 p-3 rounded-lg">
-                          <span className="font-medium text-blue-800 block mb-1">ステータス</span>
-                          <span className="text-blue-700 text-sm">{signedTxData[request.id]?.status || '不明'}</span>
+                                          <span className="font-medium text-blue-800 block mb-1">ステータス</span>
+                                          <span className="text-blue-700 text-sm">{signedTxData[request.id]?.status || '不明'}</span>
                                         </div>
                                       </>
                                     )}

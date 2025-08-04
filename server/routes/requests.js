@@ -233,7 +233,6 @@ export async function requestRoutes(fastify, options) {
       });
     }
   });
-  });
 
   // Get requests by admin (for dashboard)
   fastify.get('/requests', {

@@ -8,9 +8,40 @@ import React, { useState, useEffect, useCallback } from 'react';
 
 
 
+interface DashboardStats {
+  todayRequests: number;
+  pendingRequests: number;
+  totalRequests: number;
+  activeConnections: number;
+  activeRequestSessions: number;
+  activeAdminSessions: number;
+  totalSocketConnections: number;
+  systemStatus: string;
+  lastUpdate: string;
+}
+
 export const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [serverStatus, setServerStatus] = useState<'online' | 'offline'>('offline');
+  const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
+  const [statsError, setStatsError] = useState<string | null>(null);
+
+  // Fetch dashboard statistics
+  const fetchDashboardStats = useCallback(async () => {
+    try {
+      const response = await fetch('/api/dashboard/stats');
+      if (response.ok) {
+        const stats = await response.json();
+        setDashboardStats(stats);
+        setStatsError(null);
+      } else {
+        setStatsError('統計データの取得に失敗しました');
+      }
+    } catch (error) {
+      console.error('Failed to fetch dashboard stats:', error);
+      setStatsError('統計データの取得中にエラーが発生しました');
+    }
+  }, []);
 
   // Check server status
   const checkServerStatus = useCallback(async () => {
@@ -25,10 +56,22 @@ export const Dashboard: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    checkServerStatus();
-    const interval = setInterval(checkServerStatus, 30000);
-    return () => clearInterval(interval);
-  }, [checkServerStatus]);
+    const loadDashboardData = async () => {
+      await checkServerStatus();
+      await fetchDashboardStats();
+    };
+
+    loadDashboardData();
+    
+    // Set up intervals for periodic updates
+    const healthInterval = setInterval(checkServerStatus, 30000); // Every 30 seconds
+    const statsInterval = setInterval(fetchDashboardStats, 60000); // Every 60 seconds
+
+    return () => {
+      clearInterval(healthInterval);
+      clearInterval(statsInterval);
+    };
+  }, [checkServerStatus, fetchDashboardStats]);
 
   if (loading) {
     return (
@@ -66,7 +109,7 @@ export const Dashboard: React.FC = () => {
               本日の処理
             </div>
             <div className="text-5xl font-extralight text-gray-900 mb-2">
-              {serverStatus === 'online' ? '—' : '0'}
+              {dashboardStats ? dashboardStats.todayRequests : (serverStatus === 'online' ? '—' : '0')}
             </div>
             <div className="text-sm text-gray-500">
               リクエスト
@@ -79,13 +122,88 @@ export const Dashboard: React.FC = () => {
               処理待ち
             </div>
             <div className="text-5xl font-extralight text-gray-900 mb-2">
-              {serverStatus === 'online' ? '—' : '0'}
+              {dashboardStats ? dashboardStats.pendingRequests : (serverStatus === 'online' ? '—' : '0')}
             </div>
             <div className="text-sm text-gray-500">
               件
             </div>
           </div>
 
+          {/* System Status */}
+          <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
+            <div className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-2">
+              総リクエスト
+            </div>
+            <div className="text-5xl font-extralight text-gray-900 mb-2">
+              {dashboardStats ? dashboardStats.totalRequests : (serverStatus === 'online' ? '—' : '0')}
+            </div>
+            <div className="text-sm text-gray-500">
+              件
+            </div>
+          </div>
+
+        </div>
+
+        {/* Session Statistics */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
+          
+          {/* Active Connections */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+            <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+              アクティブ接続
+            </div>
+            <div className="text-3xl font-extralight text-blue-600 mb-1">
+              {dashboardStats ? dashboardStats.activeConnections : '—'}
+            </div>
+            <div className="text-xs text-gray-500">
+              接続中
+            </div>
+          </div>
+
+          {/* Request Sessions */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+            <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+              リクエストセッション
+            </div>
+            <div className="text-3xl font-extralight text-green-600 mb-1">
+              {dashboardStats ? dashboardStats.activeRequestSessions : '—'}
+            </div>
+            <div className="text-xs text-gray-500">
+              アクティブ
+            </div>
+          </div>
+
+          {/* Admin Sessions */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+            <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+              管理者セッション
+            </div>
+            <div className="text-3xl font-extralight text-purple-600 mb-1">
+              {dashboardStats ? dashboardStats.activeAdminSessions : '—'}
+            </div>
+            <div className="text-xs text-gray-500">
+              管理者
+            </div>
+          </div>
+
+          {/* Total Socket Connections */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+            <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+              総Socket接続
+            </div>
+            <div className="text-3xl font-extralight text-orange-600 mb-1">
+              {dashboardStats ? dashboardStats.totalSocketConnections : '—'}
+            </div>
+            <div className="text-xs text-gray-500">
+              総数
+            </div>
+          </div>
+
+        </div>
+
+        {/* System Status and Update Info */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-16">
+          
           {/* System Status */}
           <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
             <div className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-2">
@@ -101,7 +219,39 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
 
+          {/* Last Update */}
+          <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
+            <div className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-2">
+              最終更新
+            </div>
+            <div className="text-lg font-medium text-gray-900 mb-2">
+              {dashboardStats ? new Date(dashboardStats.lastUpdate).toLocaleTimeString('ja-JP') : '—'}
+            </div>
+            <div className="text-sm text-gray-500">
+              {dashboardStats ? new Date(dashboardStats.lastUpdate).toLocaleDateString('ja-JP') : '情報なし'}
+            </div>
+          </div>
+
         </div>
+
+        {/* Error Display */}
+        {statsError && (
+          <div className="mb-8 bg-yellow-50 rounded-2xl p-6 border border-yellow-100">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <div className="w-5 h-5 rounded-full bg-yellow-500 mt-0.5"></div>
+              </div>
+              <div className="ml-4">
+                <h3 className="text-sm font-medium text-yellow-800">
+                  データ取得エラー
+                </h3>
+                <div className="mt-1 text-sm text-yellow-700">
+                  {statsError}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Recent Activity */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100">

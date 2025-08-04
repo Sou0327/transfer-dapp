@@ -94,6 +94,44 @@ const constructCompleteTransaction = async (txBodyHex, witnessSetHex) => {
     if (isConwayEraTx(decodedMeta)) {
       console.log('🎯 metadata.txBody is already a complete Conway Era transaction');
       
+      // 🔧 CRITICAL FIX: Case 1でもWitnessSetをMapに変換
+      console.log('🔍 Case 1 WitnessSet conversion check:', {
+        element1Type: typeof decodedMeta[1],
+        element1IsMap: decodedMeta[1] instanceof Map,
+        needsConversion: !(decodedMeta[1] instanceof Map)
+      });
+      
+      if (!(decodedMeta[1] instanceof Map)) {
+        console.log('🔧 Converting Case 1 WitnessSet object to Map...');
+        const witnessSetMap = new Map();
+        
+        if (decodedMeta[1] && typeof decodedMeta[1] === 'object') {
+          Object.entries(decodedMeta[1]).forEach(([key, value]) => {
+            const numKey = Number(key);
+            witnessSetMap.set(numKey, value);
+            console.log(`✅ Case 1: Converted witness_set[${key}] -> Map.set(${numKey}, ${typeof value})`);
+          });
+        }
+        
+        // 完全トランザクション配列を更新
+        decodedMeta[1] = witnessSetMap;
+        console.log('✅ Case 1: WitnessSet successfully converted to Map');
+        
+        // 修正後のトランザクションを再エンコード
+        const fixedTxBuffer = cbor.encode(decodedMeta);
+        const fixedTxHex = fixedTxBuffer.toString('hex');
+        
+        console.log('🔍 Case 1 Fixed Transaction:', {
+          originalLength: txBodyHex.length,
+          fixedLength: fixedTxHex.length,
+          element1IsNowMap: decodedMeta[1] instanceof Map
+        });
+        
+        // 修正後のトランザクションを返す
+        console.log('✅ Using Case 1 fixed complete transaction');
+        return fixedTxHex;
+      }
+      
       // 🔍 完全トランザクションの詳細デバッグ
       console.log('🔍 Complete Transaction Debug (Case 1):');
       console.log('Full hex:', txBodyHex);
