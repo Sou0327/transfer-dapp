@@ -7,7 +7,23 @@ import { promisify } from 'util';
 import fs from 'fs/promises';
 import path from 'path';
 import cbor from 'cbor';
-import * as CSL from '@emurgo/cardano-serialization-lib-nodejs';
+// Dynamic import for CSL to reduce bundle size and Cold Start time
+let CSL = null;
+
+// 🔧 UTILITY: CSLライブラリの動的ロード
+const loadCSL = async () => {
+  if (!CSL) {
+    try {
+      CSL = await import('@emurgo/cardano-serialization-lib-nodejs');
+      console.log('✅ CSL library loaded successfully');
+    } catch (error) {
+      console.warn('⚠️ CSL library not available:', error.message);
+      console.warn('🔍 Key hash validation will be limited');
+      return null;
+    }
+  }
+  return CSL;
+};
 
 // 🔧 UTILITY: バイト配列をUint8Arrayに正規化
 const toUint8Array = (bytes) => {
@@ -709,8 +725,15 @@ export default async function handler(req, res) {
                         console.log(`🏠 Input ${i} address: ${address.substring(0, 20)}...`);
                         
                         try {
-                          // CSLでアドレスを解析して支払いkeyhashを抽出
-                          const cslAddress = CSL.Address.from_bech32(address);
+                          // 🔧 DYNAMIC: CSLでアドレスを解析して支払いkeyhashを抽出
+                          const cslLib = await loadCSL();
+                          
+                          if (!cslLib) {
+                            console.warn(`⚠️ Input ${i}: CSL not available, skipping key hash extraction`);
+                            continue;
+                          }
+                          
+                          const cslAddress = cslLib.Address.from_bech32(address);
                           const baseAddress = cslAddress.as_base();
                           
                           if (baseAddress) {
@@ -811,11 +834,26 @@ export default async function handler(req, res) {
                 
                 if (publicKeyBytes && publicKeyBytes.length === 32) {
                   try {
+                    // 🔧 DYNAMIC: CSLを動的ロードして key hash計算
+                    const cslLib = await loadCSL();
+                    
+                    if (!cslLib) {
+                      console.warn(`⚠️ Witness ${i}: CSL not available, skipping key hash computation`);
+                      // Fallback: ログのみ、key hash計算はスキップ
+                      console.log(`🔗 Key mapping ${i} (CSL unavailable):`, {
+                        publicKey: Buffer.from(publicKeyBytes).toString('hex'),
+                        computedHash: 'CSL_UNAVAILABLE',
+                        signaturePresent: !!signatureBytes,
+                        pubKeyType: typeof publicKeyBytes
+                      });
+                      continue;
+                    }
+                    
                     // 🔧 IMPROVED: witness公開鍵バイトの正規化
                     const normalizedPubKeyBytes = toUint8Array(publicKeyBytes);
                     
                     // Use CSL to compute Blake2b-224 key hash from public key
-                    const publicKey = CSL.PublicKey.from_bytes(normalizedPubKeyBytes);
+                    const publicKey = cslLib.PublicKey.from_bytes(normalizedPubKeyBytes);
                     const keyHash = publicKey.hash();
                     const keyHashHex = Buffer.from(keyHash.to_bytes()).toString('hex');
                     

@@ -36,6 +36,7 @@
   },
   "dependencies": {
     "@emurgo/cardano-serialization-lib-browser": "^12.0.1",
+    "@emurgo/cardano-serialization-lib-nodejs": "^12.0.1",
     "@fastify/cors": "^11.0.1",
     "@fastify/jwt": "^9.1.0",
     "@fastify/redis": "^7.0.2",
