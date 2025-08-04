@@ -680,45 +680,52 @@ export default async function handler(req, res) {
       const currentSlot = parseInt(latestBlock.slot);
       console.log('📊 Current mainnet slot:', currentSlot);
       
-      // 🔍 EXPERT RECOMMENDED: トランザクションからTTL抽出して検証
+      // 🎯 EXPERT RECOMMENDED: CSLライブラリで正規のTTL抽出
       try {
-        const txDecoded = cbor.decode(Buffer.from(signedTxHex, 'hex'));
-        let ttlValue = null;
+        const cslLib = await loadCSL();
         
-        if (Array.isArray(txDecoded) && txDecoded.length === 4) {
-          // Conway Era完全トランザクション
-          const txBodyFromComplete = txDecoded[0];
-          if (txBodyFromComplete instanceof Map) {
-            ttlValue = txBodyFromComplete.get(3);
-          }
-        }
-        
-        if (ttlValue !== null) {
-          const ttlMargin = ttlValue - currentSlot;
-          const marginHours = Math.floor(ttlMargin / 3600);
-          
-          console.log('📅 TTL Validation:', {
-            currentSlot: currentSlot,
-            ttlSlot: ttlValue,
-            margin: ttlMargin,
-            marginHours: marginHours,
-            status: ttlMargin > 120 ? '✅ Valid' : '❌ Too close/expired'
-          });
-          
-          // ⏰ IMPROVED: TTL余裕しきい値を環境変数で可変化
-          const minTtlMarginSlots = parseInt(process.env.MIN_TTL_MARGIN_SLOTS) || 120; // デフォルト2分
-          const warnTtlMarginSlots = parseInt(process.env.WARN_TTL_MARGIN_SLOTS) || 600; // デフォルト10分
-          
-          // 🚨 EXPERT RECOMMENDED: TTL余裕チェック（実運用では5-10分推奨）
-          if (ttlMargin < minTtlMarginSlots) {
-            throw new Error(`TTL too close to expiry. Margin: ${ttlMargin} slots (${marginHours} hours). Need at least ${minTtlMarginSlots} slots.`);
-          } else if (ttlMargin < warnTtlMarginSlots) {
-            console.warn('⚠️ TTL expires soon:', `${marginHours} hours remaining (${ttlMargin} slots)`);
-          } else {
-            console.log('✅ TTL has sufficient margin:', `${marginHours} hours remaining (${ttlMargin} slots)`);
-          }
+        if (!cslLib) {
+          console.warn('⚠️ CSL not available, skipping TTL validation');
         } else {
-          console.warn('⚠️ Could not extract TTL from transaction for validation');
+          console.log('🔍 Using CSL for TTL extraction...');
+          
+          const tx = cslLib.Transaction.from_bytes(Buffer.from(signedTxHex, 'hex'));
+          const body = tx.body();
+          const ttl = body.ttl(); // BigNum | undefined
+          
+          if (ttl === undefined) {
+            console.log('📅 TTL Validation (CSL): No TTL set (unlimited validity)');
+          } else {
+            const ttlSlot = Number(ttl.to_str());
+            
+            if (ttlSlot === 0) {
+              throw new Error('❌ CRITICAL: TTL is 0 (invalidHereafter=0). This causes immediate expiry - transaction invalid.');
+            }
+            
+            const ttlMargin = ttlSlot - currentSlot;
+            const marginHours = Math.floor(ttlMargin / 3600);
+            
+            console.log('📅 TTL Validation (CSL):', {
+              currentSlot: currentSlot,
+              ttlSlot: ttlSlot,
+              margin: ttlMargin,
+              marginHours: marginHours,
+              status: ttlMargin > 120 ? '✅ Valid' : '❌ Too close/expired'
+            });
+            
+            // ⏰ IMPROVED: TTL余裕しきい値を環境変数で可変化
+            const minTtlMarginSlots = parseInt(process.env.MIN_TTL_MARGIN_SLOTS) || 120; // デフォルト2分
+            const warnTtlMarginSlots = parseInt(process.env.WARN_TTL_MARGIN_SLOTS) || 600; // デフォルト10分
+            
+            // 🚨 EXPERT RECOMMENDED: TTL余裕チェック（実運用では5-10分推奨）
+            if (ttlMargin < minTtlMarginSlots) {
+              throw new Error(`TTL too close to expiry. Margin: ${ttlMargin} slots (${marginHours} hours). Need at least ${minTtlMarginSlots} slots.`);
+            } else if (ttlMargin < warnTtlMarginSlots) {
+              console.warn('⚠️ TTL expires soon:', `${marginHours} hours remaining (${ttlMargin} slots)`);
+            } else {
+              console.log('✅ TTL has sufficient margin:', `${marginHours} hours remaining (${ttlMargin} slots)`);
+            }
+          }
         }
       } catch (ttlError) {
         console.warn('⚠️ TTL validation failed:', ttlError.message);
@@ -844,13 +851,61 @@ export default async function handler(req, res) {
           }
         }
         
-        // Extract provided key hashes from witness set
+        // 🎯 EXPERT RECOMMENDED: CSLライブラリ + 型差吸収でwitness_set抽出
         const providedKeyHashes = new Set();
         
-        if (witnessSetFromTransaction instanceof Map && witnessSetFromTransaction.has(0)) {
+        // Method 1: CSL Library (最も堅牢)
+        const cslLib = await loadCSL();
+        if (cslLib) {
+          try {
+            console.log('🔍 Using CSL for witness extraction...');
+            const tx = cslLib.Transaction.from_bytes(Buffer.from(signedTxHex, 'hex'));
+            const wset = tx.witness_set();
+            const vkeys = wset.vkeys(); // Vkeywitnesses | undefined
+            
+            if (vkeys) {
+              console.log('🔑 CSL VKey witnesses found:', { count: vkeys.len() });
+              for (let i = 0; i < vkeys.len(); i++) {
+                const w = vkeys.get(i);
+                const pubKey = w.vkey().public_key();
+                const keyHash = Buffer.from(pubKey.hash().to_bytes()).toString('hex');
+                providedKeyHashes.add(keyHash);
+                console.log(`✅ CSL computed key hash for witness ${i}:`, keyHash);
+              }
+            } else {
+              console.warn('⚠️ CSL: No VKey witnesses found in witness_set');
+            }
+          } catch (cslError) {
+            console.warn('⚠️ CSL witness extraction failed:', cslError.message);
+            console.log('🔄 Falling back to CBOR direct method...');
+          }
+        }
+        
+        // Method 2: CBOR直読み（型差吸収版） - CSL失敗時のフォールバック
+        if (providedKeyHashes.size === 0) {
+          console.log('🔄 Using CBOR direct method with type tolerance...');
+          
+          // 🔧 EXPERT RECOMMENDED: get/has判定で型差を吸収
+          const toNumKeyMap = (val) => {
+            if (val && typeof val.get === 'function' && typeof val.has === 'function') {
+              // Map互換（CborMap含む）
+              return val;
+            }
+            // plain objectをMapに変換
+            return new Map(Object.entries(val ?? {}).map(([k, v]) => [Number(k), v]));
+          };
+          
+          const witnessSetMap = toNumKeyMap(witnessSetFromTransaction);
+          console.log('🔍 WitnessSet Map conversion result:', {
+            hasGetMethod: typeof witnessSetMap.get === 'function',
+            hasHasMethod: typeof witnessSetMap.has === 'function',
+            keys: witnessSetMap instanceof Map ? Array.from(witnessSetMap.keys()) : 'not enumerable'
+          });
+          
+        if (witnessSetMap && witnessSetMap.has && witnessSetMap.has(0)) {
           // 🔧 IMPROVED: より堅牢な完全Tx判定 - witnessSetのキー列ログ
-          const witnessSetKeys = Array.from(witnessSetFromTransaction.keys());
-          console.log('🔍 WitnessSet Map keys:', witnessSetKeys);
+          const witnessSetKeys = witnessSetMap instanceof Map ? Array.from(witnessSetMap.keys()) : Object.keys(witnessSetMap).map(Number);
+          console.log('🔍 WitnessSet Map keys (CBOR method):', witnessSetKeys);
           
           // Log all witness set components for future script/redeemer support
           witnessSetKeys.forEach(key => {
@@ -865,7 +920,7 @@ export default async function handler(req, res) {
               7: 'Plutus v3 scripts'
             }[key] || `Unknown key ${key}`;
             
-            const value = witnessSetFromTransaction.get(key);
+            const value = witnessSetMap.get(key);
             console.log(`  [${key}] ${keyName}:`, {
               isPresent: !!value,
               type: Array.isArray(value) ? 'array' : typeof value,
@@ -873,10 +928,10 @@ export default async function handler(req, res) {
             });
           });
           
-          const vkeyWitnesses = witnessSetFromTransaction.get(0);
+          const vkeyWitnesses = witnessSetMap.get(0);
           
           if (Array.isArray(vkeyWitnesses)) {
-            console.log('🔑 Analyzing VKey witnesses:', { count: vkeyWitnesses.length });
+            console.log('🔑 Analyzing VKey witnesses (CBOR method):', { count: vkeyWitnesses.length });
             
             for (let i = 0; i < vkeyWitnesses.length; i++) {
               const witness = vkeyWitnesses[i];
@@ -885,53 +940,20 @@ export default async function handler(req, res) {
                 const publicKeyBytes = witness[0];
                 const signatureBytes = witness[1];
                 
-                console.log(`🔍 VKey witness ${i}:`, {
+                console.log(`🔍 VKey witness ${i} (CBOR method):`, {
                   pubKeyLength: publicKeyBytes ? publicKeyBytes.length : 0,
                   sigLength: signatureBytes ? signatureBytes.length : 0,
                   pubKeyHex: publicKeyBytes ? Buffer.from(publicKeyBytes).toString('hex') : 'missing'
                 });
                 
                 if (publicKeyBytes && publicKeyBytes.length === 32) {
-                  try {
-                    // 🔧 DYNAMIC: CSLを動的ロードして key hash計算
-                    const cslLib = await loadCSL();
-                    
-                    if (!cslLib) {
-                      console.warn(`⚠️ Witness ${i}: CSL not available, skipping key hash computation`);
-                      // Fallback: ログのみ、key hash計算はスキップ
-                      console.log(`🔗 Key mapping ${i} (CSL unavailable):`, {
-                        publicKey: Buffer.from(publicKeyBytes).toString('hex'),
-                        computedHash: 'CSL_UNAVAILABLE',
-                        signaturePresent: !!signatureBytes,
-                        pubKeyType: typeof publicKeyBytes
-                      });
-                      continue;
-                    }
-                    
-                    // 🔧 IMPROVED: witness公開鍵バイトの正規化
-                    const normalizedPubKeyBytes = toUint8Array(publicKeyBytes);
-                    
-                    // Use CSL to compute Blake2b-224 key hash from public key
-                    const publicKey = cslLib.PublicKey.from_bytes(normalizedPubKeyBytes);
-                    const keyHash = publicKey.hash();
-                    const keyHashHex = Buffer.from(keyHash.to_bytes()).toString('hex');
-                    
-                    providedKeyHashes.add(keyHashHex);
-                    console.log(`✅ Computed key hash for witness ${i}:`, keyHashHex);
-                    
-                    // Log the mapping for debugging
-                    console.log(`🔗 Key mapping ${i}:`, {
-                      publicKey: Buffer.from(publicKeyBytes).toString('hex'),
-                      computedHash: keyHashHex,
-                      signaturePresent: !!signatureBytes,
-                      pubKeyType: typeof publicKeyBytes,
-                      normalizedType: normalizedPubKeyBytes.constructor.name
-                    });
-                    
-                  } catch (cslError) {
-                    console.error(`❌ CSL key hash computation failed for witness ${i}:`, cslError.message);
-                    console.error(`  PublicKey type: ${typeof publicKeyBytes}, length: ${publicKeyBytes ? publicKeyBytes.length : 'null'}`);
-                  }
+                  // 🔄 CBOR フォールバック: 基本的な構造検証のみ（CSLは上で実行済み）
+                  console.log(`🔗 CBOR fallback witness ${i}:`, {
+                    publicKey: Buffer.from(publicKeyBytes).toString('hex'),
+                    signaturePresent: !!signatureBytes,
+                    pubKeyType: typeof publicKeyBytes,
+                    note: 'Key hash computation done by CSL above'
+                  });
                 } else {
                   console.warn(`⚠️ Invalid public key length for witness ${i}:`, publicKeyBytes ? publicKeyBytes.length : 'missing');
                 }
@@ -940,10 +962,13 @@ export default async function handler(req, res) {
               }
             }
           } else {
-            console.warn('⚠️ VKey witnesses is not an array');
+            console.warn('⚠️ VKey witnesses is not an array (CBOR method)');
+          }
+          } else {
+            console.warn('⚠️ CBOR method failed: witness_set has no key 0 or not accessible');
           }
         } else {
-          console.warn('⚠️ No VKey witnesses found in witness set');
+          console.warn('⚠️ Both CSL and CBOR methods found no VKey witnesses');
         }
         
         // 🎯 EXPERT RECOMMENDED: required ↔ provided 照合
