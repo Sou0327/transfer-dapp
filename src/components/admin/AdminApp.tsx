@@ -417,8 +417,7 @@ export const AdminApp: React.FC = () => {
       const response = await fetch(apiUrl, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('otc_admin_token')}`,
-          'Content-Type': 'application/json'
+          'Authorization': `Bearer ${localStorage.getItem('otc_admin_token')}`
         }
       });
 

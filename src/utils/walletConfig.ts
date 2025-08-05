@@ -12,6 +12,17 @@ export const WALLET_CONFIG: Record<WalletName, WalletInfo> = {
     apiKey: 'yoroi',
     downloadUrl: 'https://yoroi-wallet.com/',
     description: 'Secure, fast and simple Cardano ADA wallet',
+    mobileApp: {
+      ios: {
+        scheme: 'yoroi://',
+        appStoreUrl: 'https://apps.apple.com/app/emurgo-yoroi-cardano-wallet/id1447326389',
+      },
+      android: {
+        scheme: 'yoroi://',
+        playStoreUrl: 'https://play.google.com/store/apps/details?id=com.emurgo',
+        packageName: 'com.emurgo',
+      },
+    },
   },
   tokeo: {
     name: 'tokeo',
@@ -20,6 +31,17 @@ export const WALLET_CONFIG: Record<WalletName, WalletInfo> = {
     apiKey: 'tokeo',
     downloadUrl: 'https://tokeo.io/',
     description: 'Advanced Cardano wallet with DeFi features',
+    mobileApp: {
+      ios: {
+        scheme: 'tokeo://',
+        appStoreUrl: 'https://apps.apple.com/app/tokeo-wallet/id1595301062',
+      },
+      android: {
+        scheme: 'tokeo://',
+        playStoreUrl: 'https://play.google.com/store/apps/details?id=io.tokeo.wallet',
+        packageName: 'io.tokeo.wallet',
+      },
+    },
   },
   eternl: {
     name: 'eternl',
@@ -28,6 +50,17 @@ export const WALLET_CONFIG: Record<WalletName, WalletInfo> = {
     apiKey: 'eternl',
     downloadUrl: 'https://eternl.io/',
     description: 'Feature-rich Cardano wallet with staking pools',
+    mobileApp: {
+      ios: {
+        scheme: 'eternl://',
+        appStoreUrl: 'https://apps.apple.com/app/eternl/id1633447558',
+      },
+      android: {
+        scheme: 'eternl://',
+        playStoreUrl: 'https://play.google.com/store/apps/details?id=io.eternl.wallet',
+        packageName: 'io.eternl.wallet',
+      },
+    },
   },
   nami: {
     name: 'nami',
@@ -36,6 +69,17 @@ export const WALLET_CONFIG: Record<WalletName, WalletInfo> = {
     apiKey: 'nami',
     downloadUrl: 'https://namiwallet.io/',
     description: 'Simple and secure Cardano wallet',
+    mobileApp: {
+      ios: {
+        scheme: 'nami://',
+        appStoreUrl: 'https://apps.apple.com/app/nami-wallet/id1612818924',
+      },
+      android: {
+        scheme: 'nami://',
+        playStoreUrl: 'https://play.google.com/store/apps/details?id=io.nami.wallet',
+        packageName: 'io.nami.wallet',
+      },
+    },
   },
   typhon: {
     name: 'typhon',
@@ -44,6 +88,17 @@ export const WALLET_CONFIG: Record<WalletName, WalletInfo> = {
     apiKey: 'typhon',
     downloadUrl: 'https://typhonwallet.io/',
     description: 'Multi-platform Cardano wallet with advanced features',
+    mobileApp: {
+      ios: {
+        scheme: 'typhonwallet://',
+        appStoreUrl: 'https://apps.apple.com/app/typhon-wallet/id1560093508',
+      },
+      android: {
+        scheme: 'typhonwallet://',
+        playStoreUrl: 'https://play.google.com/store/apps/details?id=io.typhonwallet.app',
+        packageName: 'io.typhonwallet.app',
+      },
+    },
   },
   flint: {
     name: 'flint',
@@ -52,6 +107,17 @@ export const WALLET_CONFIG: Record<WalletName, WalletInfo> = {
     apiKey: 'flint',
     downloadUrl: 'https://flint-wallet.com/',
     description: 'Fast and lightweight Cardano wallet',
+    mobileApp: {
+      ios: {
+        scheme: 'flint://',
+        appStoreUrl: 'https://apps.apple.com/app/flint-wallet/id1555742083',
+      },
+      android: {
+        scheme: 'flint://',
+        playStoreUrl: 'https://play.google.com/store/apps/details?id=com.dcentwallet.flint',
+        packageName: 'com.dcentwallet.flint',
+      },
+    },
   },
   lace: {
     name: 'lace',
@@ -60,6 +126,17 @@ export const WALLET_CONFIG: Record<WalletName, WalletInfo> = {
     apiKey: 'lace',
     downloadUrl: 'https://www.lace.io/',
     description: 'Next-generation Cardano wallet by IOG',
+    mobileApp: {
+      ios: {
+        scheme: 'lace://',
+        appStoreUrl: 'https://apps.apple.com/app/lace-wallet/id6468903894',
+      },
+      android: {
+        scheme: 'lace://',
+        playStoreUrl: 'https://play.google.com/store/apps/details?id=io.lace.wallet',
+        packageName: 'io.lace.wallet',
+      },
+    },
   },
   daedalus: {
     name: 'daedalus',
@@ -68,6 +145,8 @@ export const WALLET_CONFIG: Record<WalletName, WalletInfo> = {
     apiKey: 'daedalus',
     downloadUrl: 'https://daedaluswallet.io/',
     description: 'Full-node Cardano wallet with maximum security',
+    // Note: Daedalusは主にデスクトップウォレットのため、モバイル版は存在しない
+    // mobileApp情報は意図的に追加しない
   },
   nufi: {
     name: 'nufi',
@@ -76,6 +155,17 @@ export const WALLET_CONFIG: Record<WalletName, WalletInfo> = {
     apiKey: 'nufi',
     downloadUrl: 'https://wallet.nu.fi/',
     description: 'Multi-chain wallet supporting Cardano',
+    mobileApp: {
+      ios: {
+        scheme: 'nufi://',
+        appStoreUrl: 'https://apps.apple.com/app/nufi/id1588915892',
+      },
+      android: {
+        scheme: 'nufi://',
+        playStoreUrl: 'https://play.google.com/store/apps/details?id=io.nufi.nufi',
+        packageName: 'io.nufi.nufi',
+      },
+    },
   },
   gero: {
     name: 'gero',
@@ -84,6 +174,17 @@ export const WALLET_CONFIG: Record<WalletName, WalletInfo> = {
     apiKey: 'gero',
     downloadUrl: 'https://gerowallet.io/',
     description: 'User-friendly Cardano wallet with DeFi integration',
+    mobileApp: {
+      ios: {
+        scheme: 'gerowallet://',
+        appStoreUrl: 'https://apps.apple.com/app/gero-wallet/id1580223637',
+      },
+      android: {
+        scheme: 'gerowallet://',
+        playStoreUrl: 'https://play.google.com/store/apps/details?id=io.gerowallet.mobile',
+        packageName: 'io.gerowallet.mobile',
+      },
+    },
   },
 };
 

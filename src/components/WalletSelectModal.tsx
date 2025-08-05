@@ -3,6 +3,9 @@
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import { CIP30Provider, CIP30Api, NetworkMismatchError } from '../types/otc/index';
+import { getDeviceInfo } from '../utils/deviceUtils';
+import { handleMobileWalletSelection } from '../utils/mobileWalletUtils';
+import { WalletName } from '../types/cardano';
 
 interface WalletSelectModalProps {
   isOpen: boolean;
@@ -135,7 +138,30 @@ export const WalletSelectModal: React.FC<WalletSelectModalProps> = ({
     setConnectionError(null);
 
     try {
-      // Get wallet API
+      const deviceInfo = getDeviceInfo();
+      
+      // モバイルデバイスの場合、アプリ起動を試行
+      if (!deviceInfo.isDesktop) {
+        const mobileResult = await handleMobileWalletSelection(provider.id as WalletName);
+        
+        if (mobileResult.success) {
+          setConnectionError(null);
+          // モバイルアプリが起動された場合、モーダルを閉じる
+          setTimeout(() => {
+            onClose();
+          }, 1000);
+          return;
+        } else if (mobileResult.action === 'install') {
+          setConnectionError(`${mobileResult.message}
+アプリストアからインストールしてください。`);
+          return;
+        } else {
+          setConnectionError(mobileResult.message);
+          return;
+        }
+      }
+
+      // デスクトップの場合、従来のブラウザ拡張機能による接続
       const walletApi = window.cardano?.[provider.id];
       if (!walletApi) {
         throw new Error('ウォレットが見つかりません');
@@ -181,7 +207,7 @@ export const WalletSelectModal: React.FC<WalletSelectModalProps> = ({
     } finally {
       setIsConnecting(null);
     }
-  }, [isConnecting, expectedNetwork, onSelect]);
+  }, [isConnecting, expectedNetwork, onSelect, onClose]);
 
   // Refresh wallet list
   const handleRefresh = useCallback(() => {
@@ -279,7 +305,10 @@ export const WalletSelectModal: React.FC<WalletSelectModalProps> = ({
                     ウォレットが見つかりません
                   </h4>
                   <p className="text-sm text-gray-500 mb-4">
-                    対応ウォレットをインストールしてページを再読み込みしてください
+                    {getDeviceInfo().isDesktop 
+                      ? '対応ウォレットをインストールしてページを再読み込みしてください'
+                      : 'モバイルアプリをインストールするか、下記のリンクから入手してください'
+                    }
                   </p>
                   <button
                     onClick={handleRefresh}
@@ -292,42 +321,59 @@ export const WalletSelectModal: React.FC<WalletSelectModalProps> = ({
                   </button>
                 </div>
               ) : (
-                availableWallets.map((wallet) => (
-                  <button
-                    key={wallet.id}
-                    onClick={() => handleWalletSelect(wallet)}
-                    disabled={isConnecting === wallet.id}
-                    className="w-full flex items-center p-4 border border-gray-200 rounded-lg hover:border-orange-300 hover:bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <div className="flex-shrink-0 text-2xl mr-4">
-                      {wallet.icon}
-                    </div>
-                    <div className="flex-1 text-left">
-                      <div className="flex items-center">
-                        <h4 className="text-sm font-medium text-gray-900">
-                          {wallet.name}
-                        </h4>
-                        {wallet.isEnabled && (
-                          <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
-                            接続済み
-                          </span>
+                availableWallets.map((wallet) => {
+                  const deviceInfo = getDeviceInfo();
+                  const isMobile = !deviceInfo.isDesktop;
+                  
+                  return (
+                    <button
+                      key={wallet.id}
+                      onClick={() => handleWalletSelect(wallet)}
+                      disabled={isConnecting === wallet.id}
+                      className="w-full flex items-center p-4 border border-gray-200 rounded-lg hover:border-orange-300 hover:bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <div className="flex-shrink-0 text-2xl mr-4">
+                        {wallet.icon}
+                      </div>
+                      <div className="flex-1 text-left">
+                        <div className="flex items-center">
+                          <h4 className="text-sm font-medium text-gray-900">
+                            {wallet.name}
+                          </h4>
+                          {wallet.isEnabled && !isMobile && (
+                            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                              接続済み
+                            </span>
+                          )}
+                          {isMobile && (
+                            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                              📱 アプリ
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {isMobile 
+                            ? 'モバイルアプリを開きます'
+                            : `API バージョン: ${wallet.apiVersion}`
+                          }
+                        </p>
+                      </div>
+                      <div className="flex-shrink-0">
+                        {isConnecting === wallet.id ? (
+                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-orange-500"></div>
+                        ) : isMobile ? (
+                          <svg className="h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                        ) : (
+                          <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
                         )}
                       </div>
-                      <p className="text-xs text-gray-500 mt-1">
-                        API バージョン: {wallet.apiVersion}
-                      </p>
-                    </div>
-                    <div className="flex-shrink-0">
-                      {isConnecting === wallet.id ? (
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-orange-500"></div>
-                      ) : (
-                        <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      )}
-                    </div>
-                  </button>
-                ))
+                    </button>
+                  );
+                })
               )}
             </div>
 

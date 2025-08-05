@@ -48,6 +48,18 @@ export interface WalletInfo {
   apiKey: string; // Key in window.cardano object
   downloadUrl: string;
   description: string;
+  // モバイルアプリ対応
+  mobileApp?: {
+    ios?: {
+      scheme: string;        // カスタムURLスキーム (例: "yoroi://")
+      appStoreUrl?: string; // App Store URL
+    };
+    android?: {
+      scheme: string;           // カスタムURLスキーム
+      playStoreUrl?: string;   // Google Play Store URL
+      packageName?: string;    // Androidパッケージ名
+    };
+  };
 }
 
 export interface WalletInterface {

@@ -538,6 +538,170 @@ export async function protocolRoutes(fastify, options) {
     }
   });
 
+  // Archive request API
+  fastify.patch('/requests/:id/archive', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string' }
+        }
+      },
+      body: {
+        type: 'object',
+        properties: {
+          archived: { type: 'boolean' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            message: { type: 'string' },
+            request: { type: 'object' }
+          }
+        },
+        404: {
+          type: 'object',
+          properties: {
+            error: { type: 'string' }
+          }
+        }
+      }
+    }
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params;
+      const { archived = true } = request.body || {};
+      
+      // Find request in storage
+      let existingRequest = requestsList.get(id);
+      if (!existingRequest) {
+        // Also check cache
+        const cacheKey = `request:${id}`;
+        existingRequest = await CacheService.get(cacheKey);
+      }
+      
+      if (!existingRequest) {
+        return reply.code(404).send({
+          error: 'リクエストが見つかりません'
+        });
+      }
+
+      // Update archived status
+      const updatedRequest = {
+        ...existingRequest,
+        archived: archived,
+        archived_at: archived ? new Date().toISOString() : null,
+        updated_at: new Date().toISOString()
+      };
+
+      // Update both storages
+      requestsList.set(id, updatedRequest);
+      const cacheKey = `request:${id}`;
+      await CacheService.set(cacheKey, updatedRequest, 86400); // 24 hours
+      
+      fastify.log.info(`Request ${archived ? 'archived' : 'unarchived'}: ${id}`);
+      
+      // Broadcast update to admin clients
+      if (fastify.io) {
+        fastify.io.to('admin').emit('request_archived', {
+          request_id: id,
+          archived: archived,
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      return {
+        success: true,
+        message: archived ? 'リクエストをアーカイブしました' : 'アーカイブを解除しました',
+        request: updatedRequest
+      };
+      
+    } catch (error) {
+      fastify.log.error('Failed to archive request:', error);
+      return reply.code(500).send({
+        error: 'アーカイブ処理に失敗しました'
+      });
+    }
+  });
+
+  // Delete request endpoint
+  fastify.delete('/requests/:id', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            message: { type: 'string' },
+            request_id: { type: 'string' }
+          }
+        },
+        404: {
+          type: 'object',
+          properties: {
+            error: { type: 'string' }
+          }
+        }
+      }
+    }
+  }, async (request, reply) => {
+    try {
+      const { id } = request.params;
+      
+      // Find request in storage
+      let existingRequest = requestsList.get(id);
+      if (!existingRequest) {
+        // Also check cache
+        const cacheKey = `request:${id}`;
+        existingRequest = await CacheService.get(cacheKey);
+      }
+      
+      if (!existingRequest) {
+        return reply.code(404).send({
+          error: 'リクエストが見つかりません'
+        });
+      }
+
+      // Delete from both storages
+      requestsList.delete(id);
+      // Note: Cache will expire naturally, but we could also manually delete it
+      
+      fastify.log.info(`Request deleted: ${id}`);
+      
+      // Broadcast update to admin clients
+      if (fastify.io) {
+        fastify.io.to('admin').emit('request_deleted', {
+          request_id: id,
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      return {
+        success: true,
+        message: 'リクエストを削除しました',
+        request_id: id
+      };
+      
+    } catch (error) {
+      fastify.log.error('Failed to delete request:', error);
+      return reply.code(500).send({
+        error: 'リクエスト削除に失敗しました',
+        details: error.message
+      });
+    }
+  });
+
   // Create new request (admin-side)
   fastify.post('/requests', {
     schema: {
