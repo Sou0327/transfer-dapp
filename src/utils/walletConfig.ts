@@ -4,7 +4,7 @@ import { WalletInfo, WalletName } from '../types/cardano';
  * Supported Cardano wallets configuration
  * Icons are base64-encoded SVGs for better reliability and consistent styling
  */
-export const WALLET_CONFIG: Record<WalletName, WalletInfo> = {
+export const export const WALLET_CONFIG: Record<WalletName, WalletInfo> = {
   yoroi: {
     name: 'yoroi',
     displayName: 'Yoroi',
@@ -15,7 +15,7 @@ export const WALLET_CONFIG: Record<WalletName, WalletInfo> = {
     mobileApp: {
       ios: {
         scheme: 'yoroi://',
-        appStoreUrl: 'https://apps.apple.com/app/emurgo-yoroi-cardano-wallet/id1447326389',
+        appStoreUrl: 'https://apps.apple.com/app/emurgos-yoroi-cardano-wallet/id1447326389',
       },
       android: {
         scheme: 'yoroi://',
@@ -53,50 +53,12 @@ export const WALLET_CONFIG: Record<WalletName, WalletInfo> = {
     mobileApp: {
       ios: {
         scheme: 'eternl://',
-        appStoreUrl: 'https://apps.apple.com/app/eternl/id1633447558',
+        appStoreUrl: 'https://apps.apple.com/app/eternl-by-tastenkunst/id1603854385',
       },
       android: {
         scheme: 'eternl://',
-        playStoreUrl: 'https://play.google.com/store/apps/details?id=io.eternl.wallet',
-        packageName: 'io.eternl.wallet',
-      },
-    },
-  },
-  nami: {
-    name: 'nami',
-    displayName: 'Nami',
-    icon: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiByeD0iMTAiIGZpbGw9IiMwQkJBRjAiLz4KPHBhdGggZD0iTTEwIDIwUTEwIDEwIDIwIDEwUTMwIDEwIDMwIDIwUTMwIDMwIDIwIDMwUTEwIDMwIDEwIDIwWiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIzIi8+CjxjaXJjbGUgY3g9IjIwIiBjeT0iMjAiIHI9IjMiIGZpbGw9IndoaXRlIi8+Cjwvc3ZnPgo=',
-    apiKey: 'nami',
-    downloadUrl: 'https://namiwallet.io/',
-    description: 'Simple and secure Cardano wallet',
-    mobileApp: {
-      ios: {
-        scheme: 'nami://',
-        appStoreUrl: 'https://apps.apple.com/app/nami-wallet/id1612818924',
-      },
-      android: {
-        scheme: 'nami://',
-        playStoreUrl: 'https://play.google.com/store/apps/details?id=io.nami.wallet',
-        packageName: 'io.nami.wallet',
-      },
-    },
-  },
-  typhon: {
-    name: 'typhon',
-    displayName: 'Typhon',
-    icon: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiByeD0iMTAiIGZpbGw9IiM4MzQzRkYiLz4KPHBhdGggZD0iTTIwIDhMMzAgMjBMMjAgMzJMMTAgMjBMMjAgOFoiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMiIvPgo8cGF0aCBkPSJNMTYgMTZMMjQgMTZMMjQgMjRMMTYgMjRMMTYgMTZaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K',
-    apiKey: 'typhon',
-    downloadUrl: 'https://typhonwallet.io/',
-    description: 'Multi-platform Cardano wallet with advanced features',
-    mobileApp: {
-      ios: {
-        scheme: 'typhonwallet://',
-        appStoreUrl: 'https://apps.apple.com/app/typhon-wallet/id1560093508',
-      },
-      android: {
-        scheme: 'typhonwallet://',
-        playStoreUrl: 'https://play.google.com/store/apps/details?id=io.typhonwallet.app',
-        packageName: 'io.typhonwallet.app',
+        playStoreUrl: 'https://play.google.com/store/apps/details?id=io.ccvault.v1.main',
+        packageName: 'io.ccvault.v1.main',
       },
     },
   },
@@ -110,60 +72,13 @@ export const WALLET_CONFIG: Record<WalletName, WalletInfo> = {
     mobileApp: {
       ios: {
         scheme: 'flint://',
-        appStoreUrl: 'https://apps.apple.com/app/flint-wallet/id1555742083',
+        appStoreUrl: 'https://apps.apple.com/app/dcspark-flint-wallet/id1619660885',
       },
       android: {
         scheme: 'flint://',
-        playStoreUrl: 'https://play.google.com/store/apps/details?id=com.dcentwallet.flint',
-        packageName: 'com.dcentwallet.flint',
-      },
-    },
-  },
-  lace: {
-    name: 'lace',
-    displayName: 'Lace',
-    icon: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiByeD0iMTAiIGZpbGw9IiMwRTFCMjYiLz4KPHBhdGggZD0iTTEyIDEySDI4VjI4SDEyVjEyWiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIyIi8+CjxwYXRoIGQ9Ik0xNiAxNkgyNFYyNEgxNlYxNloiIGZpbGw9IndoaXRlIi8+CjxwYXRoIGQ9Ik0xOCAxOEgyMlYyMkgxOFYxOFoiIGZpbGw9IiMwRTFCMjYiLz4KPC9zdmc+Cg==',
-    apiKey: 'lace',
-    downloadUrl: 'https://www.lace.io/',
-    description: 'Next-generation Cardano wallet by IOG',
-    mobileApp: {
-      ios: {
-        scheme: 'lace://',
-        appStoreUrl: 'https://apps.apple.com/app/lace-wallet/id6468903894',
-      },
-      android: {
-        scheme: 'lace://',
-        playStoreUrl: 'https://play.google.com/store/apps/details?id=io.lace.wallet',
-        packageName: 'io.lace.wallet',
-      },
-    },
-  },
-  daedalus: {
-    name: 'daedalus',
-    displayName: 'Daedalus',
-    icon: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiByeD0iMTAiIGZpbGw9IiMzQjgyRjYiLz4KPHBhdGggZD0iTTIwIDhMMzAgMTZMMjQgMjhMMTYgMjhMMTAgMTZMMjAgOFoiIGZpbGw9IndoaXRlIi8+CjxwYXRoIGQ9Ik0yMCAxNkwyNCAxOEwyMCAyMEwxNiAxOEwyMCAxNloiIGZpbGw9IiMzQjgyRjYiLz4KPC9zdmc+Cg==',
-    apiKey: 'daedalus',
-    downloadUrl: 'https://daedaluswallet.io/',
-    description: 'Full-node Cardano wallet with maximum security',
-    // Note: Daedalusは主にデスクトップウォレットのため、モバイル版は存在しない
-    // mobileApp情報は意図的に追加しない
-  },
-  nufi: {
-    name: 'nufi',
-    displayName: 'NuFi',
-    icon: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiByeD0iMTAiIGZpbGw9IiMwQ0E1NEMiLz4KPHBhdGggZD0iTTEyIDEySDIwVjIwSDI4VjI4SDIwVjIwSDEyVjEyWiIgZmlsbD0id2hpdGUiLz4KPGNpcmNsZSBjeD0iMjQiIGN5PSIxNiIgcj0iMiIgZmlsbD0iIzBDQTU0QyIvPgo8L3N2Zz4K',
-    apiKey: 'nufi',
-    downloadUrl: 'https://wallet.nu.fi/',
-    description: 'Multi-chain wallet supporting Cardano',
-    mobileApp: {
-      ios: {
-        scheme: 'nufi://',
-        appStoreUrl: 'https://apps.apple.com/app/nufi/id1588915892',
-      },
-      android: {
-        scheme: 'nufi://',
-        playStoreUrl: 'https://play.google.com/store/apps/details?id=io.nufi.nufi',
-        packageName: 'io.nufi.nufi',
+        // Note: Android app exists but specific Play Store URL not found in search
+        playStoreUrl: 'https://play.google.com/store/search?q=flint%20wallet%20cardano',
+        packageName: 'com.dcspark.flint',
       },
     },
   },
@@ -177,16 +92,63 @@ export const WALLET_CONFIG: Record<WalletName, WalletInfo> = {
     mobileApp: {
       ios: {
         scheme: 'gerowallet://',
-        appStoreUrl: 'https://apps.apple.com/app/gero-wallet/id1580223637',
+        appStoreUrl: 'https://apps.apple.com/app/gerowallet/id1630797611',
       },
       android: {
         scheme: 'gerowallet://',
-        playStoreUrl: 'https://play.google.com/store/apps/details?id=io.gerowallet.mobile',
+        // Note: Android app mentioned but specific Play Store URL not found
+        playStoreUrl: 'https://play.google.com/store/search?q=gerowallet',
         packageName: 'io.gerowallet.mobile',
       },
     },
   },
-};
+  // Desktop-only wallets (no mobile apps)
+  nami: {
+    name: 'nami',
+    displayName: 'Nami',
+    icon: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiByeD0iMTAiIGZpbGw9IiMwQkJBRjAiLz4KPHBhdGggZD0iTTEwIDIwUTEwIDEwIDIwIDEwUTMwIDEwIDMwIDIwUTMwIDMwIDIwIDMwUTEwIDMwIDEwIDIwWiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIzIi8+CjxjaXJjbGUgY3g9IjIwIiBjeT0iMjAiIHI9IjMiIGZpbGw9IndoaXRlIi8+Cjwvc3ZnPgo=',
+    apiKey: 'nami',
+    downloadUrl: 'https://namiwallet.io/',
+    description: 'Simple and secure Cardano wallet (browser extension only)',
+    // Note: Nami does not have mobile apps - browser extension only
+  },
+  typhon: {
+    name: 'typhon',
+    displayName: 'Typhon',
+    icon: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiByeD0iMTAiIGZpbGw9IiM4MzQzRkYiLz4KPHBhdGggZD0iTTIwIDhMMzAgMjBMMjAgMzJMMTAgMjBMMjAgOFoiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMiIvPgo8cGF0aCBkPSJNMTYgMTZMMjQgMTZMMjQgMjRMMTYgMjRMMTYgMTZaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K',
+    apiKey: 'typhon',
+    downloadUrl: 'https://typhonwallet.io/',
+    description: 'Multi-platform Cardano wallet with advanced features (browser extension only)',
+    // Note: Typhon mobile apps were planned but not released as of 2025
+  },
+  lace: {
+    name: 'lace',
+    displayName: 'Lace',
+    icon: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiByeD0iMTAiIGZpbGw9IiMwRTFCMjYiLz4KPHBhdGggZD0iTTEyIDEySDI4VjI4SDEyVjEyWiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIyIi8+CjxwYXRoIGQ9Ik0xNiAxNkgyNFYyNEgxNlYxNloiIGZpbGw9IndoaXRlIi8+CjxwYXRoIGQ9Ik0xOCAxOEgyMlYyMkgxOFYxOFoiIGZpbGw9IiMwRTFCMjYiLz4KPC9zdmc+Cg==',
+    apiKey: 'lace',
+    downloadUrl: 'https://www.lace.io/',
+    description: 'Next-generation Cardano wallet by IOG (browser extension only, mobile planned for 2025)',
+    // Note: Lace mobile apps are planned for 2025 but not yet released
+  },
+  daedalus: {
+    name: 'daedalus',
+    displayName: 'Daedalus',
+    icon: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiByeD0iMTAiIGZpbGw9IiMzQjgyRjYiLz4KPHBhdGggZD0iTTIwIDhMMzAgMTZMMjQgMjhMMTYgMjhMMTAgMTZMMjAgOFoiIGZpbGw9IndoaXRlIi8+CjxwYXRoIGQ9Ik0yMCAxNkwyNCAxOEwyMCAyMEwxNiAxOEwyMCAxNloiIGZpbGw9IiMzQjgyRjYiLz4KPC9zdmc+Cg==',
+    apiKey: 'daedalus',
+    downloadUrl: 'https://daedaluswallet.io/',
+    description: 'Full-node Cardano wallet with maximum security (desktop only)',
+    // Note: Daedalus is desktop-only, no mobile apps exist
+  },
+  nufi: {
+    name: 'nufi',
+    displayName: 'NuFi',
+    icon: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiByeD0iMTAiIGZpbGw9IiMwQ0E1NEMiLz4KPHBhdGggZD0iTTEyIDEySDIwVjIwSDI4VjI4SDIwVjIwSDEyVjEyWiIgZmlsbD0id2hpdGUiLz4KPGNpcmNsZSBjeD0iMjQiIGN5PSIxNiIgcj0iMiIgZmlsbD0iIzBDQTU0QyIvPgo8L3N2Zz4K',
+    apiKey: 'nufi',
+    downloadUrl: 'https://wallet.nu.fi/',
+    description: 'Multi-chain wallet supporting Cardano (primarily browser-based)',
+    // Note: NuFi mobile app availability unclear from search results - primarily browser-based
+  },
+};;
 
 /**
  * Get available wallets (installed and detected)

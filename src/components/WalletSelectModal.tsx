@@ -6,6 +6,7 @@ import { CIP30Provider, CIP30Api, NetworkMismatchError } from '../types/otc/inde
 import { getDeviceInfo } from '../utils/deviceUtils';
 import { handleMobileWalletSelection } from '../utils/mobileWalletUtils';
 import { WalletName } from '../types/cardano';
+import { WALLET_CONFIG } from '../utils/walletConfig';
 
 interface WalletSelectModalProps {
   isOpen: boolean;
@@ -96,11 +97,42 @@ export const WalletSelectModal: React.FC<WalletSelectModalProps> = ({
       // Wait a bit for wallets to load
       await new Promise(resolve => setTimeout(resolve, 100));
 
+      const deviceInfo = getDeviceInfo();
+
+      // モバイルの場合、設定ファイルから対応ウォレットを直接表示
+      if (!deviceInfo.isDesktop) {
+        for (const config of WALLET_CONFIGS) {
+          const walletConfig = WALLET_CONFIG[config.id as WalletName];
+
+          // モバイルアプリ対応のウォレットのみ表示
+          if (walletConfig?.mobileApp) {
+            const appConfig = deviceInfo.platform === 'ios'
+              ? walletConfig.mobileApp.ios
+              : walletConfig.mobileApp.android;
+
+            if (appConfig) {
+              detected.push({
+                id: config.id,
+                name: config.name,
+                icon: config.icon,
+                isEnabled: false, // モバイルアプリの場合は常にfalse
+                apiVersion: 'mobile',
+              });
+            }
+          }
+        }
+
+        setAvailableWallets(detected);
+        setIsScanning(false);
+        return;
+      }
+
+      // デスクトップの場合、従来のブラウザ拡張機能検知
       for (const config of WALLET_CONFIGS) {
         try {
           // Check if wallet is available
           const walletApi = window.cardano?.[config.id];
-          
+
           if (walletApi) {
             // Get wallet info
             const isEnabled = await walletApi.isEnabled?.() || false;
@@ -128,7 +160,7 @@ export const WalletSelectModal: React.FC<WalletSelectModalProps> = ({
     } finally {
       setIsScanning(false);
     }
-  }, []);
+  }, []);;
 
   // Connect to selected wallet
   const handleWalletSelect = useCallback(async (provider: CIP30Provider) => {
@@ -139,11 +171,11 @@ export const WalletSelectModal: React.FC<WalletSelectModalProps> = ({
 
     try {
       const deviceInfo = getDeviceInfo();
-      
+
       // モバイルデバイスの場合、アプリ起動を試行
       if (!deviceInfo.isDesktop) {
         const mobileResult = await handleMobileWalletSelection(provider.id as WalletName);
-        
+
         if (mobileResult.success) {
           setConnectionError(null);
           // モバイルアプリが起動された場合、モーダルを閉じる
@@ -188,9 +220,9 @@ export const WalletSelectModal: React.FC<WalletSelectModalProps> = ({
 
     } catch (error) {
       console.error(`Failed to connect to ${provider.name}:`, error);
-      
+
       let errorMessage = 'ウォレットへの接続に失敗しました';
-      
+
       if (error instanceof NetworkMismatchError) {
         errorMessage = error.message;
       } else if (error instanceof Error) {
@@ -202,7 +234,7 @@ export const WalletSelectModal: React.FC<WalletSelectModalProps> = ({
           errorMessage = error.message;
         }
       }
-      
+
       setConnectionError(errorMessage);
     } finally {
       setIsConnecting(null);
@@ -235,8 +267,8 @@ export const WalletSelectModal: React.FC<WalletSelectModalProps> = ({
   return (
     <div className={`fixed inset-0 z-50 overflow-y-auto ${className}`}>
       {/* Backdrop */}
-      <div 
-        className="fixed inset-0 bg-black bg-opacity-50 transition-opacity" 
+      <div
+        className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
         onClick={onClose}
       />
 
@@ -305,7 +337,7 @@ export const WalletSelectModal: React.FC<WalletSelectModalProps> = ({
                     ウォレットが見つかりません
                   </h4>
                   <p className="text-sm text-gray-500 mb-4">
-                    {getDeviceInfo().isDesktop 
+                    {getDeviceInfo().isDesktop
                       ? '対応ウォレットをインストールしてページを再読み込みしてください'
                       : 'モバイルアプリをインストールするか、下記のリンクから入手してください'
                     }
@@ -324,7 +356,7 @@ export const WalletSelectModal: React.FC<WalletSelectModalProps> = ({
                 availableWallets.map((wallet) => {
                   const deviceInfo = getDeviceInfo();
                   const isMobile = !deviceInfo.isDesktop;
-                  
+
                   return (
                     <button
                       key={wallet.id}
@@ -352,7 +384,7 @@ export const WalletSelectModal: React.FC<WalletSelectModalProps> = ({
                           )}
                         </div>
                         <p className="text-xs text-gray-500 mt-1">
-                          {isMobile 
+                          {isMobile
                             ? 'モバイルアプリを開きます'
                             : `API バージョン: ${wallet.apiVersion}`
                           }
