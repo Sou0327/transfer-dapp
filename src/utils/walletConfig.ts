@@ -4,7 +4,7 @@ import { WalletInfo, WalletName } from '../types/cardano';
  * Supported Cardano wallets configuration
  * Icons are base64-encoded SVGs for better reliability and consistent styling
  */
-export const export const WALLET_CONFIG: Record<WalletName, WalletInfo> = {
+export const WALLET_CONFIG: Record<WalletName, WalletInfo> = {
   yoroi: {
     name: 'yoroi',
     displayName: 'Yoroi',
