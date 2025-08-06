@@ -1,0 +1,1034 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OTC Transfer Admin - 管理画面</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f5f5f7;
+            color: #1d1d1f;
+            line-height: 1.6;
+        }
+        
+        .header {
+            background: #fff;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            padding: 1rem 2rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .header h1 {
+            color: #1d1d1f;
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-left: 10px;
+            background: #34c759;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 2rem;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .stat-card {
+            background: #fff;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .stat-card h3 {
+            font-size: 0.875rem;
+            color: #86868b;
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #1d1d1f;
+        }
+        
+        .requests-section {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .section-header {
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid #e5e5e7;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .section-header h2 {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+        
+        .refresh-btn {
+            background: #007aff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            font-size: 0.875rem;
+            transition: background 0.2s;
+        }
+        
+        .refresh-btn:hover {
+            background: #0056cc;
+        }
+        
+        .requests-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .requests-table th,
+        .requests-table td {
+            text-align: left;
+            padding: 1rem 2rem;
+            border-bottom: 1px solid #e5e5e7;
+        }
+        
+        .requests-table th {
+            background: #f9f9fb;
+            font-weight: 600;
+            font-size: 0.875rem;
+            color: #86868b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 16px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .status-requested {
+            background: #ff9500;
+            color: white;
+        }
+        
+        .status-signed {
+            background: #34c759;
+            color: white;
+        }
+        
+        .status-submitted {
+            background: #007aff;
+            color: white;
+        }
+        
+        .status-confirmed {
+            background: #30d158;
+            color: white;
+        }
+        
+        .status-failed {
+            background: #ff3b30;
+            color: white;
+        }
+        
+        .action-btn {
+            background: #007aff;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 0.375rem 0.75rem;
+            cursor: pointer;
+            font-size: 0.75rem;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        
+        .action-btn:hover {
+            background: #0056cc;
+            transform: translateY(-1px);
+        }
+        
+        .action-btn:disabled {
+            background: #86868b;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            color: #86868b;
+        }
+        
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #e5e5e7;
+            border-radius: 50%;
+            border-top-color: #007aff;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #34c759;
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+            z-index: 1000;
+        }
+        
+        .notification.show {
+            transform: translateX(0);
+        }
+        
+        .notification.error {
+            background: #ff3b30;
+        }
+        
+        .amount-display {
+            font-family: 'SF Mono', Consolas, Monaco, monospace;
+            font-weight: 500;
+        }
+        
+        .address-display {
+            font-family: 'SF Mono', Consolas, Monaco, monospace;
+            font-size: 0.75rem;
+            color: #86868b;
+        }
+        
+        .ttl-warning {
+            color: #ff9500;
+            font-weight: 600;
+        }
+        
+        .ttl-expired {
+            color: #ff3b30;
+            font-weight: 600;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                margin: 1rem auto;
+                padding: 0 1rem;
+            }
+            
+            .requests-table {
+                font-size: 0.875rem;
+            }
+            
+            .requests-table th,
+            .requests-table td {
+                padding: 0.75rem 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center;">
+                <h1>OTC Transfer 管理画面</h1>
+                <span class="status-indicator" id="connectionStatus"></span>
+                <span id="connectionText" style="margin-left: 8px; font-size: 0.875rem; color: #86868b;">接続中...</span>
+            </div>
+            <button id="logoutButton" class="refresh-btn" style="display: none;" onclick="dashboard.logout()">
+                ログアウト
+            </button>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- ログイン画面 -->
+        <div id="loginSection" class="requests-section" style="max-width: 400px; margin: 2rem auto;">
+            <div class="section-header">
+                <h2>管理者ログイン</h2>
+            </div>
+            <div style="padding: 2rem;">
+                <form id="loginForm">
+                    <div style="margin-bottom: 1rem;">
+                        <label for="email" style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Email:</label>
+                        <input type="email" id="email" required 
+                               style="width: 100%; padding: 0.75rem; border: 1px solid #e5e5e7; border-radius: 8px; font-size: 1rem;"
+                               value="admin@otc.local">
+                    </div>
+                    <div style="margin-bottom: 1.5rem;">
+                        <label for="password" style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Password:</label>
+                        <input type="password" id="password" required 
+                               style="width: 100%; padding: 0.75rem; border: 1px solid #e5e5e7; border-radius: 8px; font-size: 1rem;"
+                               placeholder="admin123">
+                    </div>
+                    <button type="submit" class="refresh-btn" style="width: 100%; padding: 0.75rem; margin-bottom: 1rem;">
+                        <span id="loginButtonText">ログイン</span>
+                    </button>
+                    <button type="button" onclick="dashboard.clearStorage()" class="refresh-btn" 
+                            style="width: 100%; padding: 0.5rem; background: #ff9500;">
+                        デバッグ: トークンクリア
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- ダッシュボード（ログイン後表示） -->
+        <div id="dashboardSection" style="display: none;">
+            <!-- 統計情報 -->
+            <div class="stats-grid">
+            <div class="stat-card">
+                <h3>待機中リクエスト</h3>
+                <div class="value" id="pendingCount">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>署名済み</h3>
+                <div class="value" id="signedCount">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>送信済み</h3>
+                <div class="value" id="submittedCount">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>本日の処理数</h3>
+                <div class="value" id="todayCount">-</div>
+            </div>
+        </div>
+
+        <!-- 新規リクエスト作成 -->
+        <div class="requests-section" style="margin-bottom: 2rem;">
+            <div class="section-header">
+                <h2>新規OTCリクエスト作成</h2>
+                <button class="refresh-btn" onclick="dashboard.toggleCreateForm()">
+                    <span id="createToggleText">作成フォーム表示</span>
+                </button>
+            </div>
+            
+            <div id="createRequestForm" style="display: none; padding: 2rem;">
+                <form id="otcRequestForm">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                        <div>
+                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">通貨種別:</label>
+                            <select id="currency" required style="width: 100%; padding: 0.75rem; border: 1px solid #e5e5e7; border-radius: 8px;">
+                                <option value="ADA">ADA</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">金額モード:</label>
+                            <select id="amountMode" required style="width: 100%; padding: 0.75rem; border: 1px solid #e5e5e7; border-radius: 8px;">
+                                <option value="fixed">Fixed - 固定額</option>
+                                <option value="sweep">Sweep - 全額送金</option>
+                                <option value="rate_based">Rate Based - レート連動</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div id="amountInputSection" style="margin-bottom: 1rem;">
+                        <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">金額 (ADA):</label>
+                        <input type="number" id="amount" step="0.000001" min="1"
+                               style="width: 100%; padding: 0.75rem; border: 1px solid #e5e5e7; border-radius: 8px;"
+                               placeholder="例: 10.5">
+                    </div>
+                    
+                    <div style="margin-bottom: 1rem;">
+                        <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">送金先アドレス:</label>
+                        <input type="text" id="recipient" required
+                               style="width: 100%; padding: 0.75rem; border: 1px solid #e5e5e7; border-radius: 8px;"
+                               placeholder="addr1...">
+                    </div>
+                    
+                    <div style="margin-bottom: 1.5rem;">
+                        <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">有効期限 (分):</label>
+                        <input type="number" id="ttlMinutes" value="60" min="5" max="2160"
+                               style="width: 100%; padding: 0.75rem; border: 1px solid #e5e5e7; border-radius: 8px;">
+                    </div>
+                    
+                    <button type="submit" class="refresh-btn" style="width: 100%; padding: 0.75rem;">
+                        <span id="createButtonText">リクエスト作成</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- リクエスト一覧 -->
+        <div class="requests-section">
+            <div class="section-header">
+                <h2>OTC取引リクエスト一覧</h2>
+                <button class="refresh-btn" onclick="loadRequests()">
+                    <span id="refreshIcon">🔄</span> 更新
+                </button>
+            </div>
+            
+            <div id="loadingSection" class="loading">
+                <div class="spinner"></div>
+                <p style="margin-top: 1rem;">データを読み込み中...</p>
+            </div>
+            
+            <table class="requests-table" id="requestsTable" style="display: none;">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>金額</th>
+                        <th>送金先</th>
+                        <th>ステータス</th>
+                        <th>TTL</th>
+                        <th>作成日時</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="requestsTableBody">
+                </tbody>
+            </table>
+        </div>
+        </div> <!-- ダッシュボードセクション終了 -->
+    </div>
+
+    <!-- 通知 -->
+    <div id="notification" class="notification">
+        <span id="notificationText"></span>
+    </div>
+
+    <script>
+        class AdminDashboard {
+            constructor() {
+                this.ws = null;
+                this.requests = [];
+                this.isConnected = false;
+                this.authToken = localStorage.getItem('otc_admin_token');
+                
+                // ログイン状態確認
+                if (this.authToken) {
+                    this.showDashboard();
+                    this.initWebSocket();
+                    this.loadRequests();
+                    
+                    // 5分間隔で自動更新
+                    setInterval(() => this.loadRequests(), 5 * 60 * 1000);
+                } else {
+                    this.showLogin();
+                }
+                
+                // ログインフォーム設定
+                this.setupLoginForm();
+                this.setupCreateForm();
+            }
+            
+            showLogin() {
+                document.getElementById('loginSection').style.display = 'block';
+                document.getElementById('dashboardSection').style.display = 'none';
+                document.getElementById('logoutButton').style.display = 'none';
+            }
+            
+            showDashboard() {
+                document.getElementById('loginSection').style.display = 'none';
+                document.getElementById('dashboardSection').style.display = 'block';
+                document.getElementById('logoutButton').style.display = 'block';
+            }
+            
+            setupLoginForm() {
+                const loginForm = document.getElementById('loginForm');
+                loginForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    await this.handleLogin();
+                });
+            }
+            
+            async handleLogin() {
+                const email = document.getElementById('email').value;
+                const password = document.getElementById('password').value;
+                const loginButton = document.getElementById('loginButtonText');
+                
+                loginButton.textContent = 'ログイン中...';
+                
+                try {
+                    const response = await fetch('/api/auth/login', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ email, password })
+                    });
+                    
+                    const data = await response.json();
+                    console.log('📥 Login response:', { 
+                        status: response.status, 
+                        ok: response.ok,
+                        token: data.token ? data.token.substring(0, 20) + '...' : 'None'
+                    });
+                    
+                    if (response.ok) {
+                        this.authToken = data.token;
+                        localStorage.setItem('otc_admin_token', this.authToken);
+                        
+                        console.log('✅ Token saved to localStorage:', this.authToken ? 'Yes' : 'No');
+                        console.log('✅ Token preview:', this.authToken.substring(0, 20) + '...');
+                        
+                        this.showNotification('ログイン成功', 'success');
+                        this.showDashboard();
+                        
+                        // ダッシュボード初期化
+                        this.initWebSocket();
+                        this.loadRequests();
+                        
+                        // 自動更新開始
+                        setInterval(() => this.loadRequests(), 5 * 60 * 1000);
+                        
+                    } else {
+                        throw new Error(data.error || 'ログインに失敗しました');
+                    }
+                } catch (error) {
+                    console.error('Login error:', error);
+                    this.showNotification(`ログインエラー: ${error.message}`, 'error');
+                } finally {
+                    loginButton.textContent = 'ログイン';
+                }
+            }
+            
+            logout() {
+                this.authToken = null;
+                localStorage.removeItem('otc_admin_token');
+                this.showLogin();
+                
+                if (this.ws) {
+                    this.ws.close();
+                }
+            }
+            
+            clearStorage() {
+                console.log('🧹 Clearing localStorage...');
+                console.log('🔍 Current token:', localStorage.getItem('otc_admin_token'));
+                
+                localStorage.removeItem('otc_admin_token');
+                this.authToken = null;
+                
+                console.log('✅ Storage cleared');
+                this.showNotification('トークンをクリアしました', 'success');
+                
+                // ページリロード
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            }
+            
+            setupCreateForm() {
+                const createForm = document.getElementById('otcRequestForm');
+                const amountModeSelect = document.getElementById('amountMode');
+                const amountInputSection = document.getElementById('amountInputSection');
+                
+                // 金額モード変更時の表示制御
+                amountModeSelect.addEventListener('change', (e) => {
+                    if (e.target.value === 'sweep') {
+                        amountInputSection.style.display = 'none';
+                    } else {
+                        amountInputSection.style.display = 'block';
+                    }
+                });
+                
+                // フォーム送信処理
+                createForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    await this.createOTCRequest();
+                });
+            }
+            
+            toggleCreateForm() {
+                const form = document.getElementById('createRequestForm');
+                const toggleText = document.getElementById('createToggleText');
+                
+                if (form.style.display === 'none') {
+                    form.style.display = 'block';
+                    toggleText.textContent = 'フォーム非表示';
+                } else {
+                    form.style.display = 'none';
+                    toggleText.textContent = 'フォーム表示';
+                }
+            }
+            
+            async createOTCRequest() {
+                const currency = document.getElementById('currency').value;
+                const amountMode = document.getElementById('amountMode').value;
+                const amount = document.getElementById('amount').value;
+                const recipient = document.getElementById('recipient').value;
+                const ttlMinutes = document.getElementById('ttlMinutes').value;
+                const createButton = document.getElementById('createButtonText');
+                
+                // デバッグ: トークンの確認
+                console.log('🔐 Current token:', this.authToken ? 'Present' : 'Missing');
+                console.log('🔐 Token preview:', this.authToken ? this.authToken.substring(0, 20) + '...' : 'None');
+                
+                createButton.textContent = '作成中...';
+                
+                try {
+                    // リクエストボディの構築
+                    let requestBody = {
+                        currency,
+                        amount_mode: amountMode,
+                        recipient,
+                        ttl_minutes: parseInt(ttlMinutes)
+                    };
+                    
+                    // 金額設定
+                    if (amountMode === 'fixed') {
+                        requestBody.amount_or_rule = {
+                            amount: Math.floor(parseFloat(amount) * 1000000) // ADA to Lovelace
+                        };
+                    } else if (amountMode === 'sweep') {
+                        requestBody.amount_or_rule = { sweep: true };
+                    } else if (amountMode === 'rate_based') {
+                        requestBody.amount_or_rule = {
+                            fiat_amount: parseFloat(amount),
+                            rate_source: 'coinbase'
+                        };
+                    }
+                    
+                    console.log('📤 Request body:', requestBody);
+                    
+                    const response = await fetch('/api/ada/requests', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${this.authToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(requestBody)
+                    });
+                    
+                    const data = await response.json();
+                    console.log('📥 Response:', data);
+                    
+                    if (response.ok) {
+                        this.showNotification('リクエスト作成成功！', 'success');
+                        
+                        // フォームリセット
+                        document.getElementById('otcRequestForm').reset();
+                        document.getElementById('ttlMinutes').value = '60';
+                        
+                        // リクエスト一覧更新
+                        this.loadRequests();
+                        
+                        // フォーム非表示
+                        this.toggleCreateForm();
+                        
+                    } else {
+                        throw new Error(data.error || 'リクエスト作成に失敗しました');
+                    }
+                } catch (error) {
+                    console.error('❌ Create request error:', error);
+                    this.showNotification(`作成エラー: ${error.message}`, 'error');
+                } finally {
+                    createButton.textContent = 'リクエスト作成';
+                }
+            }
+            
+            initWebSocket() {
+                // Socket.io クライアントを使用
+                const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
+                const socketUrl = `${protocol}//${window.location.host}`;
+                
+                console.log('🔌 Connecting to Socket.io server:', socketUrl);
+                console.log('🔌 This will connect to the Socket.io server on the backend');
+                
+                // Socket.ioクライアントライブラリをCDNからロード
+                if (!window.io) {
+                    const script = document.createElement('script');
+                    script.src = 'https://cdn.socket.io/4.7.4/socket.io.min.js';
+                    script.onload = () => {
+                        console.log('✅ Socket.io client library loaded');
+                        this.connectSocketIO(socketUrl);
+                    };
+                    script.onerror = () => {
+                        console.error('❌ Failed to load Socket.io client library');
+                        this.updateConnectionStatus(false);
+                    };
+                    document.head.appendChild(script);
+                } else {
+                    this.connectSocketIO(socketUrl);
+                }
+            }
+            
+            connectSocketIO(socketUrl) {
+                try {
+                    this.ws = io(socketUrl, {
+                        transports: ['websocket', 'polling'],
+                        upgrade: true,
+                        timeout: 20000,
+                        forceNew: false
+                    });
+                } catch (error) {
+                    console.error('❌ Socket.io connection failed:', error);
+                    this.updateConnectionStatus(false);
+                    return;
+                }
+                
+                this.ws.on('connect', () => {
+                    console.log('✅ Socket.io connected');
+                    this.isConnected = true;
+                    this.updateConnectionStatus(true);
+                    
+                    // 管理者認証を試行
+                    if (this.authToken) {
+                        console.log('🔐 Attempting admin authentication...');
+                        this.ws.emit('authenticate', {
+                            token: this.authToken,
+                            client_type: 'admin-dashboard'
+                        });
+                    }
+                });
+                
+                this.ws.on('disconnect', (reason) => {
+                    console.log('📡 Socket.io disconnected:', reason);
+                    this.isConnected = false;
+                    this.updateConnectionStatus(false);
+                });
+                
+                this.ws.on('reconnect', () => {
+                    console.log('🔄 Socket.io reconnected');
+                    this.isConnected = true;
+                    this.updateConnectionStatus(true);
+                });
+                
+                this.ws.on('connect_error', (error) => {
+                    console.error('❌ Socket.io connection error:', error);
+                    this.updateConnectionStatus(false);
+                });
+                
+                // Socket.io イベントハンドラー
+                this.ws.on('connection_established', (data) => {
+                    console.log('✅ Socket.io connection established:', data);
+                });
+                
+                this.ws.on('admin_authenticated', (data) => {
+                    console.log('✅ Admin authentication successful:', data);
+                });
+                
+                this.ws.on('authentication_failed', (data) => {
+                    console.error('❌ Authentication failed:', data);
+                });
+                
+                this.ws.on('REQUEST_SIGNED', (data) => {
+                    console.log('📝 Request signed:', data);
+                    this.handleWebSocketMessage({ type: 'REQUEST_SIGNED', ...data });
+                });
+                
+                this.ws.on('TRANSACTION_SUBMITTED', (data) => {
+                    console.log('🚀 Transaction submitted:', data);
+                    this.handleWebSocketMessage({ type: 'TRANSACTION_SUBMITTED', ...data });
+                });
+                
+                this.ws.on('error', (error) => {
+                    console.error('❌ Socket.io error:', error);
+                    this.updateConnectionStatus(false);
+                });
+            }
+            
+            updateConnectionStatus(connected) {
+                const statusIndicator = document.getElementById('connectionStatus');
+                const statusText = document.getElementById('connectionText');
+                
+                if (connected) {
+                    statusIndicator.style.background = '#34c759';
+                    statusText.textContent = 'リアルタイム接続';
+                    statusText.style.color = '#34c759';
+                } else {
+                    statusIndicator.style.background = '#ff3b30';
+                    statusText.textContent = '接続中...';
+                    statusText.style.color = '#ff3b30';
+                }
+            }
+            
+            handleWebSocketMessage(data) {
+                switch (data.type) {
+                    case 'REQUEST_SIGNED':
+                        this.showNotification(`リクエスト ${data.requestId} が署名されました`, 'success');
+                        this.loadRequests();
+                        break;
+                    case 'TRANSACTION_SUBMITTED':
+                        this.showNotification(`トランザクション ${data.txHash} が送信されました`, 'success');
+                        this.loadRequests();
+                        break;
+                    case 'connection_established':
+                        console.log(`WebSocket接続確立: ${data.clientId}`);
+                        break;
+                }
+            }
+            
+            async loadRequests() {
+                const loadingSection = document.getElementById('loadingSection');
+                const requestsTable = document.getElementById('requestsTable');
+                const refreshIcon = document.getElementById('refreshIcon');
+                
+                // ローディング表示
+                if (this.requests.length === 0) {
+                    loadingSection.style.display = 'block';
+                    requestsTable.style.display = 'none';
+                }
+                
+                refreshIcon.style.transform = 'rotate(180deg)';
+                
+                try {
+                    const response = await fetch('/api/ada/requests', {
+                        headers: {
+                            'Authorization': `Bearer ${this.authToken}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        this.requests = data.requests || [];
+                        this.renderRequests();
+                        this.updateStats();
+                        
+                        loadingSection.style.display = 'none';
+                        requestsTable.style.display = 'table';
+                    } else {
+                        throw new Error(data.error || 'Failed to load requests');
+                    }
+                } catch (error) {
+                    console.error('❌ Load requests error:', error);
+                    this.showNotification('データの読み込みに失敗しました', 'error');
+                } finally {
+                    refreshIcon.style.transform = 'rotate(0deg)';
+                }
+            }
+            
+            renderRequests() {
+                const tbody = document.getElementById('requestsTableBody');
+                tbody.innerHTML = '';
+                
+                if (this.requests.length === 0) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="7" style="text-align: center; color: #86868b; padding: 2rem;">
+                                リクエストが見つかりません
+                            </td>
+                        </tr>
+                    `;
+                    return;
+                }
+                
+                this.requests.forEach(request => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>
+                            <div style="font-family: 'SF Mono', monospace; font-size: 0.75rem;">
+                                ${request.id.substring(0, 16)}...
+                            </div>
+                        </td>
+                        <td>
+                            <div class="amount-display">
+                                ${this.formatAmount(request.amount_or_rule_json, request.amount_mode)}
+                            </div>
+                        </td>
+                        <td>
+                            <div class="address-display">
+                                ${request.recipient.substring(0, 20)}...
+                            </div>
+                        </td>
+                        <td>
+                            <span class="status-badge status-${request.status.toLowerCase()}">
+                                ${this.translateStatus(request.status)}
+                            </span>
+                        </td>
+                        <td>${this.formatTTL(request.ttl_absolute)}</td>
+                        <td>${this.formatDateTime(request.created_at)}</td>
+                        <td>
+                            ${this.renderActionButton(request)}
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            }
+            
+            formatAmount(amountOrRule, mode) {
+                try {
+                    const rule = typeof amountOrRule === 'string' ? JSON.parse(amountOrRule) : amountOrRule;
+                    
+                    switch (mode) {
+                        case 'fixed':
+                            return `${(rule.amount / 1000000).toLocaleString()} ADA`;
+                        case 'sweep':
+                            return '全額送金';
+                        case 'rate_based':
+                            return `¥${rule.fiat_amount.toLocaleString()} (${rule.rate_source})`;
+                        default:
+                            return '不明';
+                    }
+                } catch (error) {
+                    return '解析エラー';
+                }
+            }
+            
+            translateStatus(status) {
+                const statusMap = {
+                    'REQUESTED': '署名待ち',
+                    'SIGNED': '承認待ち',
+                    'SUBMITTED': '送信済み',
+                    'CONFIRMED': '確認済み',
+                    'FAILED': '失敗',
+                    'EXPIRED': '期限切れ'
+                };
+                return statusMap[status] || status;
+            }
+            
+            formatTTL(ttlAbsolute) {
+                const ttlDate = new Date(ttlAbsolute);
+                const now = new Date();
+                const diff = ttlDate - now;
+                
+                if (diff < 0) {
+                    return '<span class="ttl-expired">期限切れ</span>';
+                } else if (diff < 10 * 60 * 1000) { // 10分未満
+                    return '<span class="ttl-warning">まもなく期限切れ</span>';
+                } else {
+                    const minutes = Math.floor(diff / (60 * 1000));
+                    return `${minutes}分`;
+                }
+            }
+            
+            formatDateTime(dateString) {
+                const date = new Date(dateString);
+                return date.toLocaleDateString('ja-JP', {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            }
+            
+            renderActionButton(request) {
+                if (request.status === 'SIGNED') {
+                    return `
+                        <button class="action-btn" onclick="dashboard.submitTransaction('${request.id}')">
+                            送信実行
+                        </button>
+                    `;
+                } else if (request.status === 'SUBMITTED') {
+                    return '<span style="color: #86868b; font-size: 0.75rem;">処理中...</span>';
+                } else {
+                    return '<span style="color: #86868b; font-size: 0.75rem;">-</span>';
+                }
+            }
+            
+            async submitTransaction(requestId) {
+                if (!confirm(`リクエスト ${requestId.substring(0, 16)}... のトランザクションを送信しますか？`)) {
+                    return;
+                }
+                
+                try {
+                    const response = await fetch('/api/ada/submit', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${this.authToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ requestId })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        this.showNotification(`トランザクション送信成功: ${data.txHash}`, 'success');
+                        this.loadRequests();
+                    } else {
+                        throw new Error(data.error || 'Submit failed');
+                    }
+                } catch (error) {
+                    console.error('❌ Submit error:', error);
+                    this.showNotification(`送信失敗: ${error.message}`, 'error');
+                }
+            }
+            
+            updateStats() {
+                const pending = this.requests.filter(r => r.status === 'REQUESTED').length;
+                const signed = this.requests.filter(r => r.status === 'SIGNED').length;
+                const submitted = this.requests.filter(r => ['SUBMITTED', 'CONFIRMED'].includes(r.status)).length;
+                
+                const today = new Date().toDateString();
+                const todayRequests = this.requests.filter(r => 
+                    new Date(r.created_at).toDateString() === today
+                ).length;
+                
+                document.getElementById('pendingCount').textContent = pending;
+                document.getElementById('signedCount').textContent = signed;
+                document.getElementById('submittedCount').textContent = submitted;
+                document.getElementById('todayCount').textContent = todayRequests;
+            }
+            
+            showNotification(message, type = 'success') {
+                const notification = document.getElementById('notification');
+                const notificationText = document.getElementById('notificationText');
+                
+                notificationText.textContent = message;
+                notification.className = `notification ${type}`;
+                notification.classList.add('show');
+                
+                setTimeout(() => {
+                    notification.classList.remove('show');
+                }, 4000);
+            }
+        }
+        
+        // グローバル変数として dashboard を作成
+        let dashboard;
+        
+        // DOM読み込み完了後に初期化
+        document.addEventListener('DOMContentLoaded', () => {
+            dashboard = new AdminDashboard();
+        });
+        
+        // グローバル関数（HTML内から呼び出し用）
+        function loadRequests() {
+            dashboard.loadRequests();
+        }
+    </script>
+</body>
+</html>

@@ -27,16 +27,97 @@ export default defineConfig(({ mode }) => {
       // チャンク分割設定
       rollupOptions: {
         output: {
-          manualChunks: {
-            // React関連を別チャンクに分離
-            react: ['react', 'react-dom'],
-            // Cardano Serialization Libraryを別チャンクに分離
-            cardano: ['@emurgo/cardano-serialization-lib-browser'],
+          manualChunks: (id) => {
+            // Node modulesの動的チャンク分割
+            if (id.includes('node_modules')) {
+              // React関連
+              if (id.includes('react') || id.includes('react-dom')) {
+                return 'react';
+              }
+              
+              // Cardano関連ライブラリ（最も大きなライブラリ）
+              if (id.includes('@emurgo/cardano-serialization-lib-browser')) {
+                return 'cardano-wasm';
+              }
+              
+              // Cardano peer connect関連
+              if (id.includes('@fabianbormann/cardano-peer-connect') || 
+                  id.includes('@fabianbormann/meerkat')) {
+                return 'cardano-peer-connect';
+              }
+              
+              // ルーティング関連
+              if (id.includes('react-router-dom')) {
+                return 'router';
+              }
+              
+              // 状態管理関連
+              if (id.includes('zustand') || id.includes('immer')) {
+                return 'store';
+              }
+              
+              // WebSocket関連
+              if (id.includes('socket.io-client') || id.includes('ws')) {
+                return 'websocket';
+              }
+              
+              // 暗号化関連
+              if (id.includes('crypto') || id.includes('bcrypt')) {
+                return 'crypto';
+              }
+              
+              // ユーティリティライブラリ（軽量なもの）
+              if (id.includes('uuid') || id.includes('qrcode')) {
+                return 'utils';
+              }
+              
+              // バリデーション関連（zodが含まれているかチェック）
+              if (id.includes('zod')) {
+                return 'validation';
+              }
+              
+              // その他のnode_modulesは共通チャンクに
+              return 'vendor';
+            }
+            
+            // アプリケーションコードの分割
+            if (id.includes('/src/components/')) {
+              return 'components';
+            }
+            
+            if (id.includes('/src/utils/') || id.includes('/src/lib/')) {
+              return 'app-utils';
+            }
+            
+            if (id.includes('/src/stores/') || id.includes('/src/context/')) {
+              return 'app-store';
+            }
           },
           // チャンクファイル名の設定
           chunkFileNames: 'assets/js/[name]-[hash].js',
           entryFileNames: 'assets/js/[name]-[hash].js',
           assetFileNames: 'assets/[ext]/[name]-[hash].[ext]',
+        },
+        // 🔐 警告の制御（セキュリティを考慮）
+        onwarn(warning, warn) {
+          // eval使用警告を特定の信頼できるライブラリでは抑制
+          if (warning.code === 'EVAL' && 
+              warning.id && 
+              (warning.id.includes('cardano-peer-connect') || 
+               warning.id.includes('@fabianbormann') ||
+               warning.id.includes('node_modules'))) {
+            // 信頼できるサードパーティライブラリのeval使用は許可
+            console.warn(`⚠️ Suppressed eval warning in: ${warning.id}`);
+            return;
+          }
+          
+          // 循環依存警告を抑制（開発時のみ）
+          if (warning.code === 'CIRCULAR_DEPENDENCY' && env.NODE_ENV === 'development') {
+            return;
+          }
+          
+          // その他の警告は通常通り表示
+          warn(warning);
         },
       },
       
@@ -47,14 +128,20 @@ export default defineConfig(({ mode }) => {
       // 圧縮設定
       minify: 'esbuild',
       
-      // ファイルサイズ警告の閾値（KB）
-      chunkSizeWarningLimit: 1000,
+      // セキュリティ設定 - eval使用警告の適切な処理
+      target: 'es2020',
+      
+      // ファイルサイズ警告の閾値（KB）- Cardano WASMライブラリを考慮
+      chunkSizeWarningLimit: mode === 'development' ? 2000 : 1200,
       
       // CSSコード分割
       cssCodeSplit: true,
       
-      // プリロード無効化（セキュリティ向上）
-      modulePreload: false,
+      // プリロード設定（Docker環境対応）
+      modulePreload: {
+        polyfill: true,
+        resolveDependencies: () => [],
+      },
     },
     
     // 開発サーバー設定
@@ -68,6 +155,18 @@ export default defineConfig(({ mode }) => {
           target: 'http://localhost:3001',
           changeOrigin: true,
           secure: false,
+        },
+        // WebSocketプロキシ設定
+        '/ws': {
+          target: 'ws://localhost:3001',
+          ws: true,
+          changeOrigin: true,
+        },
+        // Socket.io プロキシ設定（念のため）
+        '/socket.io': {
+          target: 'http://localhost:3001',
+          ws: true,
+          changeOrigin: true,
         },
       },
       // HTTPS設定（環境変数で制御）

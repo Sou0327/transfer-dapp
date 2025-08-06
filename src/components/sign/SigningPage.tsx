@@ -17,7 +17,6 @@ import { SigningSuccess } from './SigningSuccess';
 import { WalletConnectModal } from '../WalletConnectModal';
 import { useWebSocket } from '../../lib/websocket';
 import { useWallet } from '../../hooks/useWallet';
-
 interface TransactionDetails {
   txHash: string;
   amount: string;
@@ -69,7 +68,7 @@ export const SigningPage: React.FC = () => {
   });
 
   const { selectedWallet, connect, disconnect, getUtxos, signTransaction: walletSignTx } = useWallet();
-  const { isConnected: wsConnected, subscribe, unsubscribe } = useWebSocket({
+const { isConnected: wsConnected, subscribe, unsubscribe } = useWebSocket({
     onStatusUpdate: (update) => {
       if (update.request_id === requestId) {
         setState(prev => ({
@@ -150,6 +149,88 @@ export const SigningPage: React.FC = () => {
       };
     }
   }, [wsConnected, requestId, subscribe, unsubscribe]);
+
+  // Handle CIP-13 mobile signing callback
+  useEffect(() => {
+    const handleMobileSigningCallback = async () => {
+      try {
+        const { parseSigningCallback, cleanSigningCallbackUrl } = await import('../../utils/cip13Utils');
+        const result = parseSigningCallback();
+        
+        if (result) {
+          console.log('📥 モバイル署名コールバック受信:', result);
+          
+          if (result.success && result.witnessSet) {
+            // Success - process the witness set
+            setState(prev => ({ ...prev, submissionStatus: 'submitting' }));
+            
+            // Submit the signed transaction to server
+            try {
+              const requestBody = {
+                requestId: result.requestId || requestId,
+                signedTx: result.witnessSet,
+                metadata: {
+                  walletUsed: selectedWallet || 'mobile',
+                  timestamp: new Date().toISOString(),
+                  signedViaMobile: true
+                }
+              };
+
+              const response = await fetch('/api/ada/presigned', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(requestBody),
+              });
+
+              if (!response.ok) {
+                const responseText = await response.text();
+                let errorData: { error?: string } = {};
+                try {
+                  errorData = JSON.parse(responseText) as { error?: string };
+                } catch {
+                  errorData = { error: `サーバーエラー: ${response.status}` };
+                }
+                
+                setError(errorData.error || 'モバイル署名データの保存に失敗しました', 'network');
+                setState(prev => ({ ...prev, submissionStatus: 'failed' }));
+                return;
+              }
+
+              const serverResult = await response.json();
+              console.log('✅ モバイル署名処理完了:', serverResult);
+              
+              setState(prev => ({ 
+                ...prev, 
+                signedTx: result.witnessSet,
+                showTxPreview: false,
+                submissionStatus: 'signed'
+              }));
+
+            } catch (error) {
+              console.error('モバイル署名後処理エラー:', error);
+              setError('モバイル署名後の処理でエラーが発生しました', 'network');
+              setState(prev => ({ ...prev, submissionStatus: 'failed' }));
+            }
+            
+          } else {
+            // Error from mobile wallet
+            setError(result.error || 'モバイル署名に失敗しました', 'wallet');
+            setState(prev => ({ ...prev, submissionStatus: 'failed' }));
+          }
+          
+          // Clean up URL parameters
+          cleanSigningCallbackUrl();
+        }
+      } catch (error) {
+        console.error('モバイル署名コールバック処理エラー:', error);
+      }
+    };
+
+    // Check for mobile signing callback on page load
+    handleMobileSigningCallback();
+  }, [requestId, selectedWallet, setError]);
 
   // Initialize request data
   useEffect(() => {
@@ -278,6 +359,29 @@ export const SigningPage: React.FC = () => {
         }
       } else {
         setError('ウォレットの接続に失敗しました。再度お試しください。', 'wallet');
+      }
+    }
+  }, [connect, clearError, setError]);
+
+  // Handle CIP-45 mobile wallet connection
+  const handleCIP45WalletConnect = useCallback(async (walletInfo: { walletName: string; address: string; balance: string; utxos: unknown[]; api: unknown }) => {
+    try {
+      clearError();
+      
+      // CIP-45で接続されたウォレットAPIは既にwindow.cardano[walletName]に注入されている
+      // useWalletフックのconnect関数を呼び出して状態を同期
+      await connect(walletInfo.walletName.toLowerCase());
+      
+      setState(prev => ({ ...prev, showWalletModal: false }));
+      console.log('✅ CIP-45ウォレット接続完了:', walletInfo);
+    } catch (error) {
+      console.error('CIP-45 wallet connection failed:', error);
+      setState(prev => ({ ...prev, showWalletModal: false }));
+      
+      if (error instanceof Error) {
+        setError(`CIP-45ウォレット接続に失敗しました: ${error.message}`, 'wallet');
+      } else {
+        setError('CIP-45ウォレット接続に失敗しました。再度お試しください。', 'unknown');
       }
     }
   }, [connect, clearError, setError]);
@@ -432,7 +536,96 @@ export const SigningPage: React.FC = () => {
         requestId: state.request.id
       });
 
-      // Sign transaction
+    // 🚀 モバイルデバイスの場合：Deep Link署名
+      if (!deviceInfo.isDesktop) {
+        console.log('📱 モバイルデバイス検出 - Deep Link署名を試行');
+        
+        const { launchWalletForSigning, createSigningRequest, supportsNativeSigning } = await import('../../utils/cip13Utils');
+        
+        // Check if wallet supports native mobile signing
+        if (!supportsNativeSigning(selectedWallet as WalletName)) {
+          console.warn(`${selectedWallet} はネイティブモバイル署名に対応していません`);
+          setError(`${selectedWallet} はモバイル署名に対応していません。デスクトップ版をご利用ください。`, 'wallet');
+          setState(prev => ({ ...prev, submissionStatus: 'failed' }));
+          return;
+        }
+
+        // Create signing request with metadata
+        const amount = state.request.amount_mode === 'fixed' 
+          ? `${(parseInt((state.request.amount_or_rule_json as FixedAmount).amount) / 1_000_000).toLocaleString()} ADA`
+          : state.request.amount_mode === 'sweep' 
+          ? '全額'
+          : 'レート計算';
+
+        const signingRequest = createSigningRequest(
+          txHex,
+          state.request.id,
+          selectedWallet as WalletName,
+          {
+            amount,
+            recipient: state.request.recipient,
+            fee: state.txData?.feeLovelace ? `${(parseInt(state.txData.feeLovelace) / 1_000_000).toFixed(6)} ADA` : undefined
+          }
+        );
+
+        console.log('🚀 モバイル署名リクエスト生成:', signingRequest);
+
+        // Launch wallet app for signing
+        const launched = await launchWalletForSigning(selectedWallet as WalletName, signingRequest);
+        
+        if (launched) {
+          console.log('✅ ウォレットアプリが正常に起動されました');
+          
+          // Show waiting state
+          setState(prev => ({ 
+            ...prev, 
+            submissionStatus: 'submitting',
+            showTxPreview: false
+          }));
+          
+          // Set up callback listener for when user returns from wallet app
+          const checkForCallback = async () => {
+            const { parseSigningCallback } = await import('../../utils/cip13Utils');
+            const result = parseSigningCallback();
+            
+            if (result) {
+              console.log('📥 署名コールバック受信:', result);
+              
+              if (result.success && result.witnessSet) {
+                // Proceed with witness set from mobile wallet
+                proceedWithWitnessSet(result.witnessSet);
+              } else {
+                setError(result.error || 'モバイル署名に失敗しました', 'wallet');
+                setState(prev => ({ ...prev, submissionStatus: 'failed' }));
+              }
+              
+              // Clean up URL
+              const { cleanSigningCallbackUrl } = await import('../../utils/cip13Utils');
+              cleanSigningCallbackUrl();
+            }
+          };
+          
+          // Check immediately and set up periodic checking
+          checkForCallback();
+          const callbackInterval = setInterval(checkForCallback, 1000);
+          
+          // Clean up after 5 minutes
+          setTimeout(() => {
+            clearInterval(callbackInterval);
+          }, 300000);
+          
+        } else {
+          console.error('❌ ウォレットアプリの起動に失敗');
+          setError('ウォレットアプリの起動に失敗しました。アプリがインストールされているか確認してください。', 'wallet');
+          setState(prev => ({ ...prev, submissionStatus: 'failed' }));
+        }
+        
+        return;
+      }
+
+      // 🖥️ デスクトップの場合：従来のブラウザ署名
+      console.log('🖥️ デスクトップデバイス - ブラウザ署名を実行');
+      
       const witnessSet = await walletSignTx(txHex);
       
       console.log('🔍 walletSignTx returned:', {
@@ -441,84 +634,8 @@ export const SigningPage: React.FC = () => {
         witnessSetLength: typeof witnessSet === 'string' ? witnessSet.length : 'not string'
       });
       
-      // Store pre-signed data
-      console.log('🔥 署名完了 - サーバーにデータ送信中:', {
-        requestId: state.request.id,
-        walletUsed: selectedWallet
-      });
-      
-      const requestBody = {
-        requestId: state.request.id,
-        signedTx: witnessSet,
-        metadata: {
-          txBody: txHex,
-          walletUsed: selectedWallet,
-          timestamp: new Date().toISOString()
-        }
-      };
-      
-      console.log('📤 POST リクエスト詳細:', {
-        url: '/api/ada/presigned',
-        method: 'POST',
-        requestBodyKeys: Object.keys(requestBody),
-        requestId: requestBody.requestId,
-        hasSignedTx: !!requestBody.signedTx,
-        signedTxType: typeof requestBody.signedTx,
-        signedTxLength: typeof requestBody.signedTx === 'string' ? requestBody.signedTx.length : 'not string',
-        signedTx: requestBody.signedTx,
-        metadata: requestBody.metadata
-      });
+      await proceedWithWitnessSet(witnessSet);
 
-      const response = await fetch('/api/ada/presigned', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
-      
-      console.log('📡 POST レスポンス詳細:', {
-        status: response.status,
-        statusText: response.statusText,
-        ok: response.ok,
-        headers: Object.fromEntries(response.headers.entries()),
-        url: response.url
-      });
-
-      if (!response.ok) {
-        const responseText = await response.text();
-        console.error('❌ POST エラーレスポンス:', {
-          status: response.status,
-          statusText: response.statusText,
-          responseText
-        });
-        
-        let errorData: { error?: string } = {};
-        try {
-          errorData = JSON.parse(responseText) as { error?: string };
-        } catch {
-          errorData = { error: `サーバーエラー: ${response.status}` };
-        }
-        
-        setError(errorData.error || '署名データの保存に失敗しました', 'network');
-        setState(prev => ({ ...prev, submissionStatus: 'failed' }));
-        return;
-      }
-
-      const result = await response.json();
-      console.log('✅ POST 成功:', result);
-      
-      // Store the signed transaction data and show completion message
-      setState(prev => ({ 
-        ...prev, 
-        signedTx: witnessSet,
-        showTxPreview: false,
-        submissionStatus: 'signed' // Mark as signed - admin will handle submission
-      }));
-
-      // Show success message to user
-      console.log('署名完了:', result.message);
-      
     } catch (error) {
       console.error('Transaction signing failed:', error);
       
@@ -538,7 +655,94 @@ export const SigningPage: React.FC = () => {
       
       setState(prev => ({ ...prev, submissionStatus: 'failed' }));
     }
-  }, [selectedWallet, state.request, clearError, setError, walletSignTx]);
+
+    // Helper function to process witness set and submit to server
+    async function proceedWithWitnessSet(witnessSet: string) {
+      try {
+        console.log('🔥 署名完了 - サーバーにデータ送信中:', {
+          requestId: state.request!.id,
+          walletUsed: selectedWallet
+        });
+        
+        const requestBody = {
+          requestId: state.request!.id,
+          signedTx: witnessSet,
+          metadata: {
+            txBody: txHex,
+            walletUsed: selectedWallet,
+            timestamp: new Date().toISOString()
+          }
+        };
+        
+        console.log('📤 POST リクエスト詳細:', {
+          url: '/api/ada/presigned',
+          method: 'POST',
+          requestBodyKeys: Object.keys(requestBody),
+          requestId: requestBody.requestId,
+          hasSignedTx: !!requestBody.signedTx,
+          signedTxType: typeof requestBody.signedTx,
+          signedTxLength: typeof requestBody.signedTx === 'string' ? requestBody.signedTx.length : 'not string',
+          signedTx: requestBody.signedTx,
+          metadata: requestBody.metadata
+        });
+
+        const response = await fetch('/api/ada/presigned', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody),
+        });
+        
+        console.log('📡 POST レスポンス詳細:', {
+          status: response.status,
+          statusText: response.statusText,
+          ok: response.ok,
+          headers: Object.fromEntries(response.headers.entries()),
+          url: response.url
+        });
+
+        if (!response.ok) {
+          const responseText = await response.text();
+          console.error('❌ POST エラーレスポンス:', {
+            status: response.status,
+            statusText: response.statusText,
+            responseText
+          });
+          
+          let errorData: { error?: string } = {};
+          try {
+            errorData = JSON.parse(responseText) as { error?: string };
+          } catch {
+            errorData = { error: `サーバーエラー: ${response.status}` };
+          }
+          
+          setError(errorData.error || '署名データの保存に失敗しました', 'network');
+          setState(prev => ({ ...prev, submissionStatus: 'failed' }));
+          return;
+        }
+
+        const result = await response.json();
+        console.log('✅ POST 成功:', result);
+        
+        // Store the signed transaction data and show completion message
+        setState(prev => ({ 
+          ...prev, 
+          signedTx: witnessSet,
+          showTxPreview: false,
+          submissionStatus: 'signed' // Mark as signed - admin will handle submission
+        }));
+
+        // Show success message to user
+        console.log('署名完了:', result.message);
+        
+      } catch (error) {
+        console.error('署名後処理エラー:', error);
+        setError('署名後の処理でエラーが発生しました', 'network');
+        setState(prev => ({ ...prev, submissionStatus: 'failed' }));
+      }
+    }
+  }, [selectedWallet, state.request, state.txData, clearError, setError, walletSignTx]);;
 
   // Handle retry actions
   const handleRetry = useCallback(() => {
@@ -982,13 +1186,22 @@ export const SigningPage: React.FC = () => {
         </button>
     </div>
 
-    {/* Wallet Connection Modal */}
-    <WalletConnectModal
-      isOpen={state.showWalletModal}
-      onClose={() => setState(prev => ({ ...prev, showWalletModal: false }))}
-      onConnect={handleWalletConnect}
-      isConnecting={false}
-    />
+    {/* Wallet Connection Modal - Desktop/Mobile responsive */}
+    {deviceInfo.isDesktop ? (
+      <WalletConnectModal
+        isOpen={state.showWalletModal}
+        onClose={() => setState(prev => ({ ...prev, showWalletModal: false }))}
+        onConnect={handleWalletConnect}
+        isConnecting={false}
+      />
+    ) : (
+      <CardanoConnectModal
+        isOpen={state.showWalletModal}
+        onClose={() => setState(prev => ({ ...prev, showWalletModal: false }))}
+        onConnect={handleCIP45WalletConnect}
+        onError={(error: string) => setError(error, 'wallet')}
+      />
+    )}
 
 
     </>

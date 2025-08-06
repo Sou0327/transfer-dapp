@@ -36,15 +36,106 @@ export const launchWalletApp = async (walletName: WalletName): Promise<boolean> 
       return false;
     }
 
-    // カスタムURLスキームでアプリを起動
-    window.location.href = appConfig.scheme;
-    
-    return true;
+    // 現代的なモバイルアプリ起動方法
+    return new Promise<boolean>((resolve) => {
+      const startTime = Date.now();
+      let isAppLaunched = false;
+      
+      // タイムアウト設定（2.5秒）
+      const timeout = setTimeout(() => {
+        if (!isAppLaunched) {
+          console.log(`${walletName} アプリの起動がタイムアウトしました。アプリストアに誘導します。`);
+          // アプリストアへのフォールバック
+          const storeUrl = deviceInfo.platform === 'ios' 
+            ? appConfig.appStoreUrl 
+            : appConfig.playStoreUrl;
+          
+          if (storeUrl) {
+            window.open(storeUrl, '_blank');
+          }
+          resolve(false);
+        }
+      }, 2500);
+
+      // ページフォーカス変更の監視
+      const handleVisibilityChange = () => {
+        if (document.hidden || document.visibilityState === 'hidden') {
+          // ページが非表示になったらアプリが起動したと判断
+          isAppLaunched = true;
+          clearTimeout(timeout);
+          document.removeEventListener('visibilitychange', handleVisibilityChange);
+          resolve(true);
+        }
+      };
+
+      // ページフォーカス喪失の監視
+      const handleBlur = () => {
+        // フォーカスが失われたらアプリが起動したと判断
+        const elapsed = Date.now() - startTime;
+        if (elapsed < 2000) { // 2秒以内のフォーカス喪失はアプリ起動
+          isAppLaunched = true;
+          clearTimeout(timeout);
+          window.removeEventListener('blur', handleBlur);
+          document.removeEventListener('visibilitychange', handleVisibilityChange);
+          resolve(true);
+        }
+      };
+
+      // イベントリスナー登録
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      window.addEventListener('blur', handleBlur);
+
+      // iOS Safari用の追加処理
+      if (deviceInfo.platform === 'ios') {
+        // iOS Safariでは location.href が効果的
+        try {
+          window.location.href = appConfig.scheme;
+        } catch (error) {
+          console.error('iOS URLスキーム起動エラー:', error);
+          clearTimeout(timeout);
+          resolve(false);
+        }
+      } else {
+        // Android Chrome用：iframe方式
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        iframe.src = appConfig.scheme;
+        
+        iframe.onload = () => {
+          // iframeがロードされたらアプリが起動しなかった可能性が高い
+          setTimeout(() => {
+            if (!isAppLaunched) {
+              document.body.removeChild(iframe);
+            }
+          }, 100);
+        };
+
+        iframe.onerror = () => {
+          // エラーが発生した場合もアプリが起動しなかった可能性
+          if (!isAppLaunched) {
+            document.body.removeChild(iframe);
+          }
+        };
+
+        document.body.appendChild(iframe);
+        
+        // フォールバック用の直接的なlocation変更も試行
+        setTimeout(() => {
+          if (!isAppLaunched) {
+            try {
+              window.location.href = appConfig.scheme;
+            } catch (error) {
+              console.error('Android URLスキーム起動エラー:', error);
+            }
+          }
+        }, 25);
+      }
+    });
   } catch (error) {
     console.error(`ウォレットアプリの起動に失敗しました: ${walletName}`, error);
     return false;
   }
-};
+};;
 
 /**
  * ウォレットアプリがインストールされているかチェック（推定）
@@ -180,28 +271,31 @@ export const handleMobileWalletSelection = async (walletName: WalletName): Promi
     };
   }
 
-  // アプリの起動を試行
+  // アプリの起動を試行（改善された方式）
   try {
+    console.log(`${walletConfig.displayName} アプリの起動を試行中...`);
     const launched = await launchWalletApp(walletName);
     
     if (launched) {
       return {
         success: true,
         action: 'launch',
-        message: `${walletConfig.displayName} アプリを起動しています...`,
+        message: `${walletConfig.displayName} アプリが起動されました`,
       };
     } else {
+      // アプリが起動しなかった場合、アプリストアに誘導
       return {
         success: false,
         action: 'install',
-        message: `${walletConfig.displayName} アプリがインストールされていない可能性があります`,
+        message: `${walletConfig.displayName} アプリをインストールしてください`,
       };
     }
-  } catch {
+  } catch (error) {
+    console.error(`${walletName} アプリ起動エラー:`, error);
     return {
       success: false,
       action: 'install',
       message: `${walletConfig.displayName} アプリの起動に問題が発生しました`,
     };
   }
-};
+};;

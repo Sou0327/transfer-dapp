@@ -4,7 +4,7 @@
 # Build stage
 FROM node:20-alpine AS builder
 
-# Install build dependencies
+# Install build dependencies and yarn
 RUN apk add --no-cache \
     git \
     python3 \
@@ -12,20 +12,23 @@ RUN apk add --no-cache \
     g++ \
     linux-headers
 
+# Enable corepack for yarn support
+RUN corepack enable
+
 # Set working directory
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+# Copy package files (yarn.lock is critical for reproducible builds)
+COPY package.json yarn.lock ./
 
-# Install dependencies with npm ci for reproducible builds
-RUN npm ci
+# Install dependencies with yarn for reproducible builds
+RUN yarn install --frozen-lockfile
 
 # Copy source code
 COPY . .
 
 # Build the application
-RUN npm run build
+RUN yarn build
 
 # Production stage
 FROM node:20-alpine AS production
@@ -34,17 +37,18 @@ FROM node:20-alpine AS production
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S otcapp -u 1001 -G nodejs
 
-# Install production dependencies only
+# Install production dependencies and enable yarn
 RUN apk add --no-cache \
     dumb-init \
-    curl
+    curl && \
+    corepack enable
 
 # Set working directory
 WORKDIR /app
 
 # Copy package files and install only production dependencies
-COPY package*.json ./
-RUN npm ci --only=production && npm cache clean --force
+COPY package.json yarn.lock ./
+RUN yarn install --frozen-lockfile --production && yarn cache clean
 
 # Copy built application from builder stage
 COPY --from=builder --chown=otcapp:nodejs /app/dist ./dist
@@ -77,4 +81,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
 ENTRYPOINT ["dumb-init", "--"]
 
 # Start the application
-CMD ["node", "server/index.js"]
+CMD ["node", "server/app.cjs"]

@@ -209,7 +209,6 @@ development/
 .travis.yml
 .circleci/
 
-# Package manager files
+# Package manager files (exclude npm's package-lock.json only)
 package-lock.json
-yarn.lock
 pnpm-lock.yaml
