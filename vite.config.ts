@@ -16,6 +16,10 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': resolve(__dirname, './src'),
+        // 本番環境ではWebSocketを無効化
+        ...(mode === 'production' && {
+          '@/lib/websocket': resolve(__dirname, './src/lib/websocket.production.ts'),
+        }),
       },
     },
     
@@ -26,6 +30,22 @@ export default defineConfig(({ mode }) => {
       
       // チャンク分割設定
       rollupOptions: {
+        // Node.js専用ライブラリを外部化（フロントエンドバンドルから除外）
+        external: mode === 'production' ? [
+          'socket.io-client',
+          'socket.io',
+          'express',
+          'fastify',
+          'bcrypt',
+          'jsonwebtoken',
+          'pg',
+          'redis',
+          'ws',
+          'helmet',
+          'cors',
+          'compression',
+          'express-rate-limit'
+        ] : [],
         output: {
           manualChunks: (id) => {
             // Node modulesの動的チャンク分割
@@ -56,10 +76,7 @@ export default defineConfig(({ mode }) => {
                 return 'store';
               }
               
-              // WebSocket関連
-              if (id.includes('socket.io-client') || id.includes('ws')) {
-                return 'websocket';
-              }
+              // WebSocket関連は本番では外部化されるため、チャンクを作成しない
               
               // 暗号化関連
               if (id.includes('crypto') || id.includes('bcrypt')) {
@@ -234,6 +251,16 @@ export default defineConfig(({ mode }) => {
       ],
       exclude: [
         '@emurgo/cardano-serialization-lib-browser', // WASMなので除外
+        // Node.js専用ライブラリを除外
+        'socket.io-client',
+        'socket.io',
+        'express',
+        'fastify',
+        'bcrypt',
+        'jsonwebtoken',
+        'pg',
+        'redis',
+        'ws'
       ],
     },
     
