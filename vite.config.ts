@@ -16,9 +16,13 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': resolve(__dirname, './src'),
-        // 本番環境ではWebSocketを無効化
+        // 本番環境では WebSocket を production version に置換
         ...(mode === 'production' && {
-          '@/lib/websocket': resolve(__dirname, './src/lib/websocket.production.ts'),
+          './src/lib/websocket': resolve(__dirname, './src/lib/websocket.production.ts'),
+          '../lib/websocket': resolve(__dirname, './src/lib/websocket.production.ts'),
+          '../../lib/websocket': resolve(__dirname, './src/lib/websocket.production.ts'),
+          '../lib/websocket.ts': resolve(__dirname, './src/lib/websocket.production.ts'),
+          '../../lib/websocket.ts': resolve(__dirname, './src/lib/websocket.production.ts'),
         }),
       },
     },
